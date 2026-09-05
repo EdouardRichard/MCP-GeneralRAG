@@ -238,7 +238,7 @@ Task: "T022 残留修复 3a alembic 0072 删 project_id 列"
 
 **Independent Test**: 新测试落地前先跑既有 byte-compat/双轨/硬指标基线全绿（旧客户端兼容先于新参数测试）；盲区闭合测试对现实现即时验证（若 RED 即揭示真实缺陷须修复）；纯措辞改动零行为变化（既有套件保持全绿）。
 
-- [ ] T049 补齐 T031：get_evidence tool description 声明「project_scope 与 domain_scope 至少一个非空」+ module/参数 docstrings 纳入 domain_scope（同步修正 search_knowledge docstring 措辞）→ backend/src/rag_mcp/mcp/get_evidence.py + backend/src/rag_mcp/mcp/search_knowledge.py per T031/FR-019/宪法 I (partial)
+- [X] T049 补齐 T031：get_evidence tool description 声明「project_scope 与 domain_scope 至少一个非空」+ module/参数 docstrings 纳入 domain_scope（同步修正 search_knowledge docstring 措辞）→ backend/src/rag_mcp/mcp/get_evidence.py + backend/src/rag_mcp/mcp/search_knowledge.py per T031/FR-019/宪法 I (partial)
 - [ ] T050 FR-017 回归测试盲区：agentic 父级上下文条目 knowledge_scope_type 行为测试（public 域父级="public"、project 域不变；夹具须含 parent_chunk_id 链）→ backend/tests/unit/test_agentic_scope_type.py per FR-017/US4-AC2/SC-007 (missing)
 - [ ] T051 FR-016 回归测试盲区：public 域 search_knowledge → get_evidence 同作用域端到端链路测试（FakeStore/FakeEmbedding 模式）+ 来源可定位断言（source ID/版本/位置）→ backend/tests/integration/test_public_evidence.py per FR-016/US4-AC1/SC-007/SC-005 (missing)
 - [ ] T052 get_evidence domain_scope 寻址验收测试：数字/slug/type:name 解析展开 + 证据不属于请求域时拒绝 → backend/tests/integration/test_evidence_domain_scope.py per FR-007/US2-AC1/Edge Cases (missing)

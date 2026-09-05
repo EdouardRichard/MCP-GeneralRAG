@@ -1,8 +1,10 @@
 """MCP tool definition for get_evidence.
 
 Registers the evidence expansion tool with the MCP server. Accepts an
-evidence_id (from search_knowledge results) and project scopes, delegates
-to EvidenceService, and returns full chunk content with parent context.
+evidence_id (from search_knowledge results) and explicit knowledge scopes
+(project_scope and/or domain_scope, at least one non-empty; 007 T031),
+delegates to EvidenceService, and returns full chunk content with parent
+context.
 
 Conforms to mcp-get-evidence.schema.json input/output structure.
 """
@@ -37,7 +39,9 @@ def register_get_evidence_tool(
             "Retrieve the full content of a specific evidence item by its ID. "
             "Use this after search_knowledge to expand an evidence excerpt into "
             "its complete text, including parent context when available. "
-            "Requires explicit project scope(s) for access control."
+            "Requires an explicit knowledge scope: at least one of project_scope "
+            "or domain_scope must be non-empty — the requested scopes must "
+            "include the knowledge domain that owns this evidence."
         ),
         annotations=ToolAnnotations(readOnlyHint=True),
     )
@@ -50,8 +54,13 @@ def register_get_evidence_tool(
 
         Args:
             evidence_id: The evidence ID string from search_knowledge results.
-            project_scope: List of project references (stable ID, alias, or repo path).
-                Must include the project that owns this evidence.
+            project_scope: List of project references (stable ID, alias, or repo
+                path). Legacy compatible scope form; without domain_scope, at
+                least one entry is required.
+            domain_scope: List of knowledge-domain references (numeric
+                knowledge_scope_id, scope slug, or type:name). New scope form;
+                without project_scope, at least one entry is required. The
+                resolved scopes must include the domain owning this evidence.
 
         Returns:
             Structured response with full_content, parent_context (if available),

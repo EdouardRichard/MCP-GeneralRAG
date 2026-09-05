@@ -1,7 +1,8 @@
 """MCP tool definition for search_knowledge.
 
 Registers the primary semantic search tool with the MCP server. Accepts
-a natural language query and explicit project scopes, delegates to
+a natural language query and explicit knowledge scopes (project_scope
+and/or domain_scope, at least one non-empty), delegates to
 RetrievalService, and returns structured content conforming to
 mcp-search-output.schema.json.
 
@@ -162,8 +163,12 @@ def register_search_knowledge_tool(
 
         Args:
             query: Natural language query or factual question (1-2000 chars).
-            project_scope: List of project references (stable ID, alias, or repo path).
-                At least one is required; full-library search is rejected.
+            project_scope: List of project references (stable ID, alias, or repo
+                path). Legacy compatible scope form.
+            domain_scope: List of knowledge-domain references (numeric
+                knowledge_scope_id, scope slug, or type:name). New scope form.
+                At least one non-empty entry across project_scope/domain_scope
+                is required; full-library search is rejected.
             top_k: Maximum evidence items to return (1-20, default 5).
             task_context: Optional context about the current work phase, file, or symbol.
 
