@@ -228,7 +228,10 @@ class RetrievalService:
 
         try:
             # 1. Resolve project references to knowledge_scope_ids
-            resolved_ids, error_info = await self.resolve_knowledge_scopes(project_scopes, domain_scopes)
+            if domain_scopes and _non_empty_entries(domain_scopes):
+                resolved_ids, error_info = await self.resolve_knowledge_scopes(project_scopes, domain_scopes)
+            else:
+                resolved_ids, error_info = await self.resolve_project_refs(project_scopes)
 
             if error_info is not None:
                 # Resolution failed — return error response
