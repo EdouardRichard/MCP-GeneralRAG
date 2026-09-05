@@ -141,15 +141,10 @@ async def ensure_graph_corpus(
             )).scalars().first()
             if version is None:
                 continue
-            project = (await session.execute(sa_text(
-                "SELECT project_id FROM projects WHERE knowledge_scope_id = :s LIMIT 1"
-            ), {"s": scope_id})).scalar_one_or_none()
-            if project is None:
-                continue
 
             version_number = version.version_number
             triples[scope_id] = {
-                "project_id": project, "version_number": version_number,
+                "version_number": version_number,
             }
 
             existing = (await session.execute(sa_text(
@@ -160,7 +155,7 @@ async def ensure_graph_corpus(
                 logger.info("Scope %s: %d graph edges present", scope_id, existing)
             else:
                 written = await _extract_scope_graph(
-                    session, scope_id, project, version, data_root,
+                    session, scope_id, version, data_root,
                 )
                 logger.info("Scope %s: extracted %d graph edges", scope_id, written)
 
@@ -174,8 +169,7 @@ async def ensure_graph_corpus(
 
 
 async def _extract_scope_graph(
-    session, scope_id: int, project_id: int,
-    version: KnowledgeVersion, data_root: Path,
+    session, scope_id: int, version: KnowledgeVersion, data_root: Path,
 ) -> int:
     """Extract hard relations for every java/ddl source of a version."""
     from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
@@ -189,7 +183,7 @@ async def _extract_scope_graph(
     )).scalars().all()
 
     store = PostgresGraphStore(session)
-    scope = GraphScope(scope_id, project_id, version.version_number)
+    scope = GraphScope(scope_id, version.version_number)
     total = 0
     for source in sources:
         raw_path = data_root / str(scope_id) / str(source.source_id) / source.filename
@@ -276,8 +270,7 @@ async def search_graph_enhanced(
             triple = graph_triples.get(scope_id)
             if triple is None:
                 continue
-            scope = GraphScope(scope_id, triple["project_id"],
-                               triple["version_number"])
+            scope = GraphScope(scope_id, triple["version_number"])
             candidates = await engine.expand(seeds, scope)
             for cand in candidates:
                 graph_results.append({
