@@ -4,6 +4,9 @@ export interface Project {
   alias?: string;
   repo_path?: string;
   knowledge_scope_id: string;
+  scope_type?: string;
+  domain_key?: string;
+  slug?: string;
   created_at: string;
   updated_at: string;
 }

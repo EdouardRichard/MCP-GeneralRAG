@@ -79,6 +79,18 @@ export default function ProjectsPage() {
       ellipsis: true,
     },
     {
+      title: 'Domain Key',
+      dataIndex: 'domain_key',
+      key: 'domain_key',
+      render: (val: string | undefined) => val || 'se-project',
+    },
+    {
+      title: 'Slug',
+      dataIndex: 'slug',
+      key: 'slug',
+      ellipsis: true,
+    },
+    {
       title: 'Created',
       dataIndex: 'created_at',
       key: 'created_at',

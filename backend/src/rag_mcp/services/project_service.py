@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.project import Project
@@ -86,6 +87,7 @@ class ProjectService:
             created_at=now,
             updated_at=now,
         )
+        project.knowledge_scope = scope
         self._session.add(project)
 
         await self._session.flush()
@@ -142,7 +144,7 @@ class ProjectService:
             List of Project entities.
         """
         result = await self._session.execute(
-            select(Project).order_by(Project.created_at.desc())
+            select(Project).options(selectinload(Project.knowledge_scope)).order_by(Project.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -156,7 +158,7 @@ class ProjectService:
             Project entity or None if not found.
         """
         result = await self._session.execute(
-            select(Project).where(Project.project_id == project_id)
+            select(Project).options(selectinload(Project.knowledge_scope)).where(Project.project_id == project_id)
         )
         return result.scalar_one_or_none()
 

@@ -124,8 +124,8 @@
 - [X] T037 [US1] 域档案 CRUD 服务 + 内置只读守卫 + 知识域 slug 分配/不可变守卫 → backend/src/rag_mcp/services/project_service.py（FR-005/FR-012/FR-026）
 - [X] T038 [US1] REST 路由：域档案 CRUD + 知识域 domain_key/slug 管理端点 → backend/src/rag_mcp/api/projects.py（FR-026）
 - [X] T039 [US1] Pydantic 模式：域档案 + scope 分配（domain_key/slug）请求/响应 → backend/src/rag_mcp/schemas/project.py（FR-026）
-- [ ] T040 [US1] 前端：知识域列表/详情呈现 scope_type/domain_key/slug 维度 → frontend/src/pages/（FR-026）
-- [ ] T041 [US1] 前端：域档案管理页（CRUD + 内置只读态）→ frontend/src/pages/（FR-026）
+- [X] T040 [US1] 前端：知识域列表/详情呈现 scope_type/domain_key/slug 维度 → frontend/src/pages/（FR-026）
+- [X] T041 [US1] 前端：域档案管理页（CRUD + 内置只读态）→ frontend/src/pages/（FR-026）
 - [X] T042 [US1] 前端 API client：域档案 CRUD + scope 分配接口对接 → frontend/src/api/（FR-026）
 
 **Checkpoint**: 管理面与前端完成——域档案治理与域属性展示闭环。

@@ -229,6 +229,9 @@ export default function ProjectDetailPage() {
           <Descriptions.Item label="Knowledge Scope ID">
             {project.knowledge_scope_id}
           </Descriptions.Item>
+          <Descriptions.Item label="Scope Type">{project.scope_type || 'project'}</Descriptions.Item>
+          <Descriptions.Item label="Domain Key">{project.domain_key || 'se-project'}</Descriptions.Item>
+          <Descriptions.Item label="Slug">{project.slug || '-'}</Descriptions.Item>
           <Descriptions.Item label="Created">
             {new Date(project.created_at).toLocaleString()}
           </Descriptions.Item>

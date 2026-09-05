@@ -23,6 +23,9 @@ class ProjectResponse(BaseModel):
     alias: str | None = None
     repo_path: str | None = None
     knowledge_scope_id: str
+    scope_type: str = "project"
+    domain_key: str = "se-project"
+    slug: str = ""
     created_at: datetime
     updated_at: datetime
 
@@ -53,6 +56,8 @@ class PublicScopeResponse(BaseModel):
     scope_id: str
     scope_type: str = "public"
     name: str
+    domain_key: str = "se-project"
+    slug: str = ""
     status: str
     created_at: datetime
     updated_at: datetime
