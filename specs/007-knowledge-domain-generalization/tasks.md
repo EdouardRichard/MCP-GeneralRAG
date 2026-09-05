@@ -116,17 +116,17 @@
 
 ### Tests（先写，确保 FAIL）
 
-- [ ] T035 [P] [US1] 集成测试（RED）：域档案 CRUD + 内置只读保护（含字段级修改拒绝）+ 被引用档案删除拒绝 → backend/tests/integration/test_profile_crud.py（FR-005/SC-008）
-- [ ] T036 [P] [US1] 集成测试（RED）：知识域创建 domain_key 声明 + slug 分配（重复 slug 拒绝、创建后不可变）→ backend/tests/integration/test_scope_slug.py（FR-012/SC-011）
+- [X] T035 [P] [US1] 集成测试（RED）：域档案 CRUD + 内置只读保护（含字段级修改拒绝）+ 被引用档案删除拒绝 → backend/tests/integration/test_profile_crud.py（FR-005/SC-008）
+- [X] T036 [P] [US1] 集成测试（RED）：知识域创建 domain_key 声明 + slug 分配（重复 slug 拒绝、创建后不可变）→ backend/tests/integration/test_scope_slug.py（FR-012/SC-011）
 
 ### Implementation
 
-- [ ] T037 [US1] 域档案 CRUD 服务 + 内置只读守卫 + 知识域 slug 分配/不可变守卫 → backend/src/rag_mcp/services/project_service.py（FR-005/FR-012/FR-026）
-- [ ] T038 [US1] REST 路由：域档案 CRUD + 知识域 domain_key/slug 管理端点 → backend/src/rag_mcp/api/projects.py（FR-026）
-- [ ] T039 [US1] Pydantic 模式：域档案 + scope 分配（domain_key/slug）请求/响应 → backend/src/rag_mcp/schemas/project.py（FR-026）
+- [X] T037 [US1] 域档案 CRUD 服务 + 内置只读守卫 + 知识域 slug 分配/不可变守卫 → backend/src/rag_mcp/services/project_service.py（FR-005/FR-012/FR-026）
+- [X] T038 [US1] REST 路由：域档案 CRUD + 知识域 domain_key/slug 管理端点 → backend/src/rag_mcp/api/projects.py（FR-026）
+- [X] T039 [US1] Pydantic 模式：域档案 + scope 分配（domain_key/slug）请求/响应 → backend/src/rag_mcp/schemas/project.py（FR-026）
 - [ ] T040 [US1] 前端：知识域列表/详情呈现 scope_type/domain_key/slug 维度 → frontend/src/pages/（FR-026）
 - [ ] T041 [US1] 前端：域档案管理页（CRUD + 内置只读态）→ frontend/src/pages/（FR-026）
-- [ ] T042 [US1] 前端 API client：域档案 CRUD + scope 分配接口对接 → frontend/src/api/（FR-026）
+- [X] T042 [US1] 前端 API client：域档案 CRUD + scope 分配接口对接 → frontend/src/api/（FR-026）
 
 **Checkpoint**: 管理面与前端完成——域档案治理与域属性展示闭环。
 

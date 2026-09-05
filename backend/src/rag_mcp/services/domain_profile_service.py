@@ -50,6 +50,64 @@ class DomainProfileService:
         await self._session.flush()
         return repairs
 
+    async def create_profile(self, data: dict[str, Any]) -> DomainProfile:
+        """Create a custom domain profile (builtin keys rejected)."""
+        assert_not_builtin(data["domain_key"])
+        profile = DomainProfile(
+            domain_key=data["domain_key"],
+            name=data["name"],
+            description=data.get("description"),
+            supported_formats=data["supported_formats"],
+            chunk_type_extensions=data.get("chunk_type_extensions"),
+            graph_relations=data.get("graph_relations", {}),
+            prompt_overrides=data.get("prompt_overrides"),
+            default_capabilities=data.get("default_capabilities", {}),
+            is_builtin=False,
+        )
+        self._session.add(profile)
+        await self._session.flush()
+        return profile
+
+    async def update_profile(self, domain_key: str, data: dict[str, Any]) -> DomainProfile:
+        """Update a custom domain profile (builtin keys rejected, field-level)."""
+        assert_not_builtin(domain_key)
+        row = await self._get(domain_key)
+        if row is None:
+            raise ValueError("domain profile '%s' not found" % domain_key)
+        row.name = data.get("name", row.name)
+        row.description = data.get("description", row.description)
+        row.supported_formats = data.get("supported_formats", row.supported_formats)
+        row.chunk_type_extensions = data.get("chunk_type_extensions", row.chunk_type_extensions)
+        row.graph_relations = data.get("graph_relations", row.graph_relations)
+        row.prompt_overrides = data.get("prompt_overrides", row.prompt_overrides)
+        row.default_capabilities = data.get("default_capabilities", row.default_capabilities)
+        await self._session.flush()
+        return row
+
+    async def delete_profile(self, domain_key: str) -> bool:
+        """Delete a custom profile; reject builtin + referenced profiles."""
+        assert_not_builtin(domain_key)
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+        referenced = await self._session.execute(
+            select(KnowledgeScope.scope_id).where(
+                KnowledgeScope.domain_key == domain_key
+            ).limit(1)
+        )
+        if referenced.scalar_one_or_none() is not None:
+            raise ValueError("domain profile '%s' is still referenced by a knowledge domain" % domain_key)
+        row = await self._get(domain_key)
+        if row is None:
+            return False
+        await self._session.delete(row)
+        await self._session.flush()
+        return True
+
+    async def list_profiles(self) -> list[DomainProfile]:
+        result = await self._session.execute(
+            select(DomainProfile).order_by(DomainProfile.domain_key)
+        )
+        return list(result.scalars().all())
+
     async def _get(self, domain_key: str) -> DomainProfile | None:
         result = await self._session.execute(
             select(DomainProfile).where(DomainProfile.domain_key == domain_key)

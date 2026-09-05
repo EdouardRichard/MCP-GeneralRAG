@@ -5,6 +5,8 @@ export interface CreateProjectInput {
   name: string;
   alias?: string;
   repo_path?: string;
+  domain_key?: string;
+  slug?: string;
 }
 
 export interface ProjectListResponse {

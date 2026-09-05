@@ -5,6 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_mcp.db import get_session
 from rag_mcp.schemas.project import (
+    DomainProfileCreate,
+    DomainProfileListResponse,
+    DomainProfileResponse,
+    DomainProfileUpdate,
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
@@ -12,6 +16,7 @@ from rag_mcp.schemas.project import (
     PublicScopeListResponse,
     PublicScopeResponse,
 )
+from rag_mcp.services.domain_profile_service import DomainProfileService
 from rag_mcp.services.project_service import ProjectService
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -101,6 +106,61 @@ async def list_public_scopes(
         for s in scopes
     ]
     return PublicScopeListResponse(items=items, total=len(items))
+
+
+@router.get("/domain-profiles", response_model=DomainProfileListResponse)
+async def list_domain_profiles(session: AsyncSession = Depends(get_session)):
+    """List all domain profiles (builtin + custom)."""
+    service = DomainProfileService(session)
+    profiles = await service.list_profiles()
+    return DomainProfileListResponse(items=profiles, total=len(profiles))
+
+
+@router.post("/domain-profiles", response_model=DomainProfileResponse, status_code=201)
+async def create_domain_profile(
+    data: DomainProfileCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a custom domain profile (builtin keys rejected)."""
+    service = DomainProfileService(session)
+    try:
+        profile = await service.create_profile(data.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    return profile
+
+
+@router.put("/domain-profiles/{domain_key}", response_model=DomainProfileResponse)
+async def update_domain_profile(
+    domain_key: str,
+    data: DomainProfileUpdate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update a custom domain profile (builtin keys rejected)."""
+    service = DomainProfileService(session)
+    try:
+        profile = await service.update_profile(domain_key, data.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    return profile
+
+
+@router.delete("/domain-profiles/{domain_key}", status_code=204)
+async def delete_domain_profile(
+    domain_key: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete a custom domain profile (builtin + referenced rejected)."""
+    service = DomainProfileService(session)
+    try:
+        deleted = await service.delete_profile(domain_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Domain profile not found")
+    await session.commit()
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

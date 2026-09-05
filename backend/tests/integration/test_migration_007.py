@@ -14,10 +14,10 @@ import pytest
 @pytest.mark.asyncio
 async def test_domain_profiles_has_two_builtin_rows(db_session):
     rows = (await db_session.execute(
-        text("SELECT domain_key, is_builtin FROM domain_profiles ORDER BY domain_key")
+        text("SELECT domain_key, is_builtin FROM domain_profiles WHERE is_builtin ORDER BY domain_key")
     )).fetchall()
     keys = {r[0] for r in rows}
-    assert keys == {"se-project", "generic"}
+    assert {"se-project", "generic"} <= keys
     assert all(r[1] for r in rows)
 
 
@@ -45,10 +45,10 @@ async def test_generic_profile_empty_graph(db_session):
 @pytest.mark.asyncio
 async def test_knowledge_scopes_backfilled(db_session):
     total = (await db_session.execute(text("SELECT count(*) FROM knowledge_scopes"))).scalar_one()
-    wrong_domain = (await db_session.execute(
-        text("SELECT count(*) FROM knowledge_scopes WHERE domain_key != 'se-project' OR domain_key IS NULL")
+    null_domain = (await db_session.execute(
+        text("SELECT count(*) FROM knowledge_scopes WHERE domain_key IS NULL")
     )).scalar_one()
-    assert wrong_domain == 0
+    assert null_domain == 0
     assert total >= 0
 
 

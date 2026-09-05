@@ -62,12 +62,14 @@ class ProjectService:
         project_id = generate_id()
 
         # Create knowledge scope first
+        domain_key = getattr(data, "domain_key", None) or _default_domain_key()
+        slug = getattr(data, "slug", None) or await self._allocate_slug(data.name, scope_id)
         scope = KnowledgeScope(
             scope_id=scope_id,
             scope_type="project",
             name=data.name,
-            domain_key=_default_domain_key(),
-            slug=await self._allocate_slug(data.name, scope_id),
+            domain_key=domain_key,
+            slug=slug,
             status="active",
             created_at=now,
             updated_at=now,
