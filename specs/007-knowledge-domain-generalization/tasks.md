@@ -140,11 +140,11 @@
 
 ### Tests / 验收
 
-- [ ] T043 [US5] 无回归评测闸口：重跑 001/002（`--limit 18`）、004 图集、005 agentic、006 冒烟，1% 单侧非回归判定 + se-project 等价性（004/005 为闸）→ backend/src/rag_mcp/eval/（FR-024/FR-025/SC-009）
+- [X] T043 [US5] 无回归评测闸口：重跑 001/002（`--limit 18`）、004 图集、005 agentic、006 冒烟，1% 单侧非回归判定 + se-project 等价性（004/005 为闸）→ backend/src/rag_mcp/eval/（FR-024/FR-025/SC-009）
 - [X] T044 [US5] 硬指标验收套件：混合域验收集断言五硬约束——跨域串库=0、无显式引用拒绝、MCP Schema 合法率=100%、来源可定位率=100%、上传内容不得作控制指令（HC3：断言 domain_profiles 仅管理面/迁移写入、上传摄入路径零写）→ backend/tests/integration/test_hard_metrics.py（FR-019/FR-020/FR-021/FR-022；SC-003/SC-004/SC-005）
 - [X] T045 [US5] 逐字节兼容回归闸口：仅 project_scope 兼容测试集升级前后逐字节比对 → backend/tests/contract/test_byte_compat.py（FR-009/SC-001）
-- [ ] T046 [US5] 目标宿主验证：DeepSeek Harness 经 MCP 端到端完成 domain_scope 三形态 + list_knowledge_domains 并通过 Schema 校验 → quickstart.md 场景 4/8（SC-001/SC-002）
-- [ ] T047 [US5] 运行 quickstart.md 全部 10 场景验证并记录结果 → specs/007-knowledge-domain-generalization/quickstart.md（SC-001~SC-012）
+- [X] T046 [US5] 目标宿主验证：DeepSeek Harness 经 MCP 端到端完成 domain_scope 三形态 + list_knowledge_domains 并通过 Schema 校验 → quickstart.md 场景 4/8（SC-001/SC-002）
+- [X] T047 [US5] 运行 quickstart.md 全部 10 场景验证并记录结果 → specs/007-knowledge-domain-generalization/quickstart.md（SC-001~SC-012）
 - [X] T048 [P] [US5] 复核 spec 状态与 review.md 评审清单（FR/SC 全映射无遗漏）→ specs/007-knowledge-domain-generalization/spec.md + checklists/review.md（FR-023/FR-024）
 
 **Checkpoint**: 全部验收闸口通过——007 可发布。
