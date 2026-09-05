@@ -97,6 +97,7 @@ def create_mcp_server(
     # Register tools
     from rag_mcp.mcp.search_knowledge import register_search_knowledge_tool
     from rag_mcp.mcp.get_evidence import register_get_evidence_tool
+    from rag_mcp.mcp.list_knowledge_domains import register_list_knowledge_domains_tool
 
     register_search_knowledge_tool(
         mcp_server=mcp_server,
@@ -111,8 +112,13 @@ def create_mcp_server(
         session_factory=session_factory,
     )
 
+    register_list_knowledge_domains_tool(
+        mcp_server=mcp_server,
+        session_factory=session_factory,
+    )
+
     logger.info(
-        "MCP server created with tools: search_knowledge, get_evidence "
+        "MCP server created with tools: search_knowledge, get_evidence, list_knowledge_domains "
         "(host=127.0.0.1, port=%d)",
         settings.mcp_port,
     )

@@ -91,18 +91,18 @@
 
 ### Tests（先写，确保 FAIL）
 
-- [ ] T026 [P] [US2] 契约测试（RED）：mcp-search-input / mcp-get-evidence 的 anyOf 放宽 + domain_scope 属性 + 错误码枚举只增不删校验 → backend/tests/contract/test_mcp_input_007.py（FR-007/FR-010/FR-021）
-- [ ] T027 [P] [US2] 集成测试（RED）：错误码双轨——仅 project_scope 形态发旧码、涉及 domain_scope 发新码（含混合请求裁决）→ backend/tests/integration/test_error_dual_track.py（FR-010/SC-010）
-- [ ] T028 [P] [US2] 集成测试（RED）：旧客户端逐字节兼容——仅 project_scope 请求响应（错误码/消息/candidates/输出）升级前后逐字节一致 → backend/tests/integration/test_byte_compat.py（FR-009/FR-011/SC-001）
-- [ ] T029 [P] [US3] 契约测试（RED）：list-domains.output.schema 校验 + 知识内容出现次数 = 0 断言 → backend/tests/contract/test_list_domains_schema.py（FR-014/FR-022/SC-006）
+- [X] T026 [P] [US2] 契约测试（RED）：mcp-search-input / mcp-get-evidence 的 anyOf 放宽 + domain_scope 属性 + 错误码枚举只增不删校验 → backend/tests/contract/test_mcp_input_007.py（FR-007/FR-010/FR-021）
+- [X] T027 [P] [US2] 集成测试（RED）：错误码双轨——仅 project_scope 形态发旧码、涉及 domain_scope 发新码（含混合请求裁决）→ backend/tests/integration/test_error_dual_track.py（FR-010/SC-010）
+- [X] T028 [P] [US2] 集成测试（RED）：旧客户端逐字节兼容——仅 project_scope 请求响应（错误码/消息/candidates/输出）升级前后逐字节一致 → backend/tests/integration/test_byte_compat.py（FR-009/FR-011/SC-001）
+- [X] T029 [P] [US3] 契约测试（RED）：list-domains.output.schema 校验 + 知识内容出现次数 = 0 断言 → backend/tests/contract/test_list_domains_schema.py（FR-014/FR-022/SC-006）
 
 ### Implementation
 
-- [ ] T030 [US2] search_knowledge 签名扩展：domain_scope 可选参数 + 入口层两参数并集非空校验（双轨错误码）+ tool description 面向客户端声明「project_scope 与 domain_scope 至少一个非空」（消解运行时 schema 与契约 anyOf 分歧）→ backend/src/rag_mcp/mcp/search_knowledge.py（FR-007/FR-019）
-- [ ] T031 [US2] get_evidence 签名扩展：domain_scope 可选参数 + 入口层并集非空校验 + tool description 声明「至少一个 scope」→ backend/src/rag_mcp/mcp/get_evidence.py（FR-007/FR-019）
-- [ ] T032 [US2] 错误码双轨落地：解析器/入口新增 MISSING_KNOWLEDGE_SCOPE / AMBIGUOUS_DOMAIN_REF，旧码保留 → backend/src/rag_mcp/services/retrieval_service.py + mcp 入口（FR-010）
-- [ ] T033 [US3] 新增只读工具 list_knowledge_domains：活跃域元数据 + 能力摘要（由域档案声明派生）+ 绝不返回知识内容 → backend/src/rag_mcp/mcp/list_knowledge_domains.py（FR-006/FR-014/FR-015/FR-022）
-- [ ] T034 [US3] 在 MCP server 注册 list_knowledge_domains（readOnlyHint）→ backend/src/rag_mcp/server.py（FR-014）
+- [X] T030 [US2] search_knowledge 签名扩展：domain_scope 可选参数 + 入口层两参数并集非空校验（双轨错误码）+ tool description 面向客户端声明「project_scope 与 domain_scope 至少一个非空」（消解运行时 schema 与契约 anyOf 分歧）→ backend/src/rag_mcp/mcp/search_knowledge.py（FR-007/FR-019）
+- [X] T031 [US2] get_evidence 签名扩展：domain_scope 可选参数 + 入口层并集非空校验 + tool description 声明「至少一个 scope」→ backend/src/rag_mcp/mcp/get_evidence.py（FR-007/FR-019）
+- [X] T032 [US2] 错误码双轨落地：解析器/入口新增 MISSING_KNOWLEDGE_SCOPE / AMBIGUOUS_DOMAIN_REF，旧码保留 → backend/src/rag_mcp/services/retrieval_service.py + mcp 入口（FR-010）
+- [X] T033 [US3] 新增只读工具 list_knowledge_domains：活跃域元数据 + 能力摘要（由域档案声明派生）+ 绝不返回知识内容 → backend/src/rag_mcp/mcp/list_knowledge_domains.py（FR-006/FR-014/FR-015/FR-022）
+- [X] T034 [US3] 在 MCP server 注册 list_knowledge_domains（readOnlyHint）→ backend/src/rag_mcp/server.py（FR-014）
 
 **Checkpoint**: MCP 契约扩展完成——新参数、双轨错误码、list 工具全部可用且旧客户端兼容。
 

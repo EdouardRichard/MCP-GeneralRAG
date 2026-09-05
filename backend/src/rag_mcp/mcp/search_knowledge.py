@@ -30,7 +30,7 @@ from rag_mcp.orchestration.entry import (
     run_agentic_search as _run_agentic_search,
 )
 from rag_mcp.providers.base import EmbeddingProvider, RerankerProvider
-from rag_mcp.services.retrieval_service import RetrievalService
+from rag_mcp.services.retrieval_service import RetrievalService, _non_empty_entries
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ async def search_knowledge_core(
     top_k: int,
     task_context: dict | None,
     session_factory: Any,
+    domain_scope: list[str] | None = None,
     qdrant_store: QdrantStore,
     embedding_provider: EmbeddingProvider,
     reranker: RerankerProvider | None = None,
@@ -57,7 +58,14 @@ async def search_knowledge_core(
     if not query or not query.strip():
         return _error_response("Query must not be empty.", "INVALID_INPUT")
 
-    if not project_scope or len(project_scope) == 0:
+    project_scope = project_scope or []
+    domain_scope = domain_scope or []
+    if not _non_empty_entries(project_scope) and not _non_empty_entries(domain_scope):
+        if _non_empty_entries(domain_scope):
+            return _error_response(
+                "At least one project_scope or domain_scope entry is required. Full-library search is not allowed.",
+                "MISSING_KNOWLEDGE_SCOPE",
+            )
         return _error_response(
             "At least one project_scope entry is required. Full-library search is not allowed.",
             "MISSING_PROJECT_SCOPE",
@@ -80,6 +88,7 @@ async def search_knowledge_core(
                 qdrant_store=qdrant_store,
                 embedding_provider=embedding_provider,
                 reranker=reranker,
+                domain_scopes=domain_scope,
             )
         except AgenticPathUnavailable as exc:
             logger.warning(
@@ -101,6 +110,7 @@ async def search_knowledge_core(
                 project_scopes=project_scope,
                 top_k=top_k,
                 task_context=task_context,
+                domain_scopes=domain_scope,
             )
             await session.commit()
             return result
@@ -134,7 +144,8 @@ def register_search_knowledge_tool(
         name="search_knowledge",
         description=(
             "Search the RAG knowledge base for evidence relevant to a query. "
-            "Requires explicit project scope(s) — full-library search is not allowed. "
+            "Requires explicit knowledge scope(s): at least one of project_scope or "
+            "domain_scope must be non-empty — full-library search is not allowed. "
             "Returns structured evidence items with relevance scores, source positions, "
             "and completion status indicating coverage quality."
         ),
@@ -142,7 +153,8 @@ def register_search_knowledge_tool(
     )
     async def search_knowledge(
         query: str,
-        project_scope: list[str],
+        project_scope: list[str] | None = None,
+        domain_scope: list[str] | None = None,
         top_k: int = 5,
         task_context: dict | None = None,
     ) -> dict[str, Any]:
@@ -161,7 +173,8 @@ def register_search_knowledge_tool(
         """
         return await search_knowledge_core(
             query=query,
-            project_scope=project_scope,
+            project_scope=project_scope or [],
+            domain_scope=domain_scope or [],
             top_k=top_k,
             task_context=task_context,
             session_factory=session_factory,

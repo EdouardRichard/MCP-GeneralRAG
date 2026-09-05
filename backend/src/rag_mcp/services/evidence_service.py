@@ -48,6 +48,7 @@ class EvidenceService:
         self,
         evidence_id: str,
         project_scopes: list[str],
+        domain_scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve full evidence content by evidence_id with scope validation.
 
@@ -85,6 +86,9 @@ class EvidenceService:
 
         # 2. Resolve project_scopes to knowledge_scope_ids
         resolved_scope_ids = await self._resolve_scope_ids(project_scopes)
+        for d in await self._resolve_domain_scope_ids(domain_scopes or []):
+            if d not in resolved_scope_ids:
+                resolved_scope_ids.append(d)
 
         # 3. Query Chunk by chunk_id
         result = await self._session.execute(
@@ -387,6 +391,52 @@ class EvidenceService:
                 if scope_id not in scope_ids:
                     scope_ids.append(scope_id)
 
+        return scope_ids
+
+    async def _resolve_domain_scope_ids(self, domain_refs: list[str]) -> list[int]:
+        """Resolve domain_scope entries (numeric → slug → type:name) for evidence."""
+        scope_ids: list[int] = []
+        for ref in domain_refs:
+            ref_stripped = ref.strip()
+            if not ref_stripped:
+                continue
+            try:
+                numeric = int(ref_stripped)
+                r = await self._session.execute(
+                    select(KnowledgeScope.scope_id).where(
+                        KnowledgeScope.scope_id == numeric,
+                        KnowledgeScope.status == "active",
+                    )
+                )
+                sid = r.scalar_one_or_none()
+                if sid is not None and sid not in scope_ids:
+                    scope_ids.append(sid)
+                continue
+            except ValueError:
+                pass
+            r = await self._session.execute(
+                select(KnowledgeScope.scope_id).where(
+                    KnowledgeScope.slug == ref_stripped,
+                    KnowledgeScope.status == "active",
+                )
+            )
+            sid = r.scalar_one_or_none()
+            if sid is not None and sid not in scope_ids:
+                scope_ids.append(sid)
+                continue
+            if ":" in ref_stripped:
+                stype, _, name = ref_stripped.partition(":")
+                if stype in ("project", "public") and name:
+                    r = await self._session.execute(
+                        select(KnowledgeScope.scope_id).where(
+                            KnowledgeScope.scope_type == stype,
+                            KnowledgeScope.name == name,
+                            KnowledgeScope.status == "active",
+                        )
+                    )
+                    for sid in r.scalars().all():
+                        if sid not in scope_ids:
+                            scope_ids.append(sid)
         return scope_ids
 
     async def _get_scope_type(self, scope_id: int) -> str:

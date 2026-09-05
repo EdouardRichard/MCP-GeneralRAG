@@ -119,6 +119,7 @@ async def run_agentic_search(
     project_scopes: list[str],
     top_k: int,
     task_context: dict | None,
+    domain_scopes: list[str] | None = None,
     session_factory: Callable[[], Any],
     qdrant_store: QdrantStore,
     embedding_provider: EmbeddingProvider,
@@ -152,7 +153,7 @@ async def run_agentic_search(
             embedding_provider=embedding_provider,
             reranker=reranker,
         )
-        scope_ids, error_info = await service.resolve_project_refs(project_scopes)
+        scope_ids, error_info = await service.resolve_knowledge_scopes(project_scopes, domain_scopes)
 
     if error_info is not None or not scope_ids:
         response = {

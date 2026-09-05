@@ -43,7 +43,8 @@ def register_get_evidence_tool(
     )
     async def get_evidence(
         evidence_id: str,
-        project_scope: list[str],
+        project_scope: list[str] | None = None,
+        domain_scope: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve full evidence content by evidence_id.
 
@@ -67,13 +68,16 @@ def register_get_evidence_tool(
                 },
             }
 
-        if not project_scope or len(project_scope) == 0:
+        project_scope = project_scope or []
+        domain_scope = domain_scope or []
+        if not any((r or "").strip() for r in project_scope) and not any((r or "").strip() for r in domain_scope):
+            code = "MISSING_KNOWLEDGE_SCOPE" if any((r or "").strip() for r in domain_scope) else "MISSING_PROJECT_SCOPE"
             return {
                 "evidence_id": evidence_id,
                 "status": "unavailable",
                 "error": {
-                    "code": "MISSING_PROJECT_SCOPE",
-                    "message": "At least one project_scope entry is required.",
+                    "code": code,
+                    "message": "At least one project_scope or domain_scope entry is required.",
                 },
             }
 
@@ -83,6 +87,7 @@ def register_get_evidence_tool(
                 result = await service.get_evidence(
                     evidence_id=evidence_id.strip(),
                     project_scopes=project_scope,
+                    domain_scopes=domain_scope,
                 )
                 await session.commit()
                 return result
