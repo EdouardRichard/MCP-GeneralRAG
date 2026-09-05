@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/007/mcp-get-evidence.schema.json",
+  "title": "get_evidence Input/Output Schema (007)",
+  "description": "证据展开 Tool 输入/输出结构（007 扩展）。输入新增可选 domain_scope，与 project_scope 至少一个非空；输出契约零改动（knowledge_scope_id/knowledge_scope_type 本就域中立）。",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "description": "get_evidence 输入参数",
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "description": "从 search_knowledge 返回的证据 ID"
+        },
+        "project_scope": {
+          "type": "array",
+          "description": "显式项目作用域（兼容形式），必须包含该证据所属项目",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "maxItems": 10
+        },
+        "domain_scope": {
+          "type": "array",
+          "description": "显式知识域作用域（新形式），必须包含该证据所属知识域",
+          "items": {
+            "$ref": "common.schema.json#/definitions/KnowledgeDomainReference"
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "evidence_id"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "project_scope"
+          ]
+        },
+        {
+          "required": [
+            "domain_scope"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "description": "get_evidence 输出结构（007 零改动）",
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "description": "证据唯一标识"
+        },
+        "full_content": {
+          "type": "string",
+          "description": "完整 Chunk 内容"
+        },
+        "parent_context": {
+          "type": "string",
+          "description": "父级上下文（如有）"
+        },
+        "source_version": {
+          "type": "integer",
+          "description": "知识源版本号"
+        },
+        "source_position": {
+          "type": "string",
+          "description": "来源位置路径"
+        },
+        "knowledge_scope_id": {
+          "type": "string",
+          "description": "知识域标识"
+        },
+        "knowledge_scope_type": {
+          "type": "string",
+          "enum": [
+            "project",
+            "public"
+          ],
+          "description": "知识域类型"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable",
+            "scope_mismatch"
+          ],
+          "description": "证据状态"
+        },
+        "error": {
+          "type": "object",
+          "description": "错误信息（status 非 available 时存在）",
+          "properties": {
+            "code": {
+              "$ref": "common.schema.json#/definitions/KnowledgeScopeErrorCode"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "evidence_id",
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "input",
+    "output"
+  ],
+  "additionalProperties": false
+}

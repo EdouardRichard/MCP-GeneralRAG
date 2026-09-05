@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/007/common.schema.json",
+  "title": "Common Schema Definitions (007 Knowledge Domain Generalization)",
+  "description": "知识域泛化共享类型定义。其他 007 schema 通过 $ref 引用本文件 definitions。",
+  "type": "object",
+  "definitions": {
+    "DomainKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "域档案稳定标识（se-project / generic / legal …）"
+    },
+    "ScopeSlug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "知识域全局唯一按名寻址标识（跨 project/public；仅 domain_scope 参数内解析；创建后不可变）"
+    },
+    "KnowledgeDomainReference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "domain_scope 条目：数字 knowledge_scope_id（任意 scope_type，限活跃域）、scope slug，或 type:name 限定引用（如 public:法规库）"
+    },
+    "KnowledgeScopeType": {
+      "type": "string",
+      "enum": [
+        "project",
+        "public"
+      ],
+      "description": "知识域结构轴类型（闭合二元）"
+    },
+    "ScopeCandidate": {
+      "type": "object",
+      "description": "引用歧义时返回的候选（AMBIGUOUS_PROJECT_REF 旧形态 / AMBIGUOUS_DOMAIN_REF 新形态的统一超集；旧码响应字节级保持 1.0 形态，新码响应增量携带 scope_type/domain_key/slug）",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "项目稳定 ID（仅旧 project_scope 形态候选）"
+        },
+        "scope_id": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "知识域稳定 ID（仅 domain_scope 形态候选）"
+        },
+        "name": {
+          "type": "string",
+          "description": "名称"
+        },
+        "alias": {
+          "type": "string",
+          "description": "项目别名（仅旧形态候选，如有）"
+        },
+        "repo_path": {
+          "type": "string",
+          "description": "仓库路径（仅旧形态候选，如有）"
+        },
+        "scope_type": {
+          "$ref": "#/definitions/KnowledgeScopeType",
+          "description": "知识域类型（仅 domain_scope 形态候选）"
+        },
+        "domain_key": {
+          "$ref": "#/definitions/DomainKey",
+          "description": "域档案标识（仅 domain_scope 形态候选）"
+        },
+        "slug": {
+          "$ref": "#/definitions/ScopeSlug",
+          "description": "按名寻址标识（仅 domain_scope 形态候选）"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "DomainCapabilitiesSummary": {
+      "type": "object",
+      "description": "知识域能力摘要（由域档案声明派生，非知识内容）",
+      "properties": {
+        "supported_formats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "支持格式集（来自域档案 supported_formats 声明）"
+        },
+        "has_graph": {
+          "type": "boolean",
+          "description": "是否有图关系词表（graph_relations 非空）"
+        }
+      },
+      "required": [
+        "supported_formats",
+        "has_graph"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeScopeErrorCode": {
+      "type": "string",
+      "enum": [
+        "SYSTEM_ERROR",
+        "MISSING_PROJECT_SCOPE",
+        "AMBIGUOUS_PROJECT_REF",
+        "INVALID_PROJECT_REF",
+        "INDEX_UNAVAILABLE",
+        "MISSING_KNOWLEDGE_SCOPE",
+        "AMBIGUOUS_DOMAIN_REF"
+      ],
+      "description": "错误码枚举（只增不删）：旧码沿用，新增 domain_scope 双轨新码（MISSING_KNOWLEDGE_SCOPE / AMBIGUOUS_DOMAIN_REF）"
+    },
+    "ErrorObject": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "机器可读错误码"
+        },
+        "message": {
+          "type": "string",
+          "description": "人类可读错误描述"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

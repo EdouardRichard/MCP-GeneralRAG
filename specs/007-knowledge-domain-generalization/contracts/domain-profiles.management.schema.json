@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/007/domain-profiles.management.schema.json",
+  "title": "Domain Profile Management Contract (007)",
+  "description": "管理面（REST API + Web）域档案 CRUD 与知识域 domain_key/slug 分配的契约（FR-026/SC-008）。内置档案只读保护：is_builtin 行拒绝任何修改/删除（含字段级）。",
+  "type": "object",
+  "properties": {
+    "profile": {
+      "type": "object",
+      "description": "域档案记录",
+      "properties": {
+        "domain_key": {
+          "$ref": "common.schema.json#/definitions/DomainKey"
+        },
+        "name": {
+          "type": "string",
+          "description": "显示名"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "描述"
+        },
+        "supported_formats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "支持格式集声明"
+        },
+        "chunk_type_extensions": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "命名空间扩展词表"
+        },
+        "graph_relations": {
+          "type": "object",
+          "description": "图关系词表及方向（generic 为空对象）"
+        },
+        "prompt_overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "planner 提示词注入片段"
+        },
+        "default_capabilities": {
+          "type": "object",
+          "description": "默认能力声明"
+        },
+        "is_builtin": {
+          "type": "boolean",
+          "description": "内置标记（true 时只读）"
+        }
+      },
+      "required": [
+        "domain_key",
+        "name",
+        "supported_formats",
+        "graph_relations",
+        "default_capabilities",
+        "is_builtin"
+      ],
+      "additionalProperties": false
+    },
+    "scope_assignment": {
+      "type": "object",
+      "description": "知识域创建/更新时的 domain_key 与 slug 声明",
+      "properties": {
+        "domain_key": {
+          "$ref": "common.schema.json#/definitions/DomainKey",
+          "description": "域档案引用（缺省 se-project）"
+        },
+        "slug": {
+          "$ref": "common.schema.json#/definitions/ScopeSlug",
+          "description": "按名寻址标识（创建后不可变）"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "profile"
+  ],
+  "additionalProperties": false
+}

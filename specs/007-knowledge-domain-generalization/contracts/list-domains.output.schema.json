@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/007/list-domains.output.schema.json",
+  "title": "list_knowledge_domains Output Schema (007)",
+  "description": "知识域发现只读 Tool 输出。仅返回活跃域元数据（ID/slug/名称/scope_type/domain_key/能力摘要），绝不返回知识内容（chunk/证据/摘录/来源片段均为禁止输出）。首期全量返回活跃域、无过滤/分页（Q5）。",
+  "type": "object",
+  "properties": {
+    "domains": {
+      "type": "array",
+      "description": "活跃知识域元数据列表；空实例返回空数组",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "知识域稳定 ID（Snowflake 字符串形式）"
+          },
+          "slug": {
+            "$ref": "common.schema.json#/definitions/ScopeSlug"
+          },
+          "name": {
+            "type": "string",
+            "description": "知识域名称"
+          },
+          "scope_type": {
+            "$ref": "common.schema.json#/definitions/KnowledgeScopeType"
+          },
+          "domain_key": {
+            "$ref": "common.schema.json#/definitions/DomainKey"
+          },
+          "capabilities": {
+            "$ref": "common.schema.json#/definitions/DomainCapabilitiesSummary"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "scope_type",
+          "domain_key",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "domains"
+  ],
+  "additionalProperties": false
+}

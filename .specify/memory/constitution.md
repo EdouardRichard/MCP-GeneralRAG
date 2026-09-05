@@ -1,28 +1,50 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 -> 1.2.0
-- Rationale: MINOR. The consolidated 7-principle set was restructured 1:1 to the
-  blueprint Chapter 3 "核心设计原则" (10 条) so each principle is independently
-  testable. No obligation was removed or weakened; the new set is a strict
-  superset of v1.1.0. A new "Non-Negotiable Hard Constraints" section codifies
-  the Chapter 24.2 hard acceptance criteria as release blockers.
+- Version change: 1.2.0 -> 1.3.0
+- Rationale: MINOR. Domain-generalization amendment per the approved 2.0
+  evolution blueprint (docs/通用RAG演进蓝图.md §3.1/§3.2/ADR-7): the scope
+  subject is generalized from project-knowledge retrieval to knowledge-domain
+  retrieval, and one new principle (XI Domain Neutrality) is added. No
+  obligation was removed or weakened; `project_scope` remains a supported
+  compatible reference form and all 1.0 acceptance semantics carry over, so
+  the bump is MINOR, not MAJOR.
 - Principle mapping (old -> new):
-    I.  Explicit Knowledge Scope            -> I.   Explicit Knowledge Scope (unchanged)
-    II. Evidence Before Inference           -> II.  Project Facts Take Priority
-                                              III. Expose Uncertainty
-                                              IV.  Locatable Evidence
-    III.Untrusted Content Isolation         -> V.   Data and Control Separation (renamed, same scope)
-    IV. Deterministic Control and Stable Contracts
-                                            -> VI.  Deterministic Control First (control half)
-                                              VII. Independent Interface Evolution (contract half)
-    V.  Versioned and Rebuildable Knowledge -> VIII. Knowledge Version Non-Mixing (renamed, same scope)
-    VI. Client-Compatible Read-Only MCP     -> IX.  Synchronous Results First (reframed, superset)
-    VII.Evaluation-Driven Evolution         -> X.   Evaluation-Driven Optimization (expanded)
-- Added sections: Non-Negotiable Hard Constraints
-- Modified sections: Core Principles (restructured to 10); Governance (adds
-  hard-constraint release-blocker rule and reference to the constraint section)
-- Removed sections: none (Architecture Constraints and Specification and
-  Delivery Workflow preserved verbatim from v1.1.0)
+    I.  Explicit Knowledge Scope            -> I.   Explicit Knowledge Scope (domain-generalized:
+                                                 project-knowledge retrieval -> knowledge-domain
+                                                 retrieval; explicit reference = project_scope OR
+                                                 domain_scope; project_scope kept as legacy form)
+    II. Project Facts Take Priority         -> II.  Domain Facts Take Priority (renamed, domain-neutral
+                                                 wording; same non-overwrite + dual-return + identity
+                                                 obligations)
+    III.Expose Uncertainty                   -> unchanged
+    IV. Locatable Evidence                   -> unchanged
+    V.  Data and Control Separation          -> unchanged
+    VI. Deterministic Control First          -> unchanged
+    VII.Independent Interface Evolution      -> unchanged
+    VIII.Knowledge Version Non-Mixing        -> unchanged
+    IX. Synchronous Results First            -> unchanged
+    X.  Evaluation-Driven Optimization       -> X.   Evaluation-Driven Optimization (expanded: real-project
+                                                 corpora -> real-domain corpora incl. software-engineering
+                                                 and general domains)
+    (new)                                    -> XI.  Domain Neutrality (no hardcoded domain assumptions;
+                                                 domain differences expressed via DomainProfile
+                                                 declarations)
+- Added sections: Core Principle XI
+- Modified sections: Core Principles I, II, X; Non-Negotiable Hard Constraints
+  (constraints 1-2 domain-neutralized: "cross-project leakage" -> "cross-domain
+  leakage", "explicit project_scope" -> "explicit knowledge-domain reference
+  (project_scope or domain_scope)"); Specification and Delivery Workflow item 2
+  marked as a 1.0 historical record
+- Removed sections: none
+- Affected artifacts: .specify/memory/constitution.md (this file); downstream
+  consumers are the upcoming Features 007-011 specs/plans/tasks, which will be
+  verified against v1.3.0 by /speckit-plan and /speckit-analyze; delivered
+  Features 001-006 artifacts remain governed by their ratification-time
+  version and require no retrofit
+- Migration impact: none for existing code, data, or MCP clients — v1.3.0 only
+  widens the scope-reference surface (adds the optional domain_scope form);
+  project_scope behavior, legacy error codes, and every hard-constraint
+  verification ritual are unchanged for legacy-only callers
 - Deferred items: none
 -->
 # AI Engineering RAG MCP Constitution
@@ -30,21 +52,23 @@ Sync Impact Report
 ## Core Principles
 
 ### I. Explicit Knowledge Scope
-Every project-knowledge retrieval request MUST carry one or more explicit
-project references (an explicit `project_scope`). The system MUST NOT infer an
-implicit active project, MUST NOT default to whole-library search, and MUST
-refuse retrieval when scope is absent. A project reference that cannot be
-resolved to a unique project MUST stop retrieval and return candidate projects.
-Public knowledge MUST use a distinct public scope and MUST NOT masquerade as a
-project.
+Every knowledge-domain retrieval request MUST carry one or more explicit
+knowledge-domain references (in `project_scope` or `domain_scope` form;
+either form suffices). The system MUST NOT infer an implicit active domain,
+MUST NOT default to whole-library search, and MUST refuse retrieval when no
+scope reference resolves. A reference that cannot be resolved to a unique
+knowledge scope MUST stop retrieval and return candidate scopes. Public
+knowledge MUST use a distinct public scope and MUST NOT masquerade as a
+project. The legacy `project_scope` parameter remains a supported compatible
+reference form.
 
-### II. Project Facts Take Priority
-Public knowledge MUST NOT silently overwrite project knowledge. When project
-and public evidence conflict, the system MUST return both concurrently, each
-retaining its domain identity. Public knowledge participates only when a query
-involves a relevant public capability; project knowledge answers how the current
-project uses that capability, and public knowledge answers what that capability
-is.
+### II. Domain Facts Take Priority
+Public/shared knowledge MUST NOT silently overwrite domain-specific knowledge.
+When public and domain-specific evidence conflict, the system MUST return both
+concurrently, each retaining its domain identity. Public knowledge participates
+only when a query involves a relevant public capability; domain-specific
+knowledge answers how this domain uses that capability, and public knowledge
+answers what that capability is.
 
 ### III. Expose Uncertainty
 Conflicts that cannot be adjudicated and evidence gaps MUST be returned to the
@@ -92,10 +116,20 @@ usable core evidence and MUST NOT depend on Resources or Tasks support.
 
 ### X. Evaluation-Driven Optimization
 Retrieval quality, latency, and cost MUST be determined by evaluation on
-real-project corpora and target MCP hosts, not by theoretical assumption.
-Enhancements (lexical, rerank, graph, and Agent orchestration) MUST prove
-measurable benefit against a fixed baseline AND MUST NOT violate any hard
-acceptance metric before entering the default retrieval path.
+real-domain corpora (software-engineering and general knowledge domains alike)
+and target MCP hosts, not by theoretical assumption. Enhancements (lexical,
+rerank, graph, and Agent orchestration) MUST prove measurable benefit against a
+fixed baseline AND MUST NOT violate any hard acceptance metric before entering
+the default retrieval path.
+
+### XI. Domain Neutrality
+Ingestion, retrieval, orchestration, and externally-facing contracts MUST NOT
+presuppose a specific knowledge domain. Domain differences — supported formats,
+chunk-type vocabularies, graph relation vocabularies, planner prompt content,
+and default capabilities — MUST be expressed declaratively through domain
+profiles (DomainProfile) and MUST NOT be hardcoded in code paths. The
+software-engineering domain is the first built-in domain profile, not a default
+assumption of the system.
 
 ## Non-Negotiable Hard Constraints
 
@@ -104,16 +138,17 @@ acceptance criteria (Chapter 24.2) and the scope/data principles, each is a
 release blocker; violation by any feature, task, or implementation MUST halt
 release until corrected.
 
-- **Cross-project leakage MUST be zero.** No retrieval result, evidence item,
+- **Cross-domain leakage MUST be zero.** No retrieval result, evidence item,
   graph relationship, or chunk from one `knowledge_scope` may surface in
-  another project's retrieval unless an explicit multi-project
-  `project_scope` requested it. *Verification: the count of cross-project
-  leakage events in the acceptance suite MUST equal zero.*
-- **Retrieval without explicit project_scope MUST be rejected.** A
-  project-knowledge retrieval request carrying no explicit `project_scope`
-  MUST be refused; it MUST NOT fall back to any default or whole-library
-  search. *Verification: a request with no project_scope returns a rejection,
-  never results.*
+  another domain's retrieval unless an explicit multi-scope request
+  (`project_scope` or `domain_scope`) included that scope. *Verification:
+  the count of cross-domain leakage events in the acceptance suite MUST equal
+  zero.*
+- **Retrieval without an explicit knowledge-domain reference MUST be
+  rejected.** A knowledge retrieval request carrying no explicit scope
+  reference (neither `project_scope` nor `domain_scope`) MUST be refused; it
+  MUST NOT fall back to any default or whole-library search. *Verification: a
+  request with no scope reference returns a rejection, never results.*
 - **Uploaded content MUST NOT act as a control instruction.** Uploaded
   documents and code are untrusted data only; they MUST NOT control prompts,
   tool selection, permissions, capability gating, or state transitions.
@@ -147,9 +182,10 @@ release until corrected.
 
 1. Every delivery Feature MUST have independently testable user scenarios and
    measurable success criteria in `spec.md`.
-2. The first delivery Feature is `001-minimum-rag-mcp-loop`; it covers the Web
-   management path, Markdown and Java ingestion, Dense retrieval, both MCP Tools,
-   and baseline evaluation.
+2. (1.0 historical record) The first delivery Feature was
+   `001-minimum-rag-mcp-loop`; it covered the Web management path, Markdown
+   and Java ingestion, Dense retrieval, both MCP Tools, and baseline
+   evaluation.
 3. Feature clarification MUST resolve all `[NEEDS CLARIFICATION]` markers before
    planning.
 4. `plan.md` MUST preserve the approved system blueprint and this constitution.
@@ -180,4 +216,4 @@ compliance, including every Non-Negotiable Hard Constraint. Exceptions MUST be
 documented in the relevant Feature `research.md` with an expiry or removal
 condition; silent exceptions are prohibited.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-08-27
+**Version**: 1.3.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-05
