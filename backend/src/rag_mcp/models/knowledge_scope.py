@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
 
-from sqlalchemy import BigInteger, String, text
+from sqlalchemy import BigInteger, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,16 @@ class KnowledgeScope(Base):
         String(16), nullable=False, comment="'project' or 'public'"
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    domain_key: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("domain_profiles.domain_key"),
+        nullable=False,
+        server_default=text("'se-project'"),
+        comment="semantic axis: domain profile key",
+    )
+    slug: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, comment="globally-unique name-addressing slug"
+    )
     status: Mapped[str] = mapped_column(
         String(16),
         nullable=False,

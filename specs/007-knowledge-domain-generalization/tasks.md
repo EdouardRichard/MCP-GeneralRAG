@@ -34,20 +34,20 @@
 
 ### Tests（先写，确保 FAIL）
 
-- [ ] T001 [P] [US1] 契约测试：校验 domain-profiles.management.schema.json 的 profile 记录与 scope_assignment 结构，及内置种子内容形状 → backend/tests/contract/test_domain_profile_schema.py（FR-003/FR-004/FR-021）
-- [ ] T002 [P] [US1] 集成测试（RED）：迁移创建 domain_profiles 两内置行 + knowledge_scopes.domain_key/slug 回填（domain_key=se-project、slug 全局唯一）→ backend/tests/integration/test_migration_007.py（FR-002/FR-004）
-- [ ] T003 [P] [US1] 单元测试（RED）：内置种子内容——se-project 8 原生格式 + 4 图关系词表；generic 空图关系 + 域中立提示词 → backend/tests/unit/test_domain_profile_seed.py（FR-004）
-- [ ] T004 [P] [US1] 单元测试（RED）：启动同步修复内置行漂移 + 同步失败显式失败启动 → backend/tests/unit/test_domain_profile_sync.py（FR-005/SC-008）
+- [X] T001 [P] [US1] 契约测试：校验 domain-profiles.management.schema.json 的 profile 记录与 scope_assignment 结构，及内置种子内容形状 → backend/tests/contract/test_domain_profile_schema.py（FR-003/FR-004/FR-021）
+- [X] T002 [P] [US1] 集成测试（RED）：迁移创建 domain_profiles 两内置行 + knowledge_scopes.domain_key/slug 回填（domain_key=se-project、slug 全局唯一）→ backend/tests/integration/test_migration_007.py（FR-002/FR-004）
+- [X] T003 [P] [US1] 单元测试（RED）：内置种子内容——se-project 8 原生格式 + 4 图关系词表；generic 空图关系 + 域中立提示词 → backend/tests/unit/test_domain_profile_seed.py（FR-004）
+- [X] T004 [P] [US1] 单元测试（RED）：启动同步修复内置行漂移 + 同步失败显式失败启动 → backend/tests/unit/test_domain_profile_sync.py（FR-005/SC-008）
 
 ### Implementation
 
-- [ ] T005 [US1] 新增 DomainProfile ORM（domain_key PK + supported_formats/chunk_type_extensions/graph_relations/prompt_overrides/default_capabilities JSONB + is_builtin）→ backend/src/rag_mcp/models/domain_profile.py（FR-003）
-- [ ] T006 [US1] 扩展 KnowledgeScope：domain_key（FK 缺省 se-project）+ slug（全局唯一）→ backend/src/rag_mcp/models/knowledge_scope.py（FR-001/FR-012）
-- [ ] T007 [US1] 迁移 0070_create_domain_profiles：建表 + 种子 se-project/generic 两内置行 → backend/alembic/versions/0070_create_domain_profiles.py（FR-004）
-- [ ] T008 [US1] 迁移 0071_extend_knowledge_scopes：加 domain_key+slug 列 + 存量回填（domain_key=se-project、slugify(name)+冲突后缀唯一 slug）→ backend/alembic/versions/0071_extend_knowledge_scopes.py（FR-002/FR-012）
-- [ ] T009 [US1] 内置种子定义（se-project/generic JSONB 内容）+ slugify 生成器 → backend/src/rag_mcp/config/domain_profiles.py（FR-004/FR-006/FR-012）
-- [ ] T010 [US1] 域档案注册表服务：进程内同步 + 内置只读保护守卫（is_builtin 拒绝修改/删除）→ backend/src/rag_mcp/services/domain_profile_service.py（FR-005）
-- [ ] T011 [US1] 应用 lifespan 接入启动同步（同步失败显式失败启动，不静默降级）→ backend/src/rag_mcp/server.py（FR-005/SC-008）
+- [X] T005 [US1] 新增 DomainProfile ORM（domain_key PK + supported_formats/chunk_type_extensions/graph_relations/prompt_overrides/default_capabilities JSONB + is_builtin）→ backend/src/rag_mcp/models/domain_profile.py（FR-003）
+- [X] T006 [US1] 扩展 KnowledgeScope：domain_key（FK 缺省 se-project）+ slug（全局唯一）→ backend/src/rag_mcp/models/knowledge_scope.py（FR-001/FR-012）
+- [X] T007 [US1] 迁移 0070_create_domain_profiles：建表 + 种子 se-project/generic 两内置行 → backend/alembic/versions/0070_create_domain_profiles.py（FR-004）
+- [X] T008 [US1] 迁移 0071_extend_knowledge_scopes：加 domain_key+slug 列 + 存量回填（domain_key=se-project、slugify(name)+冲突后缀唯一 slug）→ backend/alembic/versions/0071_extend_knowledge_scopes.py（FR-002/FR-012）
+- [X] T009 [US1] 内置种子定义（se-project/generic JSONB 内容）+ slugify 生成器 → backend/src/rag_mcp/config/domain_profiles.py（FR-004/FR-006/FR-012）
+- [X] T010 [US1] 域档案注册表服务：进程内同步 + 内置只读保护守卫（is_builtin 拒绝修改/删除）→ backend/src/rag_mcp/services/domain_profile_service.py（FR-005）
+- [X] T011 [US1] 应用 lifespan 接入启动同步（同步失败显式失败启动，不静默降级）→ backend/src/rag_mcp/server.py（FR-005/SC-008）
 
 **Checkpoint**: 迁移基座就绪——domain_profiles + 双轴模型落地，US1 数据面可独立验证。
 

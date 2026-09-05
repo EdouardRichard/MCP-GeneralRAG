@@ -127,6 +127,23 @@ async def _acquire_writer_lease(settings):
     )
 
 
+async def _sync_domain_profiles() -> None:
+    """Sync builtin domain profiles at startup (007, FR-005/SC-008).
+
+    Failure raises (fails startup loudly) — never a silent degradation to
+    hardcoded behaviour.
+    """
+    from rag_mcp.db import get_session_factory
+    from rag_mcp.services.domain_profile_service import DomainProfileService
+
+    factory = get_session_factory()
+    async with factory() as session:
+        service = DomainProfileService(session)
+        repairs = await service.sync_builtin_profiles()
+        await session.commit()
+        logger.info("domain profile sync complete (%d repair(s))", repairs)
+
+
 async def _release_writer_lease(lease) -> None:
     """Graceful shutdown: release the lease and deregister the instance."""
     from rag_mcp.db import get_session_factory
@@ -208,6 +225,8 @@ async def lifespan(app: FastAPI):
     _validate_provider_config_or_fail(settings)
     # 抢租约 -> 失败即拒启 (no silent degradation, FR-002)
     lease = await _acquire_writer_lease(settings)
+    # 007: sync builtin domain profiles (drift repair; fails startup on error, FR-005/SC-008)
+    await _sync_domain_profiles()
     renewal_task = asyncio.create_task(
         _lease_renewal_loop(
             lease.lease_id,

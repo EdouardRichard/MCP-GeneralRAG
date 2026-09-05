@@ -14,11 +14,36 @@ from rag_mcp.schemas.project import ProjectCreate
 from rag_mcp.utils.snowflake import generate_id
 
 
+def _default_domain_key() -> str:
+    """Default semantic-axis domain key for new scopes (FR-002)."""
+    return "se-project"
+
+
 class ProjectService:
     """Service layer for project management."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def _allocate_slug(self, name: str, scope_id: int) -> str:
+        """Allocate a globally-unique slug for a new scope (FR-012)."""
+        from rag_mcp.config.domain_profiles import slugify
+
+        base = slugify(name) or ("scope-" + str(scope_id))
+        result = await self._session.execute(
+            select(KnowledgeScope.slug).where(KnowledgeScope.slug == base)
+        )
+        if result.scalar_one_or_none() is None:
+            return base
+        i = 2
+        while True:
+            candidate = base + "-" + str(i)
+            r = await self._session.execute(
+                select(KnowledgeScope.slug).where(KnowledgeScope.slug == candidate)
+            )
+            if r.scalar_one_or_none() is None:
+                return candidate
+            i += 1
 
     async def create_project(self, data: ProjectCreate) -> Project:
         """Create a new project with its associated knowledge scope atomically.
@@ -41,6 +66,8 @@ class ProjectService:
             scope_id=scope_id,
             scope_type="project",
             name=data.name,
+            domain_key=_default_domain_key(),
+            slug=await self._allocate_slug(data.name, scope_id),
             status="active",
             created_at=now,
             updated_at=now,
@@ -82,10 +109,13 @@ class ProjectService:
         )
         if existing.scalar_one_or_none() is not None:
             raise ValueError(f"Public scope with name '{name}' already exists")
+        scope_id = generate_id()
         scope = KnowledgeScope(
-            scope_id=generate_id(),
+            scope_id=scope_id,
             scope_type="public",
             name=name,
+            domain_key=_default_domain_key(),
+            slug=await self._allocate_slug(name, scope_id),
             status="active",
             created_at=now,
             updated_at=now,
