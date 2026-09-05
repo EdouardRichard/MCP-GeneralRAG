@@ -40,7 +40,7 @@ async def two_project_scopes(db_session):
 
     await db_session.commit()
     return {
-        "scope_a": GraphScope(sa, pa, 1), "scope_b": GraphScope(sb, pb, 1),
+        "scope_a": GraphScope(sa, 1), "scope_b": GraphScope(sb, 1),
         "sa": sa, "sb": sb, "pa": pa, "pb": pb,
         "hub_a": hub_a, "hub_b": hub_b,
     }

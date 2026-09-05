@@ -30,7 +30,7 @@ async def us4_scope(db_session):
     for cid in (src_chunk, tgt_chunk):
         await _insert_chunk(db_session, cid, sa, va, src_a)
     await db_session.commit()
-    return {"scope": GraphScope(sa, pa, 1), "src": src_chunk, "tgt": tgt_chunk}
+    return {"scope": GraphScope(sa, 1), "src": src_chunk, "tgt": tgt_chunk}
 
 
 @pytest.mark.asyncio
@@ -61,14 +61,14 @@ async def test_as4_2_hard_soft_distinguishable_no_silent_override(db_session, us
 
     hard_edge = GraphEdge(
         edge_id=generate_id(), knowledge_scope_id=us4_scope["scope"].knowledge_scope_id,
-        project_id=us4_scope["scope"].project_id, index_version=1,
+        index_version=1,
         source_chunk_id=us4_scope["src"], target_chunk_id=us4_scope["tgt"],
         relation_type="calls", direction="out", is_hard=True, version=1,
         parse_evidence={"source_format": "java", "locator": "x", "extractor": "java_call_graph"},
     )
     soft_rel = SoftRelation(
         edge_id=generate_id(), knowledge_scope_id=us4_scope["scope"].knowledge_scope_id,
-        project_id=us4_scope["scope"].project_id, index_version=1,
+        index_version=1,
         source_chunk_id=us4_scope["src"], target_chunk_id=us4_scope["tgt"],
         relation_type="inferred", direction="out", is_hard=False, version=1,
         inference_source="llm", confidence=0.8, model_and_version="m",
@@ -191,24 +191,24 @@ async def soft_search_env(db_session):
     # Active soft relation A -> B (five metadata + active state)
     edge_id = generate_id()
     await db_session.execute(text(
-        "INSERT INTO soft_relation (edge_id, knowledge_scope_id, project_id, "
+        "INSERT INTO soft_relation (edge_id, knowledge_scope_id, "
         "index_version, source_chunk_id, target_chunk_id, relation_type, "
         "direction, is_hard, version, inference_source, confidence, "
         "model_and_version, generated_at, supporting_evidence_ids, lifecycle_state) "
-        "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'inferred', 'out', false, 1, "
+        "VALUES (:eid, :ksid, 1, :src, :tgt, 'inferred', 'out', false, 1, "
         "'llm-offline', 0.9, 'offline-llm-v1', :now, CAST(:ev AS jsonb), 'active')"
-    ), {"eid": edge_id, "ksid": sa, "pid": pa, "src": chunk_a, "tgt": chunk_b,
+    ), {"eid": edge_id, "ksid": sa, "src": chunk_a, "tgt": chunk_b,
         "now": datetime.now(timezone.utc), "ev": json.dumps([str(chunk_a)])})
 
     # Low-confidence inferred relation A -> C must NOT participate (FR-005)
     await db_session.execute(text(
-        "INSERT INTO soft_relation (edge_id, knowledge_scope_id, project_id, "
+        "INSERT INTO soft_relation (edge_id, knowledge_scope_id, "
         "index_version, source_chunk_id, target_chunk_id, relation_type, "
         "direction, is_hard, version, inference_source, confidence, "
         "model_and_version, generated_at, supporting_evidence_ids, lifecycle_state) "
-        "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'inferred', 'out', false, 1, "
+        "VALUES (:eid, :ksid, 1, :src, :tgt, 'inferred', 'out', false, 1, "
         "'llm-offline', 0.2, 'offline-llm-v1', :now, CAST(:ev AS jsonb), 'inferred')"
-    ), {"eid": generate_id(), "ksid": sa, "pid": pa, "src": chunk_a, "tgt": chunk_c,
+    ), {"eid": generate_id(), "ksid": sa, "src": chunk_a, "tgt": chunk_c,
         "now": datetime.now(timezone.utc), "ev": json.dumps([str(chunk_a)])})
     await db_session.commit()
 

@@ -18,7 +18,7 @@ from rag_mcp.graph.models import GraphEdge, GraphExpansionPath, SoftRelation
 class TestGraphEdge:
     def test_valid_hard_calls_edge(self):
         edge = GraphEdge(
-            edge_id=1, knowledge_scope_id=100, project_id=200, index_version=1,
+            edge_id=1, knowledge_scope_id=100, index_version=1,
             source_chunk_id=300, target_chunk_id=301,
             relation_type="calls", direction="out", is_hard=True, version=1,
             parse_evidence={"source_format": "java", "locator": "x", "extractor": "e"},
@@ -30,7 +30,7 @@ class TestGraphEdge:
         """graph_edge (hard) MUST NOT allow relation_type='inferred'."""
         with pytest.raises((ValueError, TypeError)):
             GraphEdge(
-                edge_id=2, knowledge_scope_id=100, project_id=200, index_version=1,
+                edge_id=2, knowledge_scope_id=100, index_version=1,
                 source_chunk_id=300, target_chunk_id=301,
                 relation_type="inferred", direction="out", is_hard=True, version=1,
                 parse_evidence={"source_format": "java", "locator": "x", "extractor": "e"},
@@ -39,7 +39,7 @@ class TestGraphEdge:
     def test_invalid_direction_rejected(self):
         with pytest.raises((ValueError, TypeError)):
             GraphEdge(
-                edge_id=3, knowledge_scope_id=100, project_id=200, index_version=1,
+                edge_id=3, knowledge_scope_id=100, index_version=1,
                 source_chunk_id=300, target_chunk_id=301,
                 relation_type="calls", direction="sideways", is_hard=True, version=1,
                 parse_evidence={"source_format": "java", "locator": "x", "extractor": "e"},
@@ -49,7 +49,7 @@ class TestGraphEdge:
 class TestSoftRelation:
     def _base_kwargs(self):
         return dict(
-            edge_id=10, knowledge_scope_id=100, project_id=200, index_version=1,
+            edge_id=10, knowledge_scope_id=100, index_version=1,
             source_chunk_id=300, target_chunk_id=305,
             relation_type="inferred", direction="out", is_hard=False, version=1,
             inference_source="llm-offline", confidence=0.85,

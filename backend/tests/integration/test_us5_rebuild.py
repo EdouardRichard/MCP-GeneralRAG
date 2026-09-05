@@ -55,7 +55,7 @@ async def rebuild_scope(db_session):
         await _insert_chunk(db_session, c["chunk_id"], scope_id, version_id, source_id)
     await db_session.commit()
     return {
-        "scope": GraphScope(scope_id, project_id, 1),
+        "scope": GraphScope(scope_id, 1),
         "source_id": source_id,
         "chunks": chunks,
     }

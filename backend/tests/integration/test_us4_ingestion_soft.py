@@ -33,7 +33,7 @@ async def soft_scope(db_session):
         await _insert_chunk(db_session, cid, scope_id, version_id, source_id)
     await db_session.commit()
     return {
-        "scope": GraphScope(scope_id, project_id, 1),
+        "scope": GraphScope(scope_id, 1),
         "src": src_chunk, "tgt": tgt_chunk,
         "source_id": source_id, "version_id": version_id,
     }
@@ -169,7 +169,7 @@ class TestIngestPipelineSoftWiring:
         rows = (await db_session.execute(text(
             "SELECT relation_type, is_hard, lifecycle_state, confidence, "
             "model_and_version, inference_source, supporting_evidence_ids, "
-            "knowledge_scope_id, project_id, index_version "
+            "knowledge_scope_id, index_version "
             "FROM soft_relation WHERE knowledge_scope_id = :k"
         ), {"k": scope_id})).fetchall()
         assert rows, "ingest() MUST write soft_relation rows when LLM configured (T042)"

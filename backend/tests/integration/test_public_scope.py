@@ -21,9 +21,9 @@ async def _make_public_scope(db_session, name: str) -> int:
     source_id = generate_id()
     version_id = generate_id()
     await db_session.execute(text(
-        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, status) "
-        "VALUES (:sid, 'public', :name, 'active')"
-    ), {"sid": scope_id, "name": name})
+        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, slug, status) "
+        "VALUES (:sid, 'public', :name, :slug, 'active')"
+    ), {"sid": scope_id, "name": name, "slug": f"scope-{scope_id}"})
     await db_session.execute(text(
         "INSERT INTO knowledge_sources (source_id, knowledge_scope_id, filename, "
         "content_hash, format, size_bytes, status) "

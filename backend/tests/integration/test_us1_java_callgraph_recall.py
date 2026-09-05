@@ -58,14 +58,14 @@ async def us1_two_projects(db_session):
     # Extract and write edges for both
     extractor = JavaCallGraphExtractor()
     store = PostgresGraphStore(db_session)
-    edges_a = extractor.extract(_JAVA_SOURCE, list(chunks_a.values()), GraphScope(sa, pa, 1))
-    await store.write_edges(edges_a, GraphScope(sa, pa, 1))
-    edges_b = extractor.extract(_JAVA_SOURCE, list(chunks_b.values()), GraphScope(sb, pb, 1))
-    await store.write_edges(edges_b, GraphScope(sb, pb, 1))
+    edges_a = extractor.extract(_JAVA_SOURCE, list(chunks_a.values()), GraphScope(sa, 1))
+    await store.write_edges(edges_a, GraphScope(sa, 1))
+    edges_b = extractor.extract(_JAVA_SOURCE, list(chunks_b.values()), GraphScope(sb, 1))
+    await store.write_edges(edges_b, GraphScope(sb, 1))
     await db_session.commit()
 
     return {
-        "scope_a": GraphScope(sa, pa, 1), "scope_b": GraphScope(sb, pb, 1),
+        "scope_a": GraphScope(sa, 1), "scope_b": GraphScope(sb, 1),
         "sa": sa, "sb": sb,
         "chunks_a": chunks_a, "chunks_b": chunks_b,
     }
@@ -220,8 +220,8 @@ async def us1_search_env(db_session):
 
     extractor = JavaCallGraphExtractor()
     store = PostgresGraphStore(db_session)
-    edges = extractor.extract(_JAVA_SOURCE, list(chunks.values()), GraphScope(sa, pa, 1))
-    await store.write_edges(edges, GraphScope(sa, pa, 1))
+    edges = extractor.extract(_JAVA_SOURCE, list(chunks.values()), GraphScope(sa, 1))
+    await store.write_edges(edges, GraphScope(sa, 1))
     await db_session.commit()
 
     vt = chunks["validateToken"]["chunk_id"]

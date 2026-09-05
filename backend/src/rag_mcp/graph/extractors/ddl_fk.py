@@ -237,7 +237,6 @@ class DdlFkExtractor:
             "is_hard": True,
             "version": 1,
             "knowledge_scope_id": scope.knowledge_scope_id,
-            "project_id": scope.project_id,
             "index_version": scope.index_version,
             "parse_evidence": {
                 "source_format": "ddl",

@@ -31,15 +31,15 @@ async def _make_scope_with_edges(db_session):
         await _insert_chunk(db_session, cid, sa, va, src)
     for (s, t) in ((hub, t1), (t1, t2)):
         await db_session.execute(text(
-            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, project_id, "
+            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
             "index_version, source_chunk_id, target_chunk_id, relation_type, "
             "direction, is_hard, version, parse_evidence) "
-            "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'calls', 'out', true, 1, "
+            "VALUES (:eid, :ksid, 1, :src, :tgt, 'calls', 'out', true, 1, "
             "CAST(:pe AS jsonb))"
-        ), {"eid": generate_id(), "ksid": sa, "pid": pa, "src": s, "tgt": t,
+        ), {"eid": generate_id(), "ksid": sa, "src": s, "tgt": t,
             "pe": json.dumps({"source_format": "java", "locator": "x", "extractor": "e"})})
     await db_session.commit()
-    return GraphScope(sa, pa, 1), hub, {t1, t2}
+    return GraphScope(sa, 1), hub, {t1, t2}
 
 
 @pytest.mark.asyncio

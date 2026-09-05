@@ -24,7 +24,6 @@ class GraphScope:
     cross-scope traversal is forbidden (leakage=0).
     """
     knowledge_scope_id: int
-    project_id: int
     index_version: int
 
 

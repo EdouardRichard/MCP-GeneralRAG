@@ -58,10 +58,10 @@ async def us2_scope(db_session):
         await _insert_chunk(db_session, c["chunk_id"], sa, va, src_a)
     extractor = DdlFkExtractor()
     store = PostgresGraphStore(db_session)
-    edges = extractor.extract(_DDL_SOURCE, list(chunks.values()), GraphScope(sa, pa, 1))
-    await store.write_edges(edges, GraphScope(sa, pa, 1))
+    edges = extractor.extract(_DDL_SOURCE, list(chunks.values()), GraphScope(sa, 1))
+    await store.write_edges(edges, GraphScope(sa, 1))
     await db_session.commit()
-    return {"scope": GraphScope(sa, pa, 1), "chunks": chunks, "sa": sa}
+    return {"scope": GraphScope(sa, 1), "chunks": chunks, "sa": sa}
 
 
 @pytest.mark.asyncio
@@ -114,7 +114,7 @@ async def test_as2_3_cross_project_fk_isolation(db_session, us2_scope):
     chunk_ids = [c["chunk_id"] for c in us2_scope["chunks"].values()]
     # All edges involving this scope's chunks must carry this scope's triple
     result = await db_session.execute(text(
-        "SELECT knowledge_scope_id, project_id, index_version FROM graph_edge "
+        "SELECT knowledge_scope_id, index_version FROM graph_edge "
         "WHERE source_chunk_id = ANY(:cids) OR target_chunk_id = ANY(:cids)"
     ), {"cids": chunk_ids})
     rows = result.fetchall()

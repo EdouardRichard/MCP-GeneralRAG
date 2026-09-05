@@ -24,7 +24,6 @@ from rag_mcp.utils.snowflake import generate_id
 
 SCOPE = {
     "knowledge_scope_id": 100,
-    "project_id": 200,
     "index_version": 1,
 }
 
@@ -211,7 +210,6 @@ class TestNeverUpgradesToHard:
             SoftRelation(
                 edge_id=generate_id(),
                 knowledge_scope_id=SCOPE["knowledge_scope_id"],
-                project_id=SCOPE["project_id"],
                 index_version=SCOPE["index_version"],
                 source_chunk_id=300, target_chunk_id=301,
                 relation_type="inferred", direction="out", is_hard=True, version=1,

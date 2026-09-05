@@ -813,18 +813,8 @@ class IngestionService:
             "soft_relations_written": 0,
         }
 
-        project_id = await self._resolve_project_id(scope_id)
-        if project_id is None:
-            details["skipped"] = "no_project_for_scope"
-            logger.info(
-                "Graph extraction skipped for scope %s: no owning project",
-                scope_id,
-            )
-            return details
-
         scope = GraphScope(
             knowledge_scope_id=scope_id,
-            project_id=project_id,
             index_version=version_number,
         )
         store = PostgresGraphStore(self._session)

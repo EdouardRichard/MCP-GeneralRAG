@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rag_mcp.config import get_settings
 from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.models.chunk import Chunk
+from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.knowledge_version import KnowledgeVersion
 from rag_mcp.models.project import Project
 from rag_mcp.providers.base import EmbeddingProvider, RerankerProvider
@@ -421,6 +422,18 @@ class AgenticRetrievalPipeline:
             for sid, pid in presult.all():
                 project_map[sid] = pid
 
+        # scope -> scope_type (007 T021: real knowledge_scope_type, not hardcoded)
+        scope_type_map: dict[int, str] = {}
+        all_scope_ids = set(scope_ids) | set(version_scope_map.values())
+        if all_scope_ids:
+            sresult = await session.execute(
+                sa_select(KnowledgeScope.scope_id, KnowledgeScope.scope_type).where(
+                    KnowledgeScope.scope_id.in_(all_scope_ids)
+                )
+            )
+            for sid, stype in sresult.all():
+                scope_type_map[sid] = stype
+
         enriched: list[dict[str, Any]] = []
         for c in candidates:
             payload = c.get("payload") or {}
@@ -448,7 +461,7 @@ class AgenticRetrievalPipeline:
                     else payload.get("position_path", "")
                 ),
                 "knowledge_scope_id": scope_id,
-                "knowledge_scope_type": "project",
+                "knowledge_scope_type": scope_type_map.get(scope_id, "project"),
                 "project_id": project_map.get(scope_id, 0),
                 "index_version": version_number,
                 "content_excerpt": (chunk.content_text[:500] if chunk is not None else ""),
@@ -465,7 +478,7 @@ class AgenticRetrievalPipeline:
                         "source_id": str(parent.source_id),
                         "source_version": parent_version,
                         "knowledge_scope_id": parent.knowledge_scope_id,
-                        "knowledge_scope_type": "project",
+                        "knowledge_scope_type": scope_type_map.get(parent.knowledge_scope_id, "project"),
                         "project_id": project_map.get(parent.knowledge_scope_id, 0),
                         "index_version": parent_version,
                     }

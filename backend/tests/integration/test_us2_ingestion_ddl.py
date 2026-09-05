@@ -47,7 +47,7 @@ async def ddl_scope(db_session):
     for c in chunks:
         await _insert_chunk(db_session, c["chunk_id"], scope_id, version_id, source_id)
     await db_session.commit()
-    return {"scope": GraphScope(scope_id, project_id, 1), "chunks": chunks}
+    return {"scope": GraphScope(scope_id, 1), "chunks": chunks}
 
 
 @pytest.mark.asyncio
@@ -93,7 +93,7 @@ async def test_fk_edges_isolation(db_session, ddl_scope):
     await db_session.commit()
 
     result = await db_session.execute(text(
-        "SELECT knowledge_scope_id, project_id, index_version, is_hard "
+        "SELECT knowledge_scope_id, index_version, is_hard "
         "FROM graph_edge WHERE knowledge_scope_id = :ksid"
     ), {"ksid": scope.knowledge_scope_id})
     for row in result:
@@ -128,7 +128,7 @@ class TestIngestPipelineGraphWiring:
         await svc.ingest(source_id)
 
         rows = (await db_session.execute(text(
-            "SELECT relation_type, is_hard, knowledge_scope_id, project_id, "
+            "SELECT relation_type, is_hard, knowledge_scope_id, "
             "index_version, parse_evidence "
             "FROM graph_edge WHERE knowledge_scope_id = :k"
         ), {"k": scope_id})).fetchall()

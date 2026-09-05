@@ -30,12 +30,11 @@ async def test_graph_edge_columns(db_session):
     assert "edge_id" in cols
     assert cols["edge_id"]["data_type"] in ("bigint", "integer")
     assert cols["edge_id"]["is_nullable"] == "NO"
-    # isolation triple
-    for c in ("knowledge_scope_id", "project_id", "index_version"):
+    # isolation pair (project_id dropped in 007, FR-018)
+    for c in ("knowledge_scope_id", "index_version"):
         assert c in cols, f"Missing column {c}"
         assert cols[c]["is_nullable"] == "NO"
     assert cols["knowledge_scope_id"]["data_type"] == "bigint"
-    assert cols["project_id"]["data_type"] == "bigint"
     assert cols["index_version"]["data_type"] in ("integer", "bigint")
     # source/target chunk
     for c in ("source_chunk_id", "target_chunk_id"):

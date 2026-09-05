@@ -66,7 +66,7 @@ async def java_scope(db_session):
 
     await db_session.commit()
     return {
-        "scope": GraphScope(scope_id, project_id, 1),
+        "scope": GraphScope(scope_id, 1),
         "scope_id": scope_id,
         "project_id": project_id,
         "chunks": chunks,
@@ -94,7 +94,7 @@ async def test_java_ingestion_writes_graph_edges(db_session, java_scope):
     # Verify edges exist in DB with isolation fields
     result = await db_session.execute(text(
         "SELECT relation_type, source_chunk_id, target_chunk_id, "
-        "is_hard, knowledge_scope_id, project_id, index_version "
+        "is_hard, knowledge_scope_id, index_version "
         "FROM graph_edge WHERE knowledge_scope_id = :ksid"
     ), {"ksid": java_scope["scope_id"]})
     rows = result.fetchall()
@@ -140,7 +140,7 @@ async def test_isolation_triple_on_edges(db_session, java_scope):
 
     # Verify isolation triple on all edges
     result = await db_session.execute(text(
-        "SELECT knowledge_scope_id, project_id, index_version, parse_evidence "
+        "SELECT knowledge_scope_id, index_version, parse_evidence "
         "FROM graph_edge WHERE knowledge_scope_id = :ksid"
     ), {"ksid": java_scope["scope_id"]})
     for row in result:
@@ -182,7 +182,7 @@ class TestIngestPipelineGraphWiring:
         await svc.ingest(source_id)
 
         rows = (await db_session.execute(text(
-            "SELECT relation_type, is_hard, knowledge_scope_id, project_id, "
+            "SELECT relation_type, is_hard, knowledge_scope_id, "
             "index_version, parse_evidence "
             "FROM graph_edge WHERE knowledge_scope_id = :k"
         ), {"k": scope_id})).fetchall()

@@ -41,7 +41,6 @@ def _make_hard_edge() -> GraphEdge:
     return GraphEdge(
         edge_id=1001,
         knowledge_scope_id=7,
-        project_id=1,
         index_version=3,
         source_chunk_id=42,
         target_chunk_id=88,
@@ -63,7 +62,6 @@ def _make_soft_relation() -> SoftRelation:
     return SoftRelation(
         edge_id=2002,
         knowledge_scope_id=7,
-        project_id=1,
         index_version=3,
         source_chunk_id=42,
         target_chunk_id=91,

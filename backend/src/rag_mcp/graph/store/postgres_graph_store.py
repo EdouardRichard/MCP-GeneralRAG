@@ -55,7 +55,6 @@ class PostgresGraphStore(GraphStore):
 
         params: dict[str, Any] = {
             "ksid": scope.knowledge_scope_id,
-            "pid": scope.project_id,
             "iv": scope.index_version,
             "start_chunks": start_chunk_ids,
             "max_hop": max_hop,
@@ -93,8 +92,8 @@ class PostgresGraphStore(GraphStore):
             ))
 
         logger.info(
-            "Graph expand: scope=%d/%d/%d, candidates=%d, budget=%d",
-            scope.knowledge_scope_id, scope.project_id,
+            "Graph expand: scope=%d/%d, candidates=%d, budget=%d",
+            scope.knowledge_scope_id,
             scope.index_version, len(candidates), budget,
         )
         return candidates
@@ -129,16 +128,15 @@ class PostgresGraphStore(GraphStore):
                     pe = json.dumps(pe)
                 await self._session.execute(text(
                     "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
-                    "project_id, index_version, source_chunk_id, "
+                    "index_version, source_chunk_id, "
                     "target_chunk_id, relation_type, direction, is_hard, "
                     "version, parse_evidence) "
-                    "VALUES (:eid, :ksid, :pid, :iv, :src, :tgt, :rt, "
+                    "VALUES (:eid, :ksid, :iv, :src, :tgt, :rt, "
                     ":dir, true, :v, CAST(:pe AS jsonb)) ON CONFLICT DO NOTHING"
                 ), {
                     "eid": edge_id,
                     "ksid": scope.knowledge_scope_id,
-                    "pid": scope.project_id,
-                    "iv": scope.index_version,
+                            "iv": scope.index_version,
                     "src": edge_data["source_chunk_id"],
                     "tgt": edge_data["target_chunk_id"],
                     "rt": edge_data["relation_type"],
@@ -155,8 +153,8 @@ class PostgresGraphStore(GraphStore):
         """True if any graph_edge exists for the given scope."""
         result = await self._session.execute(text(
             "SELECT 1 FROM graph_edge WHERE knowledge_scope_id = :ksid "
-            "AND project_id = :pid AND index_version = :iv LIMIT 1"
-        ), {"ksid": scope.knowledge_scope_id, "pid": scope.project_id,
+            "AND index_version = :iv LIMIT 1"
+        ), {"ksid": scope.knowledge_scope_id,
             "iv": scope.index_version})
         return result.scalar_one_or_none() is not None
 
@@ -179,16 +177,16 @@ class PostgresGraphStore(GraphStore):
         """
         result = await self._session.execute(text(
             "DELETE FROM graph_edge WHERE knowledge_scope_id = :ksid "
-            "AND project_id = :pid AND index_version = :iv"
-        ), {"ksid": scope.knowledge_scope_id, "pid": scope.project_id,
+            "AND index_version = :iv"
+        ), {"ksid": scope.knowledge_scope_id,
             "iv": scope.index_version})
         hard_deleted = result.rowcount
 
         try:
             result2 = await self._session.execute(text(
                 "DELETE FROM soft_relation WHERE knowledge_scope_id = :ksid "
-                "AND project_id = :pid AND index_version = :iv"
-            ), {"ksid": scope.knowledge_scope_id, "pid": scope.project_id,
+                "AND index_version = :iv"
+            ), {"ksid": scope.knowledge_scope_id,
                 "iv": scope.index_version})
             soft_deleted = result2.rowcount
         except Exception:
@@ -245,13 +243,13 @@ class PostgresGraphStore(GraphStore):
         return (
             "SELECT source_chunk_id AS from_chunk, target_chunk_id AS to_chunk, "
             "edge_id, relation_type, direction, is_hard FROM graph_edge "
-            "WHERE knowledge_scope_id = :ksid AND project_id = :pid "
+            "WHERE knowledge_scope_id = :ksid "
             "AND index_version = :iv" + rt_filter +
             " UNION ALL "
             "SELECT source_chunk_id, target_chunk_id, edge_id, relation_type, "
             "direction, is_hard FROM soft_relation "
             "WHERE lifecycle_state = 'active' AND knowledge_scope_id = :ksid "
-            "AND project_id = :pid AND index_version = :iv" + rt_filter
+            "AND index_version = :iv" + rt_filter
         )
 
     def _reverse_edges_cte(self, rt_filter: str) -> str:
@@ -266,7 +264,7 @@ class PostgresGraphStore(GraphStore):
             "ELSE relation_type END AS relation_type, "
             "CASE direction WHEN 'out' THEN 'in' ELSE 'out' END AS direction, "
             "is_hard FROM graph_edge "
-            "WHERE knowledge_scope_id = :ksid AND project_id = :pid "
+            "WHERE knowledge_scope_id = :ksid "
             "AND index_version = :iv" + rt_filter +
             " UNION ALL "
             "SELECT target_chunk_id, source_chunk_id, edge_id, "
@@ -274,7 +272,7 @@ class PostgresGraphStore(GraphStore):
             "CASE direction WHEN 'out' THEN 'in' ELSE 'out' END, "
             "is_hard FROM soft_relation "
             "WHERE lifecycle_state = 'active' AND knowledge_scope_id = :ksid "
-            "AND project_id = :pid AND index_version = :iv" + rt_filter
+            "AND index_version = :iv" + rt_filter
         )
 
     def _build_expansion_sql(self, directed_union: str) -> str:

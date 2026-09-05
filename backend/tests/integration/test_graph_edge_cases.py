@@ -31,13 +31,13 @@ class TestAstDegradation:
     def test_invalid_java_no_fabricated_edges(self):
         """AST failure MUST report degradation, NOT fabricate edges (Edge Case)."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract("this is not { valid java (((", [], scope)
         assert edges == [], "AST failure must not fabricate edges"
 
     def test_empty_source_no_edges(self):
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         assert extractor.extract("", [], scope) == []
         assert extractor.extract("   ", [], scope) == []
 
@@ -46,7 +46,7 @@ class TestNoFkDdl:
     def test_ddl_without_fk_produces_no_edges(self):
         """DDL with no foreign keys produces no edges (Edge Case)."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         chunks = [{"chunk_id": 1, "symbol_path": "table:simple",
                    "symbol_type": "table", "content_text": "simple", "start_line": 1, "end_line": 3}]
         edges = extractor.extract("CREATE TABLE simple (id INT PRIMARY KEY);", chunks, scope)
@@ -55,7 +55,7 @@ class TestNoFkDdl:
     def test_ddl_fk_to_absent_table_skipped(self):
         """FK referencing a table not in project produces no edge (only determinable)."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         # orders references users, but users chunk not provided
         chunks = [{"chunk_id": 1, "symbol_path": "table:orders",
                    "symbol_type": "table", "content_text": "orders", "start_line": 1, "end_line": 6}]
@@ -75,16 +75,16 @@ async def fanout_scope(db_session):
         tgt = generate_id()
         await _insert_chunk(db_session, tgt, sa, va, src)
         await db_session.execute(text(
-            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, project_id, "
+            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
             "index_version, source_chunk_id, target_chunk_id, relation_type, "
             "direction, is_hard, version, parse_evidence) "
-            "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'calls', 'out', true, 1, "
+            "VALUES (:eid, :ksid, 1, :src, :tgt, 'calls', 'out', true, 1, "
             "CAST(:pe AS jsonb))"
-        ), {"eid": generate_id(), "ksid": sa, "pid": pa, "src": hub, "tgt": tgt,
+        ), {"eid": generate_id(), "ksid": sa, "src": hub, "tgt": tgt,
             "pe": json.dumps({"source_format": "java", "locator": "x", "extractor": "e"})})
         targets.append(tgt)
     await db_session.commit()
-    return {"scope": GraphScope(sa, pa, 1), "hub": hub, "targets": targets}
+    return {"scope": GraphScope(sa, 1), "hub": hub, "targets": targets}
 
 
 class TestFanOutTruncation:
@@ -111,12 +111,12 @@ class TestHardSoftConflict:
         import datetime
         es = EvidenceService(None)
         hard = GraphEdge(
-            edge_id=1, knowledge_scope_id=100, project_id=200, index_version=1,
+            edge_id=1, knowledge_scope_id=100, index_version=1,
             source_chunk_id=300, target_chunk_id=301, relation_type="calls",
             direction="out", is_hard=True, version=1,
             parse_evidence={"source_format": "java", "locator": "x", "extractor": "e"})
         soft = SoftRelation(
-            edge_id=2, knowledge_scope_id=100, project_id=200, index_version=1,
+            edge_id=2, knowledge_scope_id=100, index_version=1,
             source_chunk_id=300, target_chunk_id=301, relation_type="inferred",
             direction="out", is_hard=False, version=1,
             inference_source="llm", confidence=0.9, model_and_version="m",
@@ -136,7 +136,7 @@ class TestLowConfidenceExclusion:
         from rag_mcp.graph.soft_relation_inference import SoftRelationInference
         inference = SoftRelationInference()
         rels = inference.infer(
-            chunks=[], scope=GraphScope(100, 200, 1),
+            chunks=[], scope=GraphScope(100, 1),
             llm=lambda c: [(300, 301, 0.2, [999])],
             model_and_version="m", inference_source="llm", direction="out", version=1)
         assert rels[0].lifecycle_state == "inferred", "Low confidence must not be active"
@@ -146,7 +146,7 @@ class TestLowConfidenceExclusion:
         from rag_mcp.graph.soft_relation_inference import SoftRelationInference
         inference = SoftRelationInference()
         rels = inference.infer(
-            chunks=[], scope=GraphScope(100, 200, 1),
+            chunks=[], scope=GraphScope(100, 1),
             llm=lambda c: [(300, 301, 0.9, [])],
             model_and_version="m", inference_source="llm", direction="out", version=1)
         assert rels[0].lifecycle_state == "inferred", "Empty evidence must not be active"
@@ -176,17 +176,17 @@ class TestVersionRevoked:
         await _insert_chunk(db_session, c1, sa, va, src)
         await _insert_chunk(db_session, c2, sa, va, src)
         await db_session.execute(text(
-            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, project_id, "
+            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
             "index_version, source_chunk_id, target_chunk_id, relation_type, "
             "direction, is_hard, version, parse_evidence) "
-            "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'calls', 'out', true, 1, "
+            "VALUES (:eid, :ksid, 1, :src, :tgt, 'calls', 'out', true, 1, "
             "CAST(:pe AS jsonb))"
-        ), {"eid": generate_id(), "ksid": sa, "pid": pa, "src": c1, "tgt": c2,
+        ), {"eid": generate_id(), "ksid": sa, "src": c1, "tgt": c2,
             "pe": json.dumps({"source_format": "java", "locator": "x", "extractor": "e"})})
         await db_session.commit()
 
         store = PostgresGraphStore(db_session)
-        scope = GraphScope(sa, pa, 1)
+        scope = GraphScope(sa, 1)
         # Revoke: cleanup removes graph relations
         await store.cleanup_scope(scope)
         await db_session.commit()

@@ -51,12 +51,12 @@ class GraphEdge(Base):
         CheckConstraint("is_hard = true", name="chk_graph_edge_is_hard"),
         Index(
             "idx_graph_edge_source",
-            "knowledge_scope_id", "project_id", "index_version",
+            "knowledge_scope_id", "index_version",
             "source_chunk_id", "relation_type", "direction",
         ),
         Index(
             "idx_graph_edge_target",
-            "knowledge_scope_id", "project_id", "index_version",
+            "knowledge_scope_id", "index_version",
             "target_chunk_id", "relation_type", "direction",
         ),
         Index(
@@ -70,7 +70,6 @@ class GraphEdge(Base):
     edge_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     knowledge_scope_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("knowledge_scopes.scope_id"), nullable=False)
-    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     index_version: Mapped[int] = mapped_column(Integer, nullable=False)
     source_chunk_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("chunks.chunk_id"), nullable=False)
@@ -135,7 +134,7 @@ class SoftRelation(Base):
         ),
         Index(
             "idx_soft_relation_active",
-            "knowledge_scope_id", "project_id", "index_version", "lifecycle_state",
+            "knowledge_scope_id", "index_version", "lifecycle_state",
             postgresql_where=text("lifecycle_state = 'active'"),
         ),
     )
@@ -143,7 +142,6 @@ class SoftRelation(Base):
     edge_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     knowledge_scope_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("knowledge_scopes.scope_id"), nullable=False)
-    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     index_version: Mapped[int] = mapped_column(Integer, nullable=False)
     source_chunk_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("chunks.chunk_id"), nullable=False)

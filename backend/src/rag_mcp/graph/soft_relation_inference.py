@@ -107,7 +107,6 @@ class SoftRelationInference:
                 SoftRelation(
                     edge_id=generate_id(),
                     knowledge_scope_id=scope["knowledge_scope_id"],
-                    project_id=scope["project_id"],
                     index_version=scope["index_version"],
                     source_chunk_id=source_chunk_id,
                     target_chunk_id=target_chunk_id,
@@ -195,7 +194,6 @@ class SoftRelationInference:
         if hasattr(scope, "knowledge_scope_id"):
             return {
                 "knowledge_scope_id": scope.knowledge_scope_id,
-                "project_id": scope.project_id,
                 "index_version": scope.index_version,
             }
         return dict(scope)

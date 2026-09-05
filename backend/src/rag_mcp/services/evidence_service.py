@@ -344,11 +344,29 @@ class EvidenceService:
             if not ref_stripped:
                 continue
 
+            # Numeric knowledge_scope_id: resolve directly against
+            # KnowledgeScope (any scope_type, active) — fixes the public-scope
+            # evidence broken link (FR-016): numeric public scope IDs no longer
+            # depend on a Project row.
+            try:
+                numeric_id = int(ref_stripped)
+                direct = await self._session.execute(
+                    select(KnowledgeScope.scope_id).where(
+                        KnowledgeScope.scope_id == numeric_id,
+                        KnowledgeScope.status == "active",
+                    )
+                )
+                direct_id = direct.scalar_one_or_none()
+                if direct_id is not None:
+                    if direct_id not in scope_ids:
+                        scope_ids.append(direct_id)
+                    continue
+            except ValueError:
+                pass
+
             conditions = []
 
-            # Try numeric ID (project_id or knowledge_scope_id; additive —
-            # callers/eval datasets may address a project via its stable
-            # knowledge scope ID, consistent with RetrievalService resolution)
+            # Try numeric ID (project_id or knowledge_scope_id)
             try:
                 numeric_id = int(ref_stripped)
                 conditions.append(Project.project_id == numeric_id)

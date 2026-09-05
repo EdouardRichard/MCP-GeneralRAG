@@ -61,7 +61,7 @@ class TestExtraction:
     def test_extracts_fk_references_edges(self):
         """orders references users via FK -> fk_references edge orders->users."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_DDL, _make_chunks(), scope)
         fk_ref = [e for e in edges if e["relation_type"] == "fk_references"]
         pairs = {(e["source_chunk_id"], e["target_chunk_id"]) for e in fk_ref}
@@ -70,7 +70,7 @@ class TestExtraction:
     def test_extracts_fk_referenced_by_edges(self):
         """fk_referenced_by is the reverse: users is referenced_by orders."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_DDL, _make_chunks(), scope)
         fk_rby = [e for e in edges if e["relation_type"] == "fk_referenced_by"]
         pairs = {(e["source_chunk_id"], e["target_chunk_id"]) for e in fk_rby}
@@ -79,7 +79,7 @@ class TestExtraction:
     def test_parse_evidence_present(self):
         """Each edge MUST have parse_evidence with ddl locator (table:X.fk:Y)."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_DDL, _make_chunks(), scope)
         assert edges, "expected at least one edge"
         for e in edges:
@@ -97,7 +97,7 @@ class TestExtraction:
     def test_all_edges_hard(self):
         """All extracted edges MUST be is_hard=true."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_DDL, _make_chunks(), scope)
         assert edges, "expected at least one edge"
         for e in edges:
@@ -106,12 +106,11 @@ class TestExtraction:
     def test_isolation_fields_present(self):
         """Edges MUST carry the isolation triple."""
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_DDL, _make_chunks(), scope)
         assert edges, "expected at least one edge"
         for e in edges:
             assert e["knowledge_scope_id"] == 100
-            assert e["project_id"] == 200
             assert e["index_version"] == 1
 
     def test_no_foreign_keys_produces_no_edges(self):
@@ -127,7 +126,7 @@ class TestExtraction:
              "start_line": 1, "end_line": 5},
         ]
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(ddl, chunks, scope)
         assert edges == []
 
@@ -145,7 +144,7 @@ class TestExtraction:
              "start_line": 1, "end_line": 6},
         ]
         extractor = DdlFkExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(ddl, chunks, scope)
         for e in edges:
             assert e["source_chunk_id"] != e["target_chunk_id"], "No self-edges"

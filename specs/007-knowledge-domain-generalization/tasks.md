@@ -61,23 +61,23 @@
 
 ### Tests（先写，确保 FAIL）
 
-- [ ] T012 [P] [US2] 单元测试（RED）：统一解析器双参数并集 + 按 scope_id 去重 + 空串/纯空白跳过 + 混合新旧引用边界 → backend/tests/unit/test_resolver_boundaries.py（FR-007/FR-008）
-- [ ] T013 [P] [US2] 单元测试（RED）：slug（全局唯一命中）+ type:name（命中/命中多个→歧义/type 非法）寻址 → backend/tests/unit/test_resolver_addressing.py（FR-012/FR-013）
-- [ ] T014 [P] [US4] 集成测试（RED）：public 证据展开——search_knowledge→get_evidence 同作用域链路成功率 100% → backend/tests/integration/test_public_evidence.py（FR-016/SC-007）
-- [ ] T015 [P] [US4] 单元测试（RED）：agentic 证据 knowledge_scope_type = 真实 scope_type（public≠"project"、project 域不变）→ backend/tests/unit/test_agentic_scope_type.py（FR-017）
-- [ ] T016 [P] [US4] 集成测试（RED）：图三元组去 Project——graph_ready 的 public 域图路径可用 + 跨域图边泄漏 = 0 → backend/tests/integration/test_graph_isolation.py（FR-018/SC-007）
+- [X] T012 [P] [US2] 单元测试（RED）：统一解析器双参数并集 + 按 scope_id 去重 + 空串/纯空白跳过 + 混合新旧引用边界 → backend/tests/unit/test_resolver_boundaries.py（FR-007/FR-008）
+- [X] T013 [P] [US2] 单元测试（RED）：slug（全局唯一命中）+ type:name（命中/命中多个→歧义/type 非法）寻址 → backend/tests/unit/test_resolver_addressing.py（FR-012/FR-013）
+- [X] T014 [P] [US4] 集成测试（RED）：public 证据展开——search_knowledge→get_evidence 同作用域链路成功率 100% → backend/tests/integration/test_public_evidence.py（FR-016/SC-007）
+- [X] T015 [P] [US4] 单元测试（RED）：agentic 证据 knowledge_scope_type = 真实 scope_type（public≠"project"、project 域不变）→ backend/tests/unit/test_agentic_scope_type.py（FR-017）
+- [X] T016 [P] [US4] 集成测试（RED）：图三元组去 Project——graph_ready 的 public 域图路径可用 + 跨域图边泄漏 = 0 → backend/tests/integration/test_graph_isolation.py（FR-018/SC-007）
 
 ### Implementation
 
-- [ ] T017 [US2] 解析器泛化：resolve_project_refs → resolve_knowledge_scopes（双参数并集 + 去重，project_scope 旧路径零改动）→ backend/src/rag_mcp/services/retrieval_service.py（FR-007）
-- [ ] T018 [US2] slug 寻址：domain_scope 内按全局唯一 slug 查找活跃域 → backend/src/rag_mcp/services/retrieval_service.py（FR-012/FR-013）
-- [ ] T019 [US2] type:name 寻址：scope_type+精确名称，命中多个返回 AMBIGUOUS_DOMAIN_REF 候选（含 scope_type/domain_key/slug）→ backend/src/rag_mcp/services/retrieval_service.py（FR-013/FR-010）
-- [ ] T020 [US4] 残留修复 1（独立任务）：evidence_service._resolve_scope_ids 复用统一解析器（数字 public scope ID 直达 public 域）→ backend/src/rag_mcp/services/evidence_service.py（FR-016）
-- [ ] T021 [US4] 残留修复 2（独立任务）：agentic scope_type 硬编码改 scope_type_map 预取查找（:451,:468，主条目与父级条目）→ backend/src/rag_mcp/orchestration/retrieval_pipeline.py（FR-017）
-- [ ] T022 [US4] 残留修复 3（独立任务）：迁移 0072_drop_graph_project_id——graph_edge/soft_relation 删 project_id + 重建复合索引 → backend/alembic/versions/0072_drop_graph_project_id.py（FR-018）
-- [ ] T023 [US4] 残留修复 3：GraphScope 去 project_id + postgres_graph_store 原始 SQL（INSERT/SELECT WHERE/递归 CTE）改以 knowledge_scope_id 为唯一隔离键（依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/graph/store/postgres_graph_store.py + graph/store/base.py（FR-018）
-- [ ] T024 [US4] 残留修复 3：soft_relation_inference 去 project_id（含调用方 scope 三元组；依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/graph/soft_relation_inference.py（FR-018）
-- [ ] T025 [US4] 残留修复 3：_graph_scope_triple 去除"须存在 Project 行"门槛（:1114-1122；依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/services/retrieval_service.py（FR-018）
+- [X] T017 [US2] 解析器泛化：resolve_project_refs → resolve_knowledge_scopes（双参数并集 + 去重，project_scope 旧路径零改动）→ backend/src/rag_mcp/services/retrieval_service.py（FR-007）
+- [X] T018 [US2] slug 寻址：domain_scope 内按全局唯一 slug 查找活跃域 → backend/src/rag_mcp/services/retrieval_service.py（FR-012/FR-013）
+- [X] T019 [US2] type:name 寻址：scope_type+精确名称，命中多个返回 AMBIGUOUS_DOMAIN_REF 候选（含 scope_type/domain_key/slug）→ backend/src/rag_mcp/services/retrieval_service.py（FR-013/FR-010）
+- [X] T020 [US4] 残留修复 1（独立任务）：evidence_service._resolve_scope_ids 复用统一解析器（数字 public scope ID 直达 public 域）→ backend/src/rag_mcp/services/evidence_service.py（FR-016）
+- [X] T021 [US4] 残留修复 2（独立任务）：agentic scope_type 硬编码改 scope_type_map 预取查找（:451,:468，主条目与父级条目）→ backend/src/rag_mcp/orchestration/retrieval_pipeline.py（FR-017）
+- [X] T022 [US4] 残留修复 3（独立任务）：迁移 0072_drop_graph_project_id——graph_edge/soft_relation 删 project_id + 重建复合索引 → backend/alembic/versions/0072_drop_graph_project_id.py（FR-018）
+- [X] T023 [US4] 残留修复 3：GraphScope 去 project_id + postgres_graph_store 原始 SQL（INSERT/SELECT WHERE/递归 CTE）改以 knowledge_scope_id 为唯一隔离键（依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/graph/store/postgres_graph_store.py + graph/store/base.py（FR-018）
+- [X] T024 [US4] 残留修复 3：soft_relation_inference 去 project_id（含调用方 scope 三元组；依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/graph/soft_relation_inference.py（FR-018）
+- [X] T025 [US4] 残留修复 3：_graph_scope_triple 去除"须存在 Project 行"门槛（:1114-1122；依赖 T022，与 T022 原子提交）→ backend/src/rag_mcp/services/retrieval_service.py（FR-018）
 
 **Checkpoint**: 引用解析泛化完成——domain_scope 三种寻址可用、三处 public 残留闭环、project 域行为不变。
 

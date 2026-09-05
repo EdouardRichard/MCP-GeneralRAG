@@ -29,7 +29,7 @@ async def test_soft_relation_columns(db_session):
     # edge_id PK + isolation
     assert "edge_id" in cols
     assert cols["edge_id"]["is_nullable"] == "NO"
-    for c in ("knowledge_scope_id", "project_id", "index_version"):
+    for c in ("knowledge_scope_id", "index_version"):
         assert c in cols
         assert cols[c]["is_nullable"] == "NO"
     # source/target

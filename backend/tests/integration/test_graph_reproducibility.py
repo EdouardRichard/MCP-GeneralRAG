@@ -33,16 +33,15 @@ async def repro_scope(db_session):
     edges = [("hub", "a"), ("a", "b"), ("b", "c"), ("hub", "d"), ("hub", "e")]
     for s, t in edges:
         await db_session.execute(text(
-            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, project_id, "
+            "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
             "index_version, source_chunk_id, target_chunk_id, relation_type, "
             "direction, is_hard, version, parse_evidence) "
-            "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, 'calls', 'out', true, 1, "
+            "VALUES (:eid, :ksid, 1, :src, :tgt, 'calls', 'out', true, 1, "
             "CAST(:pe AS jsonb))"
-        ), {"eid": generate_id(), "ksid": sa, "pid": pa,
-            "src": nodes[s], "tgt": nodes[t],
+        ), {"eid": generate_id(), "ksid": sa, "src": nodes[s], "tgt": nodes[t],
             "pe": json.dumps({"source_format": "java", "locator": "x", "extractor": "e"})})
     await db_session.commit()
-    return {"scope": GraphScope(sa, pa, 1), "hub": nodes["hub"]}
+    return {"scope": GraphScope(sa, 1), "hub": nodes["hub"]}
 
 
 @pytest.mark.asyncio

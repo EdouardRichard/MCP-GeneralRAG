@@ -117,8 +117,8 @@ async def trace_env(db_session):
 
     extractor = JavaCallGraphExtractor()
     store = PostgresGraphStore(db_session)
-    edges = extractor.extract(_JAVA_SOURCE, list(chunks.values()), GraphScope(sa, pa, 1))
-    await store.write_edges(edges, GraphScope(sa, pa, 1))
+    edges = extractor.extract(_JAVA_SOURCE, list(chunks.values()), GraphScope(sa, 1))
+    await store.write_edges(edges, GraphScope(sa, 1))
     await db_session.commit()
 
     vt = chunks["validateToken"]["chunk_id"]

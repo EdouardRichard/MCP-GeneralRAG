@@ -22,10 +22,10 @@ async def _setup_scope(session: AsyncSession, scope_id: int, project_id: int,
     """Insert a knowledge_scope, project, knowledge_source, and knowledge_version.
     Returns the source_id."""
     await session.execute(text(
-        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, status) "
-        "VALUES (:sid, 'project', :name, 'active') "
+        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, slug, status) "
+        "VALUES (:sid, 'project', :name, :slug, 'active') "
         "ON CONFLICT (scope_id) DO NOTHING"
-    ), {"sid": scope_id, "name": f"test-scope-{scope_id}"})
+    ), {"sid": scope_id, "name": f"test-scope-{scope_id}", "slug": f"scope-{scope_id}"})
     await session.execute(text(
         "INSERT INTO projects (project_id, name, knowledge_scope_id) "
         "VALUES (:pid, :name, :sid) "
@@ -75,14 +75,13 @@ async def _insert_edge(session: AsyncSession, scope_id: int, project_id: int,
     """Insert a graph_edge and return the edge_id."""
     edge_id = generate_id()
     await session.execute(text(
-        "INSERT INTO graph_edge (edge_id, knowledge_scope_id, project_id, "
+        "INSERT INTO graph_edge (edge_id, knowledge_scope_id, "
         "index_version, source_chunk_id, target_chunk_id, relation_type, "
         "direction, is_hard, version, parse_evidence) "
-        "VALUES (:eid, :ksid, :pid, 1, :src, :tgt, :rt, 'out', true, :v, :pe) "
+        "VALUES (:eid, :ksid, 1, :src, :tgt, :rt, 'out', true, :v, :pe) "
         "ON CONFLICT DO NOTHING"
     ), {
-        "eid": edge_id, "ksid": scope_id, "pid": project_id,
-        "src": src, "tgt": tgt, "rt": rel_type, "v": version,
+        "eid": edge_id, "ksid": scope_id, "src": src, "tgt": tgt, "rt": rel_type, "v": version,
         "pe": '{"source_format":"java","locator":"x","extractor":"e"}',
     })
     return edge_id
@@ -129,8 +128,8 @@ async def graph_test_data(db_session):
     await db_session.commit()
 
     yield {
-        "scope_a": GraphScope(scope_a, proj_a, 1),
-        "scope_b": GraphScope(scope_b, proj_b, 1),
+        "scope_a": GraphScope(scope_a, 1),
+        "scope_b": GraphScope(scope_b, 1),
         "hub_a": hub_a,
         "hub_b": hub_b,
         "targets_a": targets_a,

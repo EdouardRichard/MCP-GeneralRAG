@@ -56,9 +56,9 @@ async def qs_scope(db_session):
     for c in chunks.values():
         await _insert_chunk(db_session, c["chunk_id"], sa, va, src)
     store = PostgresGraphStore(db_session)
-    await store.rebuild_graph_edges(_JAVA, list(chunks.values()), GraphScope(sa, pa, 1), "java")
+    await store.rebuild_graph_edges(_JAVA, list(chunks.values()), GraphScope(sa, 1), "java")
     await db_session.commit()
-    return {"scope": GraphScope(sa, pa, 1), "chunks": chunks, "version_id": va}
+    return {"scope": GraphScope(sa, 1), "chunks": chunks, "version_id": va}
 
 
 def test_scenario1_graph_build_and_ready(qs_scope):

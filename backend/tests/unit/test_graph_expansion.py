@@ -46,7 +46,7 @@ async def expansion_data(db_session):
 
     await db_session.commit()
     return {
-        "scope": GraphScope(scope_id, project_id, 1),
+        "scope": GraphScope(scope_id, 1),
         "hub": hub,
         "a": a,
         "b": b,

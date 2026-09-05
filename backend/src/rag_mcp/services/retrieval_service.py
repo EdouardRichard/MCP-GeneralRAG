@@ -41,6 +41,29 @@ logger = logging.getLogger(__name__)
 _sparse_encoder_cache: dict[tuple[int, ...], "BM25SparseEncoder"] = {}
 
 
+def _non_empty_entries(refs: list[str] | None) -> list[str]:
+    """Return the non-empty / non-whitespace entries of a scope reference list."""
+    if not refs:
+        return []
+    out: list[str] = []
+    for r in refs:
+        if isinstance(r, str) and r.strip():
+            out.append(r)
+    return out
+
+
+
+def _non_empty_entries(refs: list[str] | None) -> list[str]:
+    """Return the non-empty / non-whitespace entries of a scope reference list."""
+    if not refs:
+        return []
+    out: list[str] = []
+    for r in refs:
+        if isinstance(r, str) and r.strip():
+            out.append(r)
+    return out
+
+
 def invalidate_sparse_encoder_cache() -> None:
     """Clear the sparse encoder cache (call after ingestion publishes new data)."""
     global _sparse_encoder_cache
@@ -141,6 +164,7 @@ class RetrievalService:
         project_scopes: list[str],
         top_k: int = 5,
         task_context: dict | None = None,
+        domain_scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         """Execute a scoped semantic search and return structured results.
 
@@ -161,7 +185,7 @@ class RetrievalService:
         retrieval_cfg = self._settings.retrieval
         try:
             return await asyncio.wait_for(
-                self._search_impl(query, project_scopes, top_k, task_context),
+                self._search_impl(query, project_scopes, top_k, task_context, domain_scopes),
                 timeout=retrieval_cfg.total_timeout_ms / 1000.0,
             )
         except asyncio.TimeoutError:
@@ -188,6 +212,7 @@ class RetrievalService:
         project_scopes: list[str],
         top_k: int = 5,
         task_context: dict | None = None,
+        domain_scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         """Body of search(); see the public method for the contract."""
         request_id = str(uuid.uuid4())
@@ -203,7 +228,7 @@ class RetrievalService:
 
         try:
             # 1. Resolve project references to knowledge_scope_ids
-            resolved_ids, error_info = await self.resolve_project_refs(project_scopes)
+            resolved_ids, error_info = await self.resolve_knowledge_scopes(project_scopes, domain_scopes)
 
             if error_info is not None:
                 # Resolution failed — return error response
@@ -528,7 +553,170 @@ class RetrievalService:
 
         return resolved_scope_ids, None
 
+
+    async def resolve_knowledge_scopes(
+        self,
+        project_scope: list[str] | None = None,
+        domain_scope: list[str] | None = None,
+    ) -> tuple[list[int], dict | None]:
+        """Resolve the union of project_scope and domain_scope references (007, T017)."""
+        project_scope = project_scope or []
+        domain_scope = domain_scope or []
+        domain_involved = bool(_non_empty_entries(domain_scope))
+
+        resolved_ids: list[int] = []
+        all_candidates: list[dict[str, Any]] = []
+        ambiguous = False
+
+        # project_scope: legacy semantics (identical to resolve_project_refs).
+        for ref in project_scope:
+            ref_stripped = ref.strip() if isinstance(ref, str) else ""
+            if not ref_stripped:
+                continue
+            try:
+                numeric_ref = int(ref_stripped)
+            except ValueError:
+                numeric_ref = None
+            if numeric_ref is not None:
+                pub_result = await self._session.execute(
+                    select(KnowledgeScope.scope_id).where(
+                        KnowledgeScope.scope_id == numeric_ref,
+                        KnowledgeScope.scope_type == "public",
+                        KnowledgeScope.status == "active",
+                    )
+                )
+                pub_scope_id = pub_result.scalar_one_or_none()
+                if pub_scope_id is not None:
+                    if pub_scope_id not in resolved_ids:
+                        resolved_ids.append(pub_scope_id)
+                    continue
+            projects = await self._find_projects_by_ref(ref_stripped)
+            if len(projects) == 0:
+                continue
+            if len(projects) > 1:
+                ambiguous = True
+                all_candidates.extend([
+                    {
+                        "project_id": str(p.project_id),
+                        "name": p.name,
+                        "alias": p.alias,
+                        "repo_path": p.repo_path,
+                    }
+                    for p in projects
+                ])
+                continue
+            scope_id = projects[0].knowledge_scope_id
+            if scope_id not in resolved_ids:
+                resolved_ids.append(scope_id)
+
+        # domain_scope: new resolution chain.
+        for ref in domain_scope:
+            ref_stripped = ref.strip() if isinstance(ref, str) else ""
+            if not ref_stripped:
+                continue
+            entry = await self._resolve_domain_scope_entry(ref_stripped)
+            if entry is None:
+                continue
+            if isinstance(entry, list):
+                ambiguous = True
+                all_candidates.extend(entry)
+                continue
+            if entry not in resolved_ids:
+                resolved_ids.append(entry)
+
+        if ambiguous:
+            if domain_involved:
+                return [], {
+                    "code": "AMBIGUOUS_DOMAIN_REF",
+                    "message": (
+                        "Domain reference is ambiguous. Please specify using a "
+                        "unique scope slug or numeric scope ID."
+                    ),
+                    "candidates": all_candidates,
+                }
+            return [], {
+                "code": "AMBIGUOUS_PROJECT_REF",
+                "message": (
+                    "Project reference matches multiple projects. "
+                    "Please specify using a unique project_id, alias, or repo_path."
+                ),
+                "candidates": all_candidates,
+            }
+
+        if not resolved_ids:
+            if domain_involved:
+                return [], {
+                    "code": "MISSING_KNOWLEDGE_SCOPE",
+                    "message": (
+                        "None of the provided knowledge domain references could be "
+                        "resolved. Please provide valid scope IDs, slugs, or type:name references."
+                    ),
+                }
+            return [], {
+                "code": "MISSING_PROJECT_SCOPE",
+                "message": (
+                    "None of the provided project references could be resolved. "
+                    "Please provide valid project IDs, aliases, or repository paths."
+                ),
+            }
+
+        return resolved_ids, None
+
+    async def _resolve_domain_scope_entry(self, ref: str) -> int | list[dict] | None:
+        """Resolve one domain_scope entry: numeric → slug → type:name (FR-008)."""
+        try:
+            numeric = int(ref)
+            result = await self._session.execute(
+                select(KnowledgeScope).where(
+                    KnowledgeScope.scope_id == numeric,
+                    KnowledgeScope.status == "active",
+                )
+            )
+            scope = result.scalar_one_or_none()
+            return scope.scope_id if scope is not None else None
+        except ValueError:
+            pass
+
+        result = await self._session.execute(
+            select(KnowledgeScope).where(
+                KnowledgeScope.slug == ref,
+                KnowledgeScope.status == "active",
+            )
+        )
+        scope = result.scalar_one_or_none()
+        if scope is not None:
+            return scope.scope_id
+
+        if ":" in ref:
+            scope_type, _, name = ref.partition(":")
+            if scope_type in ("project", "public") and name:
+                result = await self._session.execute(
+                    select(KnowledgeScope).where(
+                        KnowledgeScope.scope_type == scope_type,
+                        KnowledgeScope.name == name,
+                        KnowledgeScope.status == "active",
+                    )
+                )
+                matches = list(result.scalars().all())
+                if len(matches) == 1:
+                    return matches[0].scope_id
+                if len(matches) > 1:
+                    return [self._domain_candidate(s) for s in matches]
+        return None
+
+    @staticmethod
+    def _domain_candidate(scope: KnowledgeScope) -> dict[str, Any]:
+        """Build a domain-scope candidate (scope_type/domain_key/slug)."""
+        return {
+            "scope_id": str(scope.scope_id),
+            "name": scope.name,
+            "scope_type": scope.scope_type,
+            "domain_key": scope.domain_key,
+            "slug": scope.slug,
+        }
+
     async def recall_candidates(
+
         self,
         query: str,
         scope_ids: list[int],
@@ -1096,7 +1284,6 @@ class RetrievalService:
         when the scope has no graph-eligible published version (FR-014).
         """
         from rag_mcp.graph.capabilities import is_graph_ready_version
-        from rag_mcp.models.project import Project
 
         result = await self._session.execute(
             select(KnowledgeVersion).where(
@@ -1110,16 +1297,7 @@ class RetrievalService:
         )
         if eligible is None:
             return None
-
-        proj_result = await self._session.execute(
-            select(Project.project_id).where(
-                Project.knowledge_scope_id == scope_id
-            ).limit(1)
-        )
-        project_id = proj_result.scalar_one_or_none()
-        if project_id is None:
-            return None
-        return project_id, eligible.version_number
+        return eligible.version_number
 
     async def _graph_recall(
         self,
@@ -1175,13 +1353,11 @@ class RetrievalService:
             hop = max(1, min(int(hop), graph_cfg.hop_max))
         graph_results: list[dict[str, Any]] = []
         for scope_id in scope_ids:
-            triple = await self._graph_scope_triple(scope_id)
-            if triple is None:
+            version_number = await self._graph_scope_triple(scope_id)
+            if version_number is None:
                 continue
-            project_id, version_number = triple
             scope = GraphScope(
                 knowledge_scope_id=scope_id,
-                project_id=project_id,
                 index_version=version_number,
             )
             candidates = await engine.expand(

@@ -68,10 +68,10 @@ class MockQdrantStore:
 async def setup_graph_scope(session, scope_id: int, project_id: int) -> None:
     """Insert knowledge_scope + project rows for an isolated graph test scope."""
     await session.execute(text(
-        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, status) "
-        "VALUES (:sid, 'project', :name, 'active') "
+        "INSERT INTO knowledge_scopes (scope_id, scope_type, name, slug, status) "
+        "VALUES (:sid, 'project', :name, :slug, 'active') "
         "ON CONFLICT (scope_id) DO NOTHING"
-    ), {"sid": scope_id, "name": f"graph-scope-{scope_id}"})
+    ), {"sid": scope_id, "name": f"graph-scope-{scope_id}", "slug": f"scope-{scope_id}"})
     await session.execute(text(
         "INSERT INTO projects (project_id, name, knowledge_scope_id) "
         "VALUES (:pid, :name, :sid) "

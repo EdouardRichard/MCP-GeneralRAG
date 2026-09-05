@@ -53,7 +53,7 @@ class TestExtraction:
     def test_extracts_calls_edges(self):
         """compute calls add and square."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_SOURCE, _make_chunks(), scope)
         calls_edges = [e for e in edges if e["relation_type"] == "calls"]
         # compute calls add and square
@@ -64,7 +64,7 @@ class TestExtraction:
     def test_extracts_called_by_edges(self):
         """called_by edges are the reverse of calls."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_SOURCE, _make_chunks(), scope)
         cb_edges = [e for e in edges if e["relation_type"] == "called_by"]
         cb_pairs = {(e["source_chunk_id"], e["target_chunk_id"]) for e in cb_edges}
@@ -74,7 +74,7 @@ class TestExtraction:
     def test_parse_evidence_present(self):
         """Each edge MUST have parse_evidence with AST locator."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_SOURCE, _make_chunks(), scope)
         for e in edges:
             assert "parse_evidence" in e
@@ -86,7 +86,7 @@ class TestExtraction:
     def test_all_edges_hard(self):
         """All extracted edges MUST be is_hard=true."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_SOURCE, _make_chunks(), scope)
         for e in edges:
             assert e["is_hard"] is True
@@ -94,11 +94,10 @@ class TestExtraction:
     def test_isolation_fields_present(self):
         """Edges MUST carry the isolation triple."""
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(_SOURCE, _make_chunks(), scope)
         for e in edges:
             assert e["knowledge_scope_id"] == 100
-            assert e["project_id"] == 200
             assert e["index_version"] == 1
 
     def test_no_self_edges(self):
@@ -119,7 +118,7 @@ public class Recursive {
              "start_line": 3, "end_line": 7},
         ]
         extractor = JavaCallGraphExtractor()
-        scope = GraphScope(100, 200, 1)
+        scope = GraphScope(100, 1)
         edges = extractor.extract(src, chunks, scope)
         for e in edges:
             assert e["source_chunk_id"] != e["target_chunk_id"], "No self-edges"
