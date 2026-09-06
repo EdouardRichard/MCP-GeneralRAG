@@ -63,11 +63,17 @@ class FormatHandler:
     parser_factory: Callable[..., Any] | None = None
     converter_spec: ConverterSpec | None = None
     graph_extractor: Callable[..., Any] | None = None
+    text_extractor: Callable[..., Any] | None = None
     locator_prefix: LocatorPrefix = LocatorPrefix.HEADING
 
 
 class RegistryFormatError(ValueError):
     """Raised for unsupported formats, unknown extensions, or converter unavailability."""
+
+
+def upload_size_limit_message(max_size: int) -> str:
+    """Single-source-of-truth upload size-ceiling message (T057, FR-015)."""
+    return f"File exceeds the maximum upload size of {max_size} bytes"
 
 
 def _unsupported_message(accepted: list[str]) -> str:
@@ -177,6 +183,7 @@ class FormatHandlerRegistry:
                 binary=True,
                 parser_factory=lambda content, filename: WordParser().parse(content, filename=filename),
                 graph_extractor=None,
+                text_extractor=_word_text_extractor,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
             FormatHandler(
@@ -186,6 +193,7 @@ class FormatHandlerRegistry:
                 binary=True,
                 parser_factory=lambda content, filename: PDFParser().parse(content, filename=filename),
                 graph_extractor=None,
+                text_extractor=_pdf_text_extractor,
                 locator_prefix=LocatorPrefix.PAGE,
             ),
             FormatHandler(
@@ -361,11 +369,15 @@ class FormatHandlerRegistry:
             if generic is not None:
                 self._check_converter_available(generic)
                 return generic.format
-            raise RegistryFormatError("Unsupported file format. " + _unsupported_message(self._accepted))
+            raise RegistryFormatError(
+                f"Unsupported format: {filename}. " + _unsupported_message(self._accepted)
+            )
 
         handler = self._by_ext.get(ext)
         if handler is None:
-            raise RegistryFormatError("Unsupported file format. " + _unsupported_message(self._accepted))
+            raise RegistryFormatError(
+                f"Unsupported format: {filename}. " + _unsupported_message(self._accepted)
+            )
 
         # Extension/content mismatch guard for .go (spec edge case).
         if handler.format == "go" and content is not None:
@@ -399,9 +411,8 @@ class FormatHandlerRegistry:
             assert handler.converter_spec.converter is not None
             return handler.converter_spec.converter.convert(raw_bytes, fmt, filename)
         if handler.binary:
-            from rag_mcp.parsers.text_extractor import extract_text
-
-            return extract_text(raw_bytes, fmt)
+            assert handler.text_extractor is not None
+            return handler.text_extractor(raw_bytes)
         return raw_bytes.decode("utf-8", errors="replace")
 
     def is_binary(self, fmt: str) -> bool:
@@ -429,6 +440,18 @@ def _ddl_graph_extractor():
     from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
 
     return DdlFkExtractor()
+
+
+def _word_text_extractor(raw_bytes):
+    from rag_mcp.parsers.text_extractor import _extract_word_text
+
+    return _extract_word_text(raw_bytes)
+
+
+def _pdf_text_extractor(raw_bytes):
+    from rag_mcp.parsers.text_extractor import _extract_pdf_text
+
+    return _extract_pdf_text(raw_bytes)
 
 
 # ---------------------------------------------------------------------------

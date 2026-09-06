@@ -12,7 +12,7 @@ from rag_mcp.schemas.knowledge_source import (
     KnowledgeSourceListResponse,
     KnowledgeSourceResponse,
 )
-from rag_mcp.parsers.registry import RegistryFormatError
+from rag_mcp.parsers.registry import RegistryFormatError, upload_size_limit_message
 from rag_mcp.utils.hashing import hash_bytes
 
 router = APIRouter(prefix="/api/knowledge-sources", tags=["knowledge-sources"])
@@ -342,7 +342,7 @@ async def upload_knowledge_source(
     if len(content) > max_size:
         raise HTTPException(
             status_code=413,
-            detail=f"File exceeds the maximum upload size of {max_size} bytes",
+            detail=upload_size_limit_message(max_size),
         )
 
     # Validate format (extension + content based, FR-010)

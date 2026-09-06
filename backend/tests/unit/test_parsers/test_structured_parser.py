@@ -28,6 +28,17 @@ class TestJsonYamlKeyPath:
         assert "path:/service" in paths
         assert "path:/users" in paths
 
+    def test_json_nested_key_path(self):
+        # T052: nested key paths (path:/service/host) are produced
+        chunks = _slice_json_yaml("config.json", "json")
+        paths = {c["position_path"] for c in chunks}
+        assert "path:/service/host" in paths
+        assert "path:/service/port" in paths
+        # nested chunks carry a non-empty parent reference (T059)
+        for c in chunks:
+            if c["position_path"].startswith("path:/service/"):
+                assert c["parent_position_path"] == "path:/service"
+
     def test_yaml_top_level_key_path(self):
         chunks = _slice_json_yaml("config.yaml", "yaml")
         paths = {c["position_path"] for c in chunks}
@@ -52,7 +63,16 @@ class TestXmlElementPath:
         ir = _registry().to_text(raw, "xml", "catalog.xml")
         chunks = xml_slicer(ir, "xml", "catalog.xml")
         paths = {c["position_path"] for c in chunks}
-        assert "path:/item" in paths
+        assert "path:/root/item" in paths
+
+    def test_xml_nested_element_path(self):
+        # T052: nested element paths (path:/root/item/name) are produced
+        raw = (FIXTURES / "catalog.xml").read_bytes()
+        ir = _registry().to_text(raw, "xml", "catalog.xml")
+        chunks = xml_slicer(ir, "xml", "catalog.xml")
+        paths = {c["position_path"] for c in chunks}
+        assert "path:/root/item/name" in paths
+        assert "path:/root/item/price" in paths
 
 
 class TestOpenApiSniffingOrder:

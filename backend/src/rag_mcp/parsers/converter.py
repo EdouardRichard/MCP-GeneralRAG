@@ -65,7 +65,14 @@ class MarkitdownConverter:
 
         Uses the filename extension as a routing hint (StreamInfo) so formats
         that magika misdetects still reach the correct markitdown converter.
+        Binary extras (xlsx/pptx) are ZIP archives; a non-ZIP payload is
+        rejected here as corrupted/unparseable instead of letting markitdown
+        silently degrade to plain text and losing the reason (T054, FR-015).
         """
+        if self._extras and not raw_bytes.startswith(b"PK"):
+            raise ConverterError(
+                f"corrupted/unparseable {format} file ({filename}): not a valid archive"
+            )
         try:
             from markitdown import MarkItDown
             from markitdown._stream_info import StreamInfo

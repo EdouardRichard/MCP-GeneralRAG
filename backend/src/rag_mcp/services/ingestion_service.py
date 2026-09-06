@@ -8,6 +8,7 @@ Implements FR-009: old version stays published until new version publish succeed
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import traceback
@@ -229,16 +230,26 @@ class IngestionService:
             raw_bytes = await self._read_raw_bytes(source)
 
             # 3b. Convert raw bytes to text (008 FR-016/FR-017), before redaction.
-            # converter tier -> registry conversion (Markdown IR);
-            # native binary -> extract_text; native text -> UTF-8 decode.
+            # converter tier -> registry conversion (Markdown IR, timeout-guarded);
+            # native binary -> text extractor; native text -> UTF-8 decode.
             registry = FormatHandlerRegistry.instance()
             stage_start = datetime.now(timezone.utc)
-            try:
-                text_content = registry.to_text(raw_bytes, source.format, source.filename)
-            except (TextExtractionError, ConverterError) as exc:
-                raise ValueError(str(exc)) from exc
-
             if registry.is_converter(source.format):
+                try:
+                    text_content = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            registry.to_text, raw_bytes, source.format, source.filename
+                        ),
+                        timeout=self._settings.max_conversion_seconds,
+                    )
+                except asyncio.TimeoutError as exc:
+                    raise ValueError(
+                        f"conversion timed out after "
+                        f"{self._settings.max_conversion_seconds}s for "
+                        f"{source.format} ({source.filename})"
+                    ) from exc
+                except (TextExtractionError, ConverterError) as exc:
+                    raise ValueError(str(exc)) from exc
                 stages.append({
                     "stage": "conversion",
                     "status": "completed",
@@ -251,6 +262,10 @@ class IngestionService:
                     },
                 })
             elif registry.is_binary(source.format):
+                try:
+                    text_content = registry.to_text(raw_bytes, source.format, source.filename)
+                except TextExtractionError as exc:
+                    raise ValueError(str(exc)) from exc
                 stages.append({
                     "stage": "text_extraction",
                     "status": "completed",
@@ -258,6 +273,8 @@ class IngestionService:
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                     "details": {"format": source.format},
                 })
+            else:
+                text_content = registry.to_text(raw_bytes, source.format, source.filename)
 
             # 4. Redact credentials
             stage_start = datetime.now(timezone.utc)

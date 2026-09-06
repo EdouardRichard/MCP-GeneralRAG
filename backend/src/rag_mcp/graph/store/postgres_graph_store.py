@@ -218,16 +218,15 @@ class PostgresGraphStore(GraphStore):
         # Delete existing edges
         await self.delete_graph_relations(scope)
 
-        # Select extractor by format
-        if format == "java":
-            from rag_mcp.graph.extractors.java_call_graph import JavaCallGraphExtractor
-            extractor = JavaCallGraphExtractor()
-        elif format == "ddl":
-            from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
-            extractor = DdlFkExtractor()
-        else:
+        # Select extractor via the FormatHandler registry (008 FR-006): the
+        # registry is the single source of truth for graph-extractor dispatch.
+        from rag_mcp.parsers.registry import FormatHandlerRegistry
+
+        extractor_factory = FormatHandlerRegistry.instance().graph_extractor(format)
+        if extractor_factory is None:
             logger.warning("No graph extractor for format %s; skipping rebuild", format)
             return 0
+        extractor = extractor_factory()
 
         edges = extractor.extract(source_code, chunks, scope)
         count = await self.write_edges(edges, scope)

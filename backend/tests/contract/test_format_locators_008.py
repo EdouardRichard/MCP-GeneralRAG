@@ -63,12 +63,12 @@ class TestLocatorPrefixes:
 
 
 class TestTxtDocumentLevelLocator:
-    def test_txt_has_empty_section_path(self, registry):
+    def test_txt_document_level_fallback_locator(self, registry):
         raw = (FIXTURES / "notes.txt").read_bytes()
         ir = registry.to_text(raw, "txt", "notes.txt")
         chunks = registry.parse_content(ir, "txt", "notes.txt")
         assert chunks
         for c in chunks:
-            assert c["position_path"] == ""
+            assert c["position_path"] == "# notes"
             assert c["start_line"] >= 1
             assert c["end_line"] >= c["start_line"]

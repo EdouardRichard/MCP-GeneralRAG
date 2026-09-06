@@ -42,13 +42,12 @@ class TestOversizeUpload:
 
 
 class TestCorruptedBinary:
-    def test_corrupted_xlsx_produces_no_chunks(self):
-        # markitdown degrades a non-zip input to plain text; the xlsx slicer
-        # then yields no '## Sheet' blocks -> "no chunk then fail" (FR-015).
+    def test_corrupted_xlsx_raises_converter_error(self):
+        # T054: a non-ZIP xlsx payload fails fast at conversion with a
+        # "corrupted/unparseable" reason (no silent plain-text degradation).
         registry = FormatHandlerRegistry.build()
-        ir = registry.to_text(b"not a real xlsx", "xlsx", "corrupt.xlsx")
-        chunks = registry.parse_content(ir, "xlsx", "corrupt.xlsx")
-        assert chunks == []
+        with pytest.raises(ConverterError):
+            registry.to_text(b"not a real xlsx", "xlsx", "corrupt.xlsx")
 
 
 

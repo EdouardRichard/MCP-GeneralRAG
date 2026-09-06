@@ -1,9 +1,10 @@
-"""Chunk slicers for converter-tier formats (008, FR-010/FR-011).
+"""Chunk slicers for converter-tier formats (008, FR-010/FR-011/FR-012/FR-013).
 
 Each slicer converts a Markdown IR (already credential-redacted) into chunk
-dicts carrying L1 chunk types and the evidence locator (position_path).
-All slicers share the chunk-dict contract of data-model.md §3 and produce no
-chunks for empty/meaningless input (FR-015 "no chunk then fail").
+dicts carrying L1 chunk types, an evidence locator (position_path), and a
+parent reference (parent_position_path) so backfill_parent_chunk_ids can build
+the parent-child index (FR-013). Over-long blocks are re-split at natural
+boundaries toward the 512-1024 token target (FR-012).
 """
 
 from __future__ import annotations
@@ -14,9 +15,32 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+_TARGET_MAX = 1024
+
 
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text.split()))
+
+
+def _split_long_block(text: str, max_tokens: int = _TARGET_MAX) -> list[str]:
+    """Split an over-long block at sentence/newline boundaries (FR-012)."""
+    if _estimate_tokens(text) <= max_tokens:
+        return [text]
+    sentences = re.split(r"(?<=[.!?。！？])\s+", text)
+    parts: list[str] = []
+    current: list[str] = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if current and _estimate_tokens(" ".join(current + [sentence])) > max_tokens:
+            parts.append(" ".join(current))
+            current = [sentence]
+        else:
+            current.append(sentence)
+    if current:
+        parts.append(" ".join(current))
+    return parts or [text]
 
 
 def _chunk(
@@ -38,6 +62,21 @@ def _chunk(
     }
 
 
+def _emit(chunks, text, position_path, chunk_type, start, end, parent=""):
+    """Emit one or more chunks for a block, splitting over-long text (FR-012)."""
+    subs = _split_long_block(text)
+    span = max(1, end - start + 1)
+    per = span // len(subs) if len(subs) > 1 else span
+    for i, sub in enumerate(subs):
+        sub = sub.strip()
+        if not sub:
+            continue
+        chunks.append(_chunk(
+            sub, position_path, chunk_type,
+            start + i * per, start + (i + 1) * per - 1, parent,
+        ))
+
+
 # ---------------------------------------------------------------------------
 # Markdown structure slicer (html / pptx) — heading/paragraph/list/table blocks
 # ---------------------------------------------------------------------------
@@ -57,10 +96,9 @@ def markdown_structure_slicer(markdown_ir: str, fmt: str, filename: str) -> list
             text = "\n".join(buffer).strip()
             if text:
                 path = " > ".join(heading_stack)
-                chunks.append(_chunk(
-                    text, path, block_type or "paragraph",
-                    start or 1, (start or 1) + len(buffer) - 1,
-                ))
+                parent = " > ".join(heading_stack[:-1]) if len(heading_stack) > 1 else ""
+                _emit(chunks, text, path, block_type or "paragraph",
+                      start or 1, (start or 1) + len(buffer) - 1, parent)
         buffer = []
         start = None
         block_type = None
@@ -127,18 +165,30 @@ def csv_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any]
         block = [header] + data[i:i + window]
         start_line = i + 2
         end_line = start_line + len(block) - 1
-        chunks.append(_chunk(
-            "\n".join(block), f"sheet:{basename}", "table", start_line, end_line,
-        ))
+        _emit(chunks, "\n".join(block), f"sheet:{basename}", "table", start_line, end_line)
     return chunks
 
 
 # ---------------------------------------------------------------------------
-# JSON / YAML key-path slicer
+# JSON / YAML key-path slicer (nested paths, FR-011 / T052)
 # ---------------------------------------------------------------------------
 
+def _walk_json(value: Any, path: str, chunks: list, parent: str) -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}/{key}"
+            _walk_json(child, child_path, chunks, f"path:{path}" if path else "")
+    elif isinstance(value, list):
+        for idx, child in enumerate(value):
+            _walk_json(child, f"{path}/{idx}", chunks, f"path:{path}" if path else "")
+    else:
+        text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else str(value)
+        if path:
+            chunks.append(_chunk(text, f"path:{path}", "paragraph", 1, 1, parent))
+
+
 def json_yaml_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any]]:
-    """Slice JSON(-equivalent) IR by top-level key path (path:/key)."""
+    """Slice JSON(-equivalent) IR into key-path chunks (top-level + nested leaves)."""
     text = markdown_ir.strip()
     if not text:
         return []
@@ -151,18 +201,26 @@ def json_yaml_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str
     chunks: list[dict[str, Any]] = []
     for key, value in data.items():
         serialized = json.dumps({key: value}, indent=2, ensure_ascii=False)
-        chunks.append(_chunk(
-            serialized, f"path:/{key}", "paragraph", 1, serialized.count(chr(10)) + 1,
-        ))
+        _emit(chunks, serialized, f"path:/{key}", "paragraph", 1, serialized.count(chr(10)) + 1)
+        _walk_json(value, f"/{key}", chunks, f"path:/{key}")
     return chunks
 
 
 # ---------------------------------------------------------------------------
-# XML element-path slicer
+# XML element-path slicer (nested paths, FR-011 / T052)
 # ---------------------------------------------------------------------------
 
+def _walk_xml(elem, path: str, chunks: list) -> None:
+    tag = elem.tag.split("}")[-1]
+    current = f"{path}/{tag}"
+    block = ET.tostring(elem, encoding="unicode")
+    chunks.append(_chunk(block, f"path:{current}", "paragraph", 1, block.count(chr(10)) + 1))
+    for child in elem:
+        _walk_xml(child, current, chunks)
+
+
 def xml_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any]]:
-    """Slice XML IR by top-level element path (path:/elem)."""
+    """Slice XML IR by element path (path:/root/item/name, FR-011/T052)."""
     text = markdown_ir.strip()
     if not text:
         return []
@@ -170,13 +228,14 @@ def xml_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any]
         root = ET.fromstring(text)
     except Exception as exc:
         raise ValueError(f"invalid XML for {filename}: {exc}") from exc
+    root_tag = root.tag.split("}")[-1]
     chunks: list[dict[str, Any]] = []
-    for child in root:
-        block = ET.tostring(child, encoding="unicode")
-        tag = child.tag.split("}")[-1]
-        chunks.append(_chunk(block, f"path:/{tag}", "paragraph", 1, block.count(chr(10)) + 1))
-    if not chunks:
-        chunks.append(_chunk(text, "path:/" + root.tag.split("}")[-1], "paragraph", 1, text.count(chr(10)) + 1))
+    if len(root):
+        for child in root:
+            _walk_xml(child, f"/{root_tag}", chunks)
+    else:
+        block = ET.tostring(root, encoding="unicode")
+        chunks.append(_chunk(block, f"path:/{root_tag}", "paragraph", 1, block.count(chr(10)) + 1))
     return chunks
 
 
@@ -196,10 +255,8 @@ def xlsx_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any
         if current_sheet is not None and current_lines:
             text = "\n".join(current_lines).strip()
             if text:
-                chunks.append(_chunk(
-                    text, f"sheet:{current_sheet}", "table",
-                    current_start or 1, (current_start or 1) + len(current_lines) - 1,
-                ))
+                _emit(chunks, text, f"sheet:{current_sheet}", "table",
+                      current_start or 1, (current_start or 1) + len(current_lines) - 1)
         current_lines = []
         current_start = None
 
@@ -248,4 +305,6 @@ def eml_slicer(markdown_ir: str, fmt: str, filename: str) -> list[dict[str, Any]
         return []
     parts = headers + ([body] if body else [])
     text = "\n".join(parts).strip()
-    return [_chunk(text, f"msg:{subject}", "paragraph", 1, len(lines))]
+    chunks: list[dict[str, Any]] = []
+    _emit(chunks, text, f"msg:{subject}", "paragraph", 1, len(lines))
+    return chunks

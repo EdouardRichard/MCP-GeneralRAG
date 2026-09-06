@@ -212,6 +212,11 @@ class Settings:
         )
     )
 
+    # 008 (FR-015/T053): converter timeout guard (within the 30s total budget).
+    max_conversion_seconds: int = field(
+        default_factory=lambda: int(os.getenv("MAX_CONVERSION_SECONDS", "30"))
+    )
+
     # Maintenance
     retrieval_ttl_cleanup_interval_s: int = field(
         default_factory=lambda: int(os.getenv("RETRIEVAL_TTL_CLEANUP_INTERVAL_S", "3600"))

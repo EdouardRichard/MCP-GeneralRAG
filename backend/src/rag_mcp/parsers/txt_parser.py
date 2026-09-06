@@ -9,6 +9,7 @@ boundaries (sentences/newlines) toward the 512-1024 token target.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 _TARGET_MAX = 1024
@@ -49,6 +50,9 @@ class TxtParser:
         chunks: list[dict[str, Any]] = []
         current: list[str] = []
         current_start: int | None = None
+        # Document-level fallback locator (100% locatability, FR-029/FR-025):
+        # no headings in plain text, so use "# <basename>" as the implicit title.
+        doc_path = "# " + (Path(filename).stem if filename else "document")
 
         def flush() -> None:
             nonlocal current, current_start
@@ -58,7 +62,7 @@ class TxtParser:
                     for sub in _split_long_paragraph(para):
                         chunks.append({
                             "content_text": sub,
-                            "position_path": "",
+                            "position_path": doc_path,
                             "parent_position_path": "",
                             "chunk_type": "paragraph",
                             "start_line": current_start or 1,
