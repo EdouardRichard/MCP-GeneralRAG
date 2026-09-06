@@ -89,12 +89,12 @@ description: "Task list for 010 graph-relation-registry implementation"
 
 **Independent Test**: `python eval/run_cross_reference_comparison.py` 产出报告并闸口判定（VS-10）；`python -m pytest backend/tests/integration/test_public_legal_graph_path.py -v`（VS-06）。
 
-- [ ] T037 [P] [US3] 新建法律域评测语料 `eval/corpora/legal/`（2–4 个虚构法规 markdown：主法规按 `## 第X条` 结构 + 实施细则/引用性文件；覆盖内部锚点、跨文件相对链接、中文条文引用三类形态与全部规则分支；虚构文本，R12.1）
-- [ ] T038 [P] [US3] 新建 `eval/cross_reference_eval_dataset.json`：≥6 条（query/project_scope/expected_evidence_ids/is_structural_benefit:true；≥1 中文条文引用查询、≥1 锚点导航、≥1 跨文件相对链接；沿 005 独立数据集先例，R12.2）
-- [ ] T039 [US3] 新建 `eval/run_cross_reference_comparison.py`：建 legal 域 scope → 入库语料 → 触发 rebuild + graph_ready 发布（硬边>0）→ 同会话先混合基线（graph 关闭）后图增强（开启）对照 → 复用 `GraphComparisonRunner` 报告器产出 `eval/cross_reference_comparison_report.json`（三段闸口/硬指标/双跑可重复性，R12.3；SC-002 ≥3% + Recall 非降判定）
-- [ ] T040 [US3] 执行受益对照并记录：运行 T039 运行器，判定结论写入 ${BT}eval/cross_reference_comparison_report.json${BT}（enters_default_path 字段）；≥3% 达标 → ${BT}backend/src/rag_mcp/config/domain_profiles.py${BT} 的 legal 词表维持声明（图扩展进默认路径）；未达 → legal 档案 graph_relations 改空词表交付（research R11 声明式补救）（SC-002/FR-030）
-- [ ] T041 [US4] 新建 `backend/tests/integration/test_public_legal_graph_path.py`：public + legal 域（无 Project 行）上传/发布 graph_ready（硬边>0）→ domain_scope 寻址图增强检索成功 → 证据 knowledge_scope_type="public"、可定位 → 并发另一图域检索互不泄漏（=0）→ public+generic 域不可声明 graph_ready 且图路径不启用（US4 全场景/SC-008/SC-009）
-- [ ] T042 [US4] 回归 US5 不变面：运行 `python -m pytest backend/tests/integration/test_us5_graph_ready_lifecycle.py backend/tests/unit/test_soft_relation_inference.py backend/tests/integration/test_us5_isolation_cleanup.py -v` 确认门控语义/软关系五项元数据四态/硬软区分与 004 一致（FR-020/FR-021/SC-009/SC-010，零改动即回归通过）
+- [X] T037 [P] [US3] 新建法律域评测语料 `eval/corpora/legal/`（2–4 个虚构法规 markdown：主法规按 `## 第X条` 结构 + 实施细则/引用性文件；覆盖内部锚点、跨文件相对链接、中文条文引用三类形态与全部规则分支；虚构文本，R12.1）
+- [X] T038 [P] [US3] 新建 `eval/cross_reference_eval_dataset.json`：≥6 条（query/project_scope/expected_evidence_ids/is_structural_benefit:true；≥1 中文条文引用查询、≥1 锚点导航、≥1 跨文件相对链接；沿 005 独立数据集先例，R12.2）
+- [X] T039 [US3] 新建 `eval/run_cross_reference_comparison.py`：建 legal 域 scope → 入库语料 → 触发 rebuild + graph_ready 发布（硬边>0）→ 同会话先混合基线（graph 关闭）后图增强（开启）对照 → 复用 `GraphComparisonRunner` 报告器产出 `eval/cross_reference_comparison_report.json`（三段闸口/硬指标/双跑可重复性，R12.3；SC-002 ≥3% + Recall 非降判定）
+- [X] T040 [US3] 执行受益对照并记录：运行 T039 运行器，判定结论写入 ${BT}eval/cross_reference_comparison_report.json${BT}（enters_default_path 字段）；≥3% 达标 → ${BT}backend/src/rag_mcp/config/domain_profiles.py${BT} 的 legal 词表维持声明（图扩展进默认路径）；未达 → legal 档案 graph_relations 改空词表交付（research R11 声明式补救）（SC-002/FR-030）
+- [X] T041 [US4] 新建 `backend/tests/integration/test_public_legal_graph_path.py`：public + legal 域（无 Project 行）上传/发布 graph_ready（硬边>0）→ domain_scope 寻址图增强检索成功 → 证据 knowledge_scope_type="public"、可定位 → 并发另一图域检索互不泄漏（=0）→ public+generic 域不可声明 graph_ready 且图路径不启用（US4 全场景/SC-008/SC-009）
+- [X] T042 [US4] 回归 US5 不变面：运行 `python -m pytest backend/tests/integration/test_us5_graph_ready_lifecycle.py backend/tests/unit/test_soft_relation_inference.py backend/tests/integration/test_us5_isolation_cleanup.py -v` 确认门控语义/软关系五项元数据四态/硬软区分与 004 一致（FR-020/FR-021/SC-009/SC-010，零改动即回归通过）
 
 **Checkpoint**: 受益闸口判定完成（达标或声明式补救）；public 图路径端到端实证；VS-06/VS-07/VS-10 可全绿。
 
@@ -106,13 +106,13 @@ description: "Task list for 010 graph-relation-registry implementation"
 
 **Independent Test**: quickstart.md 汇总闸口表全过。
 
-- [ ] T043 [US5] 硬约束验收集执行（新建 ${BT}backend/tests/integration/test_010_hard_constraints.py${BT}）：图增强检索显式 scope 缺失拒绝（FR-024）、跨域泄漏=0（含 public+legal 与 project+se-project 混合域，FR-025/SC-003）、Schema 合法率 100%（含携带 references 标注的响应，FR-026/SC-004）、来源可定位率 100%（含交叉引用硬边 locator，FR-027/SC-005）——pytest 断言 + ${BT}eval/cross_reference_comparison_report.json${BT} 硬指标字段双口径
-- [ ] T044 [US5] 004 图集 37 条完整回归（VS-09 终版）：按 research R0 口径重跑 `python eval/run_graph_comparison.py --dataset eval/eval_dataset.json --output eval/010_graph_regression_report.json --limit 37`，非延迟指标 1% 容差一致 + 硬指标通过 + java/ddl 产边逐条等价（SC-001 完整闭合）
-- [ ] T045 [US5] 既有 pytest 全量回归：`python -m pytest backend/tests/ -v`（001–009 既有测试集零回归；other_hard 引用与 008 钩子引用已在前序任务更新）
-- [ ] T046 [US5] 可重复性验证（SC-011）：连续两次运行 T039/T044，非延迟指标 1% 容差内一致，延迟指标标注环境敏感（沿用 004 SC-007 范式）；结果落入 ${BT}eval/cross_reference_comparison_report.json${BT} 与 ${BT}eval/010_graph_regression_report.json${BT} 的 reproducibility 字段
-- [ ] T047 [US5] quickstart 全场景验证：按 `specs/010-graph-relation-registry/quickstart.md` VS-01~VS-10 逐场景执行并记录结果（汇总闸口表全过：插件化无回归/受益闸口/硬指标三件套/不变面）
-- [ ] T048 [US5] DeepSeek Harness 端到端参考客户端验证：legal 域图增强 search_knowledge/get_evidence MCP 端到端调用 + 输出 Schema 校验通过，验证记录写入 ${BT}specs/010-graph-relation-registry/quickstart.md${BT} 验证结果注记（沿用 006/007 惯例；ChatGPT App/Claude Code 记录兼容性状态不阻塞）
-- [ ] T049 [US5] 更新 `eval/README.md`：新增 010 评测产物条目（cross_reference_eval_dataset/cross_reference_comparison_report/010_graph_regression_report 与运行口径 --limit 37 说明，沿 eval 既有 --limit 先例），并更新数据集与基线报告表（004 图集 37 条口径注记 + legal 语料与受益子集说明）
+- [X] T043 [US5] 硬约束验收集执行（新建 ${BT}backend/tests/integration/test_010_hard_constraints.py${BT}）：图增强检索显式 scope 缺失拒绝（FR-024）、跨域泄漏=0（含 public+legal 与 project+se-project 混合域，FR-025/SC-003）、Schema 合法率 100%（含携带 references 标注的响应，FR-026/SC-004）、来源可定位率 100%（含交叉引用硬边 locator，FR-027/SC-005）——pytest 断言 + ${BT}eval/cross_reference_comparison_report.json${BT} 硬指标字段双口径
+- [X] T044 [US5] 004 图集 37 条完整回归（VS-09 终版）：按 research R0 口径重跑 `python eval/run_graph_comparison.py --dataset eval/eval_dataset.json --output eval/010_graph_regression_report.json --limit 37`，非延迟指标 1% 容差一致 + 硬指标通过 + java/ddl 产边逐条等价（SC-001 完整闭合）
+- [X] T045 [US5] 既有 pytest 全量回归：`python -m pytest backend/tests/ -v`（001–009 既有测试集零回归；other_hard 引用与 008 钩子引用已在前序任务更新）
+- [X] T046 [US5] 可重复性验证（SC-011）：连续两次运行 T039/T044，非延迟指标 1% 容差内一致，延迟指标标注环境敏感（沿用 004 SC-007 范式）；结果落入 ${BT}eval/cross_reference_comparison_report.json${BT} 与 ${BT}eval/010_graph_regression_report.json${BT} 的 reproducibility 字段
+- [X] T047 [US5] quickstart 全场景验证：按 `specs/010-graph-relation-registry/quickstart.md` VS-01~VS-10 逐场景执行并记录结果（汇总闸口表全过：插件化无回归/受益闸口/硬指标三件套/不变面）
+- [X] T048 [US5] DeepSeek Harness 端到端参考客户端验证：legal 域图增强 search_knowledge/get_evidence MCP 端到端调用 + 输出 Schema 校验通过，验证记录写入 ${BT}specs/010-graph-relation-registry/quickstart.md${BT} 验证结果注记（沿用 006/007 惯例；ChatGPT App/Claude Code 记录兼容性状态不阻塞）
+- [X] T049 [US5] 更新 `eval/README.md`：新增 010 评测产物条目（cross_reference_eval_dataset/cross_reference_comparison_report/010_graph_regression_report 与运行口径 --limit 37 说明，沿 eval 既有 --limit 先例），并更新数据集与基线报告表（004 图集 37 条口径注记 + legal 语料与受益子集说明）
 
 **Checkpoint**: 全部 SC（SC-001~SC-012）与硬约束闭合；Feature 可交付。
 
@@ -120,9 +120,9 @@ description: "Task list for 010 graph-relation-registry implementation"
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T050 [P] 代码清理：删除迁移过程中的死代码与过渡注释（parsers/registry.py 退役残留、expansion.py 硬编码常量残留），确认无 other_hard 文案残留（backend 全仓 grep 断言）
-- [ ] T051 [P] 更新 `backend/tests/fixtures/deps_baseline.txt` 快照核对（010 零新增依赖——断言基线不变，运行 `backend/tests/unit/test_deps_unchanged.py`）
-- [ ] T052 运行 quickstart.md 验证（若 T047 已完整执行则作为复核）
+- [X] T050 [P] 代码清理：删除迁移过程中的死代码与过渡注释（parsers/registry.py 退役残留、expansion.py 硬编码常量残留），确认无 other_hard 文案残留（backend 全仓 grep 断言）
+- [X] T051 [P] 更新 `backend/tests/fixtures/deps_baseline.txt` 快照核对（010 零新增依赖——断言基线不变，运行 `backend/tests/unit/test_deps_unchanged.py`）
+- [X] T052 运行 quickstart.md 验证（若 T047 已完整执行则作为复核）
 
 ---
 

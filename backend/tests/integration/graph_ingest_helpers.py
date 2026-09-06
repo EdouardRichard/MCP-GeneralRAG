@@ -65,6 +65,35 @@ class MockQdrantStore:
         ]
 
 
+async def setup_legal_eval_domain(session) -> str:
+    """Create a custom domain declaring references/referenced_by (010, R11).
+
+    The builtin legal profile ships with an empty vocabulary (SC-002 gate not
+    passed); cross-reference extraction is exercised through a custom domain
+    profile that declares the references/referenced_by vocabulary. Returns the
+    domain_key.
+    """
+    from rag_mcp.services.domain_profile_service import DomainProfileService
+
+    svc = DomainProfileService(session)
+    domain_key = "legal-eval"
+    existing = await svc._get(domain_key)
+    if existing is None:
+        await svc.create_profile({
+            "domain_key": domain_key,
+            "name": "Legal Eval",
+            "description": "cross-reference eval domain",
+            "supported_formats": ["markdown"],
+            "graph_relations": {
+                "references": ["out", "in"],
+                "referenced_by": ["out", "in"],
+            },
+            "default_capabilities": {"has_graph": True},
+        })
+    await session.flush()
+    return domain_key
+
+
 async def setup_graph_scope(session, scope_id: int, project_id: int) -> None:
     """Insert knowledge_scope + project rows for an isolated graph test scope."""
     await session.execute(text(

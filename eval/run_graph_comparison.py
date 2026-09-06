@@ -217,7 +217,10 @@ async def _extract_scope_graph(
             edges = extractor.extract(raw_text, chunk_dicts, scope)
             for edge in edges:
                 edge["version"] = version.version_number
-            total += await store.write_edges(edges, scope)
+            total += await store.write_edges(
+                edges, scope,
+                allowed_relation_types=list(graph_relations.keys()),
+            )
     return total
 
 

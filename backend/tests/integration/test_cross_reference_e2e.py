@@ -16,6 +16,7 @@ from tests.integration.graph_ingest_helpers import (
     FakeEmbeddingProvider,
     MockQdrantStore,
     setup_graph_scope,
+    setup_legal_eval_domain,
     upload_source_file,
 )
 
@@ -61,13 +62,15 @@ async def legal_scope(db_session):
     svc = DomainProfileService(db_session)
     await svc.sync_builtin_profiles()
     await db_session.commit()
+    domain_key = await setup_legal_eval_domain(db_session)
+    await db_session.commit()
 
     scope_id = generate_id()
     project_id = generate_id()
     await setup_graph_scope(db_session, scope_id, project_id)
     await db_session.execute(text(
-        "UPDATE knowledge_scopes SET domain_key = 'legal' WHERE scope_id = :sid"
-    ), {"sid": scope_id})
+        "UPDATE knowledge_scopes SET domain_key = :dk WHERE scope_id = :sid"
+    ), {"dk": domain_key, "sid": scope_id})
     await db_session.commit()
 
     law_id = generate_id()

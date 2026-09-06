@@ -1,0 +1,65 @@
+[
+  {
+    "query": "谁引用了第二条适用范围",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "第三条 数据处理原则",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "第二条被哪些条款引用",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "第三条 数据处理原则",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "跨境提供数据需要什么程序",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "第六条 跨境提供",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "数据处理原则依据什么确定",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "第三条 数据处理原则",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "同意的例外情形有哪些",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "4.2 同意的例外",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "数据安全规范有哪些要求",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "数据安全规范",
+    "is_structural_benefit": true
+  },
+  {
+    "query": "实施细则依据什么制定",
+    "project_scope": [
+      "__legal_scope__"
+    ],
+    "expected_evidence_ids": [],
+    "expected_heading": "第二条 依据",
+    "is_structural_benefit": true
+  }
+]

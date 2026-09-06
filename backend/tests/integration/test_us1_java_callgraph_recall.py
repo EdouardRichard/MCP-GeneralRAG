@@ -370,7 +370,7 @@ class TestGraphEvidenceRelationAnnotation:
             assert rel["type"] == "hard"
             assert rel["is_hard"] is True
             assert rel["relation_type"] in (
-                "calls", "called_by", "fk_references", "fk_referenced_by", "other_hard"
+                "calls", "called_by", "fk_references", "fk_referenced_by"
             )
             assert rel["edge_id"]
             assert rel["parse_evidence"]["extractor"] == "java_call_graph"

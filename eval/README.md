@@ -27,6 +27,8 @@
 | `graph_enhanced_comparison_report.json` | 004 | 图增强对照评测（37 条，见下） |
 | `agentic_comparison_report.json` | 005 | 三 Agent 编排对照评测（44 条，数据集 `agentic_eval_dataset.json`） |
 | `instance_form_smoke_report.json` | 006 | writer/reader 双形态冒烟对照（各 11 条，单侧非回归判定） |
+| `010_graph_regression_report.json` | 010 | 004 图集 37 条无回归重跑（`--limit 37`，不覆盖历史报告） |
+| `cross_reference_comparison_report.json` | 010 | 交叉引用受益对照（法律域语料 + ≥6 条受益子集） |
 
 ## 运行器
 
@@ -84,6 +86,30 @@ python eval/run_graph_comparison.py \
   分数 + 图扩展路径分数（关系类型/跳数/结构权重，FR-023/SC-008）；
 - `reproducibility`：非延迟指标 1% 容差可重复（SC-007）；延迟环境敏感；
 - `enters_default_path`：仅当三段 + 硬性指标全过为 `true`（FR-024）。
+
+### 010 图关系注册表评测（004 图集无回归 + 交叉引用受益）
+
+```bash
+# 004 图集 37 条无回归重跑（插件化纯重构，1% 相对容差）
+python eval/run_graph_comparison.py \
+    --dataset eval/eval_dataset.json \
+    --output eval/010_graph_regression_report.json \
+    --limit 37
+
+# 交叉引用受益对照（法律域语料 + ≥6 条受益子集，SC-002 ≥3% 闸口）
+python eval/run_cross_reference_comparison.py \
+    --dataset eval/cross_reference_eval_dataset.json \
+    --output eval/cross_reference_comparison_report.json
+```
+
+- `--limit 37`：`run_graph_comparison.py` 自 010 增补的 `--limit N` 参数
+  （沿 `run_comparison.py` 先例），004 图集口径 = `eval_dataset.json` 索引
+  0–36 共 37 条；不覆盖 `graph_enhanced_comparison_report.json` 历史报告。
+- `cross_reference_eval_dataset.json`：法律域受益子集 ≥6 条（含中文条文引用
+  查询），独立数据集文件（不追加进 `eval_dataset.json`，避免污染 004 37 条
+  回归口径）。
+- `corpora/legal/`：虚构法规语料（主法规 `## 第X条` 结构 + 实施细则 +
+  引用性文件，覆盖内部锚点 / 跨文件相对链接 / 中文条文引用三类形态）。
 
 ### 可配置开关与默认路径
 

@@ -52,11 +52,11 @@ def test_legal_has_markdown_format():
     assert formats == ["markdown"]
 
 
-def test_legal_has_references_vocab():
-    graph = BUILTIN_DOMAIN_PROFILES["legal"]["graph_relations"]
-    assert set(graph.keys()) == {"references", "referenced_by"}
-    for directions in graph.values():
-        assert "out" in directions and "in" in directions
+def test_legal_has_empty_vocab_r11_remedy():
+    """The 010 preliminary cross-reference benefit gate did not pass (SC-002),
+    so the builtin legal profile ships with an empty vocabulary (R11 declarative
+    remedy); cross_reference remains deliverable via a custom profile."""
+    assert BUILTIN_DOMAIN_PROFILES["legal"]["graph_relations"] == {}
 
 
 def test_legal_is_builtin_with_graph_capability():

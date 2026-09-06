@@ -137,14 +137,16 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
         "name": "Legal",
         "description": (
             "Legal document domain: clause structure + cross-reference "
-            "graph relations (references/referenced_by)."
+            "graph relations (references/referenced_by). The cross-reference "
+            "benefit gate (SC-002) did not pass with the 010 preliminary corpus, "
+            "so the builtin profile ships with an empty graph vocabulary (research "
+            "R11 declarative remedy); the cross_reference extractor remains "
+            "deliverable and can be enabled by a custom profile declaring the "
+            "references/referenced_by vocabulary."
         ),
         "supported_formats": ["markdown"],
         "chunk_type_extensions": None,
-        "graph_relations": {
-            "references": ["out", "in"],
-            "referenced_by": ["out", "in"],
-        },
+        "graph_relations": {},
         "prompt_overrides": None,
         "default_capabilities": {
             "retrieval_modes": ["dense", "hybrid", "graph_enhanced", "agentic"],

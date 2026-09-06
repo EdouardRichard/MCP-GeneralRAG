@@ -57,7 +57,7 @@ from run_graph_comparison import ensure_graph_corpus  # noqa: E402
 logger = logging.getLogger(__name__)
 
 SC001_THRESHOLD_PCT = 3.0   # relative improvement percent (SC-001)
-SC_TOLERANCE = 0.01         # absolute non-inferiority tolerance (research §10)
+SC_TOLERANCE = 0.01         # 1% RELATIVE non-inferiority tolerance (009 SC-001(3)/R5(3))
 REPEAT_TOLERANCE = 0.01     # reproducibility relative tolerance (SC-008)
 _001_QUERY_COUNT = 11
 
@@ -341,7 +341,7 @@ def build_comparison_report(
         if abs(ra - rb) > 1e-9:
             sc002_pass = False
             sc002_notes.append(f"query {i}: recall {rb} -> {ra}")
-        if ma < mb - SC_TOLERANCE or na < nb - SC_TOLERANCE:
+        if ma < mb * (1.0 - SC_TOLERANCE) or na < nb * (1.0 - SC_TOLERANCE):
             sc002_pass = False
             sc002_notes.append(f"query {i}: MRR/nDCG regression")
 
@@ -359,7 +359,7 @@ def build_comparison_report(
         if ra < rb - 1e-9:
             sc015_pass = False
             sc015_notes.append(f"query {i}: recall {rb} -> {ra}")
-        if ma < mb - SC_TOLERANCE or na < nb - SC_TOLERANCE:
+        if ma < mb * (1.0 - SC_TOLERANCE) or na < nb * (1.0 - SC_TOLERANCE):
             sc015_pass = False
             sc015_notes.append(f"query {i}: MRR/nDCG regression")
 
