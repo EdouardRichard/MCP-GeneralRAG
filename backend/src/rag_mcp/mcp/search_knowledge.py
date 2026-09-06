@@ -170,7 +170,11 @@ def register_search_knowledge_tool(
                 At least one non-empty entry across project_scope/domain_scope
                 is required; full-library search is rejected.
             top_k: Maximum evidence items to return (1-20, default 5).
-            task_context: Optional context about the current work phase, file, or symbol.
+            task_context: Optional task context (domain-neutral). Coding-domain
+                convention fields current_file/current_symbol/work_phase (kept
+                for backward compatibility), plus the optional free-string
+                activity describing the current work (any knowledge domain) and
+                additional_context (supplementary background fallback).
 
         Returns:
             Structured response with completion_status, evidence list, optional gaps,

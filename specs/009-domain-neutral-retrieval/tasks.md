@@ -45,15 +45,15 @@
 
 ### Implementation
 
-- [ ] T009 [US2] 实现 _build_node_schema(relation_vocab) 动态工厂（词表非空含 relation_directions enum + graph_hop；空则省略二者且 signals 仅 [dense, sparse]）+ 按 frozenset(vocab) 缓存的 per-request 校验器于 backend/src/rag_mcp/agents/query_planner.py（FR-005/FR-008, research R2）
-- [ ] T010 [US2] 移除模块级硬编码 BIDIRECTIONAL_DEFAULT / VALID_DIRECTIONS 常量与静态 NODE_SCHEMA relation_directions 枚举（改为从 domain_planner_config.relation_vocab 派生）于 backend/src/rag_mcp/agents/query_planner.py（FR-005, SC-005）
-- [ ] T011 [US2] 使 _validate_signals / _validate_directions / get_default_directions 从 per-request relation_vocab 派生（无图时 graph 不可规划、方向回退域档案默认词表）于 backend/src/rag_mcp/agents/query_planner.py（FR-006/FR-007）
-- [ ] T012 [US2] 更新 _build_fallback_output：无图档案省略 relation_directions 与 graph_hop（fallback 输出与 schema 一致）于 backend/src/rag_mcp/agents/query_planner.py（FR-008, 澄清 Q4）
+- [X] T009 [US2] 实现 _build_node_schema(relation_vocab) 动态工厂（词表非空含 relation_directions enum + graph_hop；空则省略二者且 signals 仅 [dense, sparse]）+ 按 frozenset(vocab) 缓存的 per-request 校验器于 backend/src/rag_mcp/agents/query_planner.py（FR-005/FR-008, research R2）
+- [X] T010 [US2] 移除模块级硬编码 BIDIRECTIONAL_DEFAULT / VALID_DIRECTIONS 常量与静态 NODE_SCHEMA relation_directions 枚举（改为从 domain_planner_config.relation_vocab 派生）于 backend/src/rag_mcp/agents/query_planner.py（FR-005, SC-005）
+- [X] T011 [US2] 使 _validate_signals / _validate_directions / get_default_directions 从 per-request relation_vocab 派生（无图时 graph 不可规划、方向回退域档案默认词表）于 backend/src/rag_mcp/agents/query_planner.py（FR-006/FR-007）
+- [X] T012 [US2] 更新 _build_fallback_output：无图档案省略 relation_directions 与 graph_hop（fallback 输出与 schema 一致）于 backend/src/rag_mcp/agents/query_planner.py（FR-008, 澄清 Q4）
 
 ### Tests
 
-- [ ] T013 [P] [US2] 编写动态词表单测（se-project=4 值 / generic=空 / 异构=排序并集；signals 枚举与 graph_hop 存在性随词表）于 backend/tests/unit/test_query_planner_schema.py（FR-006, SC-004, research R4）
-- [ ] T014 [P] [US2] 编写空词表行为单测（NODE_SCHEMA 省略 relation_directions/graph_hop、signals 不含 graph、fallback 省略、产出 schema_valid=true）于 backend/tests/unit/test_query_planner_schema.py（FR-008, 澄清 Q4）
+- [X] T013 [P] [US2] 编写动态词表单测（se-project=4 值 / generic=空 / 异构=排序并集；signals 枚举与 graph_hop 存在性随词表）于 backend/tests/unit/test_query_planner_schema.py（FR-006, SC-004, research R4）
+- [X] T014 [P] [US2] 编写空词表行为单测（NODE_SCHEMA 省略 relation_directions/graph_hop、signals 不含 graph、fallback 省略、产出 schema_valid=true）于 backend/tests/unit/test_query_planner_schema.py（FR-008, 澄清 Q4）
 - [ ] T015 [US2] 运行 005 agentic 结构等价回归（44 条 signals/relation_directions 逐条与 1.0 一致；AGENTIC_LLM_CACHE_PATH + temperature=0.0 字节复现）于 eval/run_agentic_comparison.py（SC-001, research R5 结构层）
 
 **Checkpoint**: 动态词表正确、无图档案省略字段、005 结构等价层通过。
@@ -68,16 +68,16 @@
 
 ### US3 task_context（FR-009~FR-011）
 
-- [ ] T016 [US3] 更新 search_knowledge.py 的 task_context 描述（新增 activity、current_file/current_symbol/work_phase 标注「编码域约定字段（向后兼容）」、additional_context 标注「补充背景兜底」、整体域中立）于 backend/src/rag_mcp/mcp/search_knowledge.py（FR-009~FR-011, 澄清 Q2）
-- [ ] T017 [P] [US3] 编写契约测试（activity 可选自由字符串被接受且不改变检索；current_file/current_symbol/work_phase 字段名/类型/枚举逐字节不变）于 backend/tests/contract/test_mcp_search_input.py（FR-009/FR-010, SC-006）
+- [X] T016 [US3] 更新 search_knowledge.py 的 task_context 描述（新增 activity、current_file/current_symbol/work_phase 标注「编码域约定字段（向后兼容）」、additional_context 标注「补充背景兜底」、整体域中立）于 backend/src/rag_mcp/mcp/search_knowledge.py（FR-009~FR-011, 澄清 Q2）
+- [X] T017 [P] [US3] 编写契约测试（activity 可选自由字符串被接受且不改变检索；current_file/current_symbol/work_phase 字段名/类型/枚举逐字节不变）于 backend/tests/contract/test_mcp_search_input.py（FR-009/FR-010, SC-006）
 
 ### US4 SourcePosition 与文案（FR-012~FR-016）
 
-- [ ] T018 [US4] 定稿 SourcePosition 描述为定位前缀规范表（标题路径/page:N/符号路径/sheet:/path:/msg:）于 specs/009-domain-neutral-retrieval/contracts/common.schema.json（FR-012/FR-014）
-- [ ] T019 [US4] 域中立化 get_evidence SCOPE_MISMATCH 文案（requested project scopes → requested knowledge domains）于 backend/src/rag_mcp/services/evidence_service.py（FR-013）
-- [ ] T020 [US4] 域中立化 gaps suggested_action 文案（broadening the project scope → broadening the knowledge domain scope）于 backend/src/rag_mcp/services/retrieval_service.py（FR-015）
-- [ ] T021 [P] [US4] 编写契约测试（SourcePosition 描述含前缀规范表、type: string 结构不变、无 Java 符号单例）于 backend/tests/contract/test_common_009.py（FR-012/FR-014）
-- [ ] T022 [P] [US4] 编写文案单测（gaps/错误文案泛化知识域措辞 project 残留=0；仅 project_scope 旧错误码/消息/candidates 逐字节不变）于 backend/tests/unit/test_retrieval_wording.py（FR-015/FR-016, SC-007/SC-008）
+- [X] T018 [US4] 定稿 SourcePosition 描述为定位前缀规范表（标题路径/page:N/符号路径/sheet:/path:/msg:）于 specs/009-domain-neutral-retrieval/contracts/common.schema.json（FR-012/FR-014）
+- [X] T019 [US4] 域中立化 get_evidence SCOPE_MISMATCH 文案（requested project scopes → requested knowledge domains）于 backend/src/rag_mcp/services/evidence_service.py（FR-013）
+- [X] T020 [US4] 域中立化 gaps suggested_action 文案（broadening the project scope → broadening the knowledge domain scope）于 backend/src/rag_mcp/services/retrieval_service.py（FR-015）
+- [X] T021 [P] [US4] 编写契约测试（SourcePosition 描述含前缀规范表、type: string 结构不变、无 Java 符号单例）于 backend/tests/contract/test_common_009.py（FR-012/FR-014）
+- [X] T022 [P] [US4] 编写文案单测（gaps/错误文案泛化知识域措辞 project 残留=0；仅 project_scope 旧错误码/消息/candidates 逐字节不变）于 backend/tests/unit/test_retrieval_wording.py（FR-015/FR-016, SC-007/SC-008）
 
 **Checkpoint**: task_context.activity 契约成立、SourcePosition 前缀规范表成立、文案去 project 且兼容路径字节不变。
 

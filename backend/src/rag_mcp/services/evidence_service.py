@@ -134,7 +134,7 @@ class EvidenceService:
                     "code": "SCOPE_MISMATCH",
                     "message": (
                         f"Evidence '{evidence_id}' does not belong to any of the "
-                        f"requested project scopes. Ensure the correct project is specified."
+                        f"requested knowledge domains. Ensure the correct domain is specified."
                     ),
                 },
                 duration_ms=int((time.monotonic() - start) * 1000),
@@ -146,7 +146,7 @@ class EvidenceService:
                     "code": "SCOPE_MISMATCH",
                     "message": (
                         f"Evidence '{evidence_id}' does not belong to any of the "
-                        f"requested project scopes. Ensure the correct project is specified."
+                        f"requested knowledge domains. Ensure the correct domain is specified."
                     ),
                 },
             }

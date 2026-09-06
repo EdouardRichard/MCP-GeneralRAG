@@ -1135,7 +1135,7 @@ class RetrievalService:
                     f"out of {requested_top_k} requested."
                 ),
                 "suggested_action": (
-                    "Consider broadening the project scope or adding more "
+                    "Consider broadening the knowledge domain scope or adding more "
                     "knowledge sources to improve coverage."
                 ),
             })
