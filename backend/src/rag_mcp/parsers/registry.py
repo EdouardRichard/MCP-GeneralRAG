@@ -111,6 +111,9 @@ class FormatHandlerRegistry:
         from rag_mcp.parsers.pdf_parser import PDFParser
         from rag_mcp.parsers.python_parser import PythonParser
         from rag_mcp.parsers.word_parser import WordParser
+        from rag_mcp.parsers.converter import MarkitdownConverter, YamlAdapter
+        from rag_mcp.parsers import slicers
+        from rag_mcp.parsers.txt_parser import TxtParser
 
         handlers: list[FormatHandler] = [
             FormatHandler(
@@ -133,7 +136,7 @@ class FormatHandlerRegistry:
             ),
             FormatHandler(
                 format="openapi",
-                extensions=(".json", ".yaml", ".yml"),
+                extensions=(),
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: OpenAPIParser().parse(content, filename=filename),
@@ -184,6 +187,111 @@ class FormatHandlerRegistry:
                 parser_factory=lambda content, filename: PDFParser().parse(content, filename=filename),
                 graph_extractor=None,
                 locator_prefix=LocatorPrefix.PAGE,
+            ),
+            FormatHandler(
+                format="txt",
+                extensions=(".txt",),
+                tier="native",
+                binary=False,
+                parser_factory=lambda content, filename: TxtParser().parse(content, filename=filename),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.HEADING,
+            ),
+            FormatHandler(
+                format="csv",
+                extensions=(".csv",),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(),
+                    chunk_slicer=slicers.csv_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.SHEET,
+            ),
+            FormatHandler(
+                format="html",
+                extensions=(".html", ".htm"),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(),
+                    chunk_slicer=slicers.markdown_structure_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.HEADING,
+            ),
+            FormatHandler(
+                format="json",
+                extensions=(".json",),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(),
+                    chunk_slicer=slicers.json_yaml_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.PATH,
+            ),
+            FormatHandler(
+                format="yaml",
+                extensions=(".yaml", ".yml"),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=YamlAdapter(),
+                    chunk_slicer=slicers.json_yaml_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.PATH,
+            ),
+            FormatHandler(
+                format="xml",
+                extensions=(".xml",),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(),
+                    chunk_slicer=slicers.xml_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.PATH,
+            ),
+            FormatHandler(
+                format="xlsx",
+                extensions=(".xlsx",),
+                tier="converter",
+                binary=True,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(extras=("xlsx",)),
+                    chunk_slicer=slicers.xlsx_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.SHEET,
+            ),
+            FormatHandler(
+                format="pptx",
+                extensions=(".pptx",),
+                tier="converter",
+                binary=True,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(extras=("pptx",)),
+                    chunk_slicer=slicers.markdown_structure_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.HEADING,
+            ),
+            FormatHandler(
+                format="eml",
+                extensions=(".eml",),
+                tier="converter",
+                binary=False,
+                converter_spec=ConverterSpec(
+                    converter=MarkitdownConverter(),
+                    chunk_slicer=slicers.eml_slicer,
+                ),
+                graph_extractor=None,
+                locator_prefix=LocatorPrefix.MSG,
             ),
         ]
 

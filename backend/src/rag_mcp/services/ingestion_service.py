@@ -91,7 +91,8 @@ def backfill_parent_chunk_ids(chunk_dicts: list[dict[str, Any]]) -> None:
     path_to_id: dict[str, int] = {}
     for chunk in chunk_dicts:
         position_path = (
-            chunk.get("section_path")
+            chunk.get("position_path")
+            or chunk.get("section_path")
             or chunk.get("symbol_path")
             or chunk.get("structure_path")
             or ""
@@ -101,7 +102,8 @@ def backfill_parent_chunk_ids(chunk_dicts: list[dict[str, Any]]) -> None:
 
     for chunk in chunk_dicts:
         parent_path = (
-            chunk.get("parent_section_path")
+            chunk.get("parent_position_path")
+            or chunk.get("parent_section_path")
             or chunk.get("parent_symbol_path")
             or chunk.get("parent_structure_path")
             or ""
@@ -384,7 +386,8 @@ class IngestionService:
             for i, chunk_dict in enumerate(chunk_dicts):
                 # Determine position_path based on format — 003 extends to all path types
                 position_path = (
-                    chunk_dict.get("section_path")
+                    chunk_dict.get("position_path")
+                    or chunk_dict.get("section_path")
                     or chunk_dict.get("symbol_path")
                     or chunk_dict.get("structure_path")
                     or ""
@@ -418,7 +421,8 @@ class IngestionService:
             # Upsert hybrid points to Qdrant (Dense + Sparse on same Point, FR-001/FR-002)
             for i, chunk_dict in enumerate(chunk_dicts):
                 position_path = (
-                    chunk_dict.get("section_path")
+                    chunk_dict.get("position_path")
+                    or chunk_dict.get("section_path")
                     or chunk_dict.get("symbol_path")
                     or chunk_dict.get("structure_path")
                     or ""

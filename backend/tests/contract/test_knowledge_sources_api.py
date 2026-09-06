@@ -18,7 +18,7 @@ async def test_upload_rejects_unsupported_format(test_client):
     content = b"some content here"
     response = await test_client.post(
         "/api/knowledge-sources?scope_id=123",
-        files={"file": ("test.txt", io.BytesIO(content), "text/plain")},
+        files={"file": ("test.xyz", io.BytesIO(content), "application/octet-stream")},
     )
     assert response.status_code == 400
     data = response.json()

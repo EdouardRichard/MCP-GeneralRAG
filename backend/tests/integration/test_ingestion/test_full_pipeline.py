@@ -70,9 +70,11 @@ class TestParseContentDispatch:
         assert all(c["chunk_type"] == "symbol" for c in chunks)
 
     def test_unsupported_format_raises(self):
+        # "unknown" is not in the registry (008: xml is now a supported
+        # converter format, so this test no longer uses xml as the negative case).
         svc = self._svc()
         with pytest.raises(ValueError, match="Unsupported format"):
-            svc._parse_content("x", "xml", "doc.xml")
+            svc._parse_content("x", "unknown", "doc.unknown")
 
 
 class TestFullPipelineDeterministicCore:
