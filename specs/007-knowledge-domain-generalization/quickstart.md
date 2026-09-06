@@ -107,3 +107,39 @@
 2. 期望：非延迟指标在 1% 相对容差内一致（单侧非回归下界）；pytest 全绿。
 3. 在混合知识域验收集上断言硬指标。
 4. 期望：跨域串库 = 0、MCP Schema 合法率 = 100%、来源可定位率 = 100%。
+
+---
+
+## 验证结果记录（T047 / T056 收敛）
+
+> 007 交付后 10 场景的可观测验证结果与验收证据。自动化测试与评测工件均提交于 007 分支；目标宿主（DeepSeek Harness）MCP 端到端状态见「场景 4/8 附注」。
+
+### 评测工件（T043 无回归重跑，已入库 eval/）
+
+| 套件 | 报告 | 硬约束（串库/Schema/定位） | 非延迟可复现 | 结论 |
+|------|------|---------------------------|--------------|------|
+| 002 混合基线（--limit 18） | eval/007_hybrid_report.json | 0 / 100% / 100% | true | 无回归，enters_default_path=true |
+| 004 图集（37 条） | eval/007_graph_report.json | 0 / 100% / 100% | true | three_gate_pass=true |
+| 005 agentic（44 条） | eval/007_agentic_report.json | schema_valid_all=true | true | 无回归 |
+| 003 格式集 / 002 有限集 | eval/format_expansion_report_002_limited.json | — | — | 重跑通过 |
+| 006 冒烟（11 条） | eval/instance_form_smoke_report.json | — | — | 重跑通过 |
+
+### 场景 → 自动化测试映射
+
+| 场景 | 验证目标 | 自动化测试文件 |
+|------|----------|----------------|
+| 1 迁移与启动同步 | FR-002/004/005/SC-008 | test_migration_007.py、test_domain_profile_seed.py、test_domain_profile_sync.py |
+| 2 域档案治理 | FR-003/005/006/SC-008 | test_profile_crud.py、test_domain_profile_schema.py |
+| 3 知识域创建 | FR-001/012/SC-011 | test_scope_slug.py |
+| 4 domain_scope 三形态 | FR-007/008/013/SC-002 | test_search_domain_scope_mcp.py（T054）、test_resolver_addressing.py |
+| 5 双参数并集去重 | FR-007/SC-002 | test_resolver_boundaries.py、test_search_domain_scope_mcp.py |
+| 6 错误码双轨 | FR-010/SC-010/SC-012 | test_error_dual_track.py |
+| 7 旧客户端逐字节 | FR-009/SC-001 | test_byte_compat.py |
+| 8 list_knowledge_domains | FR-014/015/022/SC-006 | test_list_domains_mcp.py（T053）、test_list_domains_schema.py、test_hard_metrics.py |
+| 9 三处残留修复 | FR-016/017/018/SC-007 | test_public_evidence.py（T051）、test_agentic_scope_type.py（T050）、test_graph_isolation.py |
+| 10 无回归 + 硬指标 | FR-019~024/SC-003~009 | test_hard_metrics.py + 上表评测工件 |
+
+### 场景 4/8 目标宿主（DeepSeek Harness）附注
+
+MCP 入口层验收已由 FastMCP call_tool 自动化测试固化（T053/T054）：工具经真实注册 + 入口调用 + 声明 Schema 校验，构成 SC-002/SC-004/SC-006 的可复现判据。当前会话 GUI「MCP」浮窗所连 rag-mcp 服务器暴露的是 007 之前的签名（search_knowledge/get_evidence 无 domain_scope、无 list_knowledge_domains、描述仍为 "Requires explicit project scope(s)"）——需在 007 分支重启该 MCP 服务器后，方可对 domain_scope 三形态 + list_knowledge_domains 做实机 DeepSeek Harness 端到端调用。
+

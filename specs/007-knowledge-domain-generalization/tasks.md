@@ -245,6 +245,6 @@ Task: "T022 残留修复 3a alembic 0072 删 project_id 列"
 - [X] T053 list_knowledge_domains MCP acceptance 测试：经 FastMCP 入口层调用 + 实际输出过 list-domains.output.schema.json 校验 + archived/deleting 排除 + 空实例空列表成功状态 → backend/tests/integration/test_list_domains_mcp.py per FR-014/FR-015/SC-004/SC-006/T046 (missing)
 - [X] T054 search_knowledge domain_scope 成功路径 MCP acceptance 测试：三形态（数字 ID/slug/type:name）经工具入口寻址命中目标域 + 输出过 mcp-search-output.schema.json + 双参数并集去重不放大 → backend/tests/integration/test_search_domain_scope_mcp.py per SC-002/FR-008/T046 (missing)
 - [X] T055 宪法 v1.3.0 措辞一致性：evidence_service 模块 docstring "cross-project data leakage"→跨知识域泄漏口径、graph/store/base.py GraphScope docstring "Isolation triple(…project_id…)"→knowledge_scope_id 唯一隔离键双字段口径 → backend/src/rag_mcp/services/evidence_service.py + backend/src/rag_mcp/graph/store/base.py per 宪法 v1.3.0 硬约束措辞/FR-018 (partial)
-- [ ] T056 验收证据持久化：提交 T043 评测工件（eval/007_hybrid_report.json、007_graph_report.json、007_agentic_report.json、instance_form_smoke_report.json）并在 quickstart.md 记录 10 场景验证结果（自动化测试映射 + 评测工件 + 目标宿主状态）→ eval/ + specs/007-knowledge-domain-generalization/quickstart.md per T043/T047/FR-024/SC-009 (partial)
+- [X] T056 验收证据持久化：提交 T043 评测工件（eval/007_hybrid_report.json、007_graph_report.json、007_agentic_report.json、instance_form_smoke_report.json）并在 quickstart.md 记录 10 场景验证结果（自动化测试映射 + 评测工件 + 目标宿主状态）→ eval/ + specs/007-knowledge-domain-generalization/quickstart.md per T043/T047/FR-024/SC-009 (partial)
 
 **Checkpoint**: 全部新测试绿 + 既有套件无回归（byte-compat/双轨/硬指标/001–006 相关子集）+ 契约声明与 v1.3.0 措辞一致 + 验收证据入库可追溯。
