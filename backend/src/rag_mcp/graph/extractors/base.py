@@ -69,12 +69,14 @@ class GraphExtractorRegistry:
     @classmethod
     def build(cls) -> "GraphExtractorRegistry":
         """Build the registry from the builtin extractor set (declaration order)."""
+        from rag_mcp.graph.extractors.cross_reference import CrossReferenceExtractor
         from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
         from rag_mcp.graph.extractors.java_call_graph import JavaCallGraphExtractor
 
         return cls([
             JavaCallGraphExtractor,
             DdlFkExtractor,
+            CrossReferenceExtractor,
         ])
 
     @classmethod

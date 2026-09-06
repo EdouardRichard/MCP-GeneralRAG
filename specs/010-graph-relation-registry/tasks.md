@@ -69,15 +69,15 @@ description: "Task list for 010 graph-relation-registry implementation"
 
 **Independent Test**: `python -m pytest backend/tests/unit/test_cross_reference_extractor.py -v`（VS-03/VS-04：三类引用形态成对产边 + 四类排除项 0 边）。
 
-- [ ] T028 [US3] 新建 `backend/src/rag_mcp/graph/extractors/cross_reference.py`：`CrossReferenceExtractor` 继承 ABC（format="markdown"、relation_pairs={"references": "referenced_by"}、chunk_scope="scope"），注册进 GraphExtractorRegistry
-- [ ] T029 [US3] 在 cross_reference.py 实现结构化链接规则（契约 §1.1）：内部锚点 `[text](#anchor)`、相对链接 `[text](path.md#anchor)`/`[text](./path.md)`（basename 解析，无锚点→目标文件首个标题 Chunk）；排除外链/图片/代码块内语法；相对链接目标 basename 在 scope 内不唯一 → 视为不可解析不产边（确定性消歧，宪法 VI）
-- [ ] T030 [US3] 在 cross_reference.py 实现条文引用规则（契约 §1.2）：触发词白名单（依据/根据/依照/按照/参照/参见/见/转致/援引）+ 中文数字条文 `第[一二三四五六七八九十百零两]+条`（款项并入条文级目标）+ 点号编号 `\\d+(\\.\\d+)*`；范围引用（第X条至第Y条）与相对指代（前条/本条/前款）确定性排除
-- [ ] T031 [US3] 在 cross_reference.py 实现混合锚定（契约 §2）：来源端点行号区间归属（start_line <= L <= end_line，缺口归前条 Chunk）；目标端点 section_path 末段标题归一化匹配（ASCII 小写/空白→-/剥 markdown 标记/CJK 保留；锚点原文宽松分支；条文号前缀匹配）；重复命中取文档序首个；basename 多文件冲突视为不可解析；无命中不产边
-- [ ] T032 [US3] 在 cross_reference.py 实现产边与 locator（契约 §3/§4）：成对 references+referenced_by（各自 direction=out、共享 locator）；自引用/自环不产边；locator 三态编码 `xref:internal/xref:relative/xref:clause`（值 %-转义）；parse_evidence 3 字段
-- [ ] T033 [US3] 修改 `backend/src/rag_mcp/services/ingestion_service.py` `_extract_graph_relations`：chunk_scope="scope" 提取器的 orchestration 支持——预构建 scope 级 `filename → [(chunk_id, heading, start_line, end_line)]` 索引（当前源 + 同 scope 其余已发布源，按 KnowledgeSource 文件名 basename 关联）注入 chunks（每条附 filename 键，R10.3）；首遍尽力 + rebuild 补全语义注释显式化
-- [ ] T034 [P] [US3] 新建 `backend/tests/unit/test_cross_reference_extractor.py`：规则集全分支断言——三类引用形态各产成对边（含跨文件相对链接经 scope 索引解析）、locator 编码、行号归属、标题归一化（中英文锚点）、条文号前缀匹配（中文数字归一）、重复标题文档序消歧、同名 basename 多文件不产边（唯一性消歧）（VS-03）
-- [ ] T035 [P] [US3] 在 test_cross_reference_extractor.py 增防误报断言（VS-04，契约 §1 排除项）：叙述性提及（无触发词）、范围引用、相对指代、目标不在语料——四类输入产边数为 0 且不记为提取失败
-- [ ] T036 [US3] 新建 `backend/tests/integration/test_cross_reference_e2e.py`：legal 域夹具上入库→提取→边落库（词表校验通过）→同语料重建边集稳定（确定性，含跨文件相对链接边完整，rebuild scope 索引数据面）（VS-03 集成面）
+- [X] T028 [US3] 新建 `backend/src/rag_mcp/graph/extractors/cross_reference.py`：`CrossReferenceExtractor` 继承 ABC（format="markdown"、relation_pairs={"references": "referenced_by"}、chunk_scope="scope"），注册进 GraphExtractorRegistry
+- [X] T029 [US3] 在 cross_reference.py 实现结构化链接规则（契约 §1.1）：内部锚点 `[text](#anchor)`、相对链接 `[text](path.md#anchor)`/`[text](./path.md)`（basename 解析，无锚点→目标文件首个标题 Chunk）；排除外链/图片/代码块内语法；相对链接目标 basename 在 scope 内不唯一 → 视为不可解析不产边（确定性消歧，宪法 VI）
+- [X] T030 [US3] 在 cross_reference.py 实现条文引用规则（契约 §1.2）：触发词白名单（依据/根据/依照/按照/参照/参见/见/转致/援引）+ 中文数字条文 `第[一二三四五六七八九十百零两]+条`（款项并入条文级目标）+ 点号编号 `\\d+(\\.\\d+)*`；范围引用（第X条至第Y条）与相对指代（前条/本条/前款）确定性排除
+- [X] T031 [US3] 在 cross_reference.py 实现混合锚定（契约 §2）：来源端点行号区间归属（start_line <= L <= end_line，缺口归前条 Chunk）；目标端点 section_path 末段标题归一化匹配（ASCII 小写/空白→-/剥 markdown 标记/CJK 保留；锚点原文宽松分支；条文号前缀匹配）；重复命中取文档序首个；basename 多文件冲突视为不可解析；无命中不产边
+- [X] T032 [US3] 在 cross_reference.py 实现产边与 locator（契约 §3/§4）：成对 references+referenced_by（各自 direction=out、共享 locator）；自引用/自环不产边；locator 三态编码 `xref:internal/xref:relative/xref:clause`（值 %-转义）；parse_evidence 3 字段
+- [X] T033 [US3] 修改 `backend/src/rag_mcp/services/ingestion_service.py` `_extract_graph_relations`：chunk_scope="scope" 提取器的 orchestration 支持——预构建 scope 级 `filename → [(chunk_id, heading, start_line, end_line)]` 索引（当前源 + 同 scope 其余已发布源，按 KnowledgeSource 文件名 basename 关联）注入 chunks（每条附 filename 键，R10.3）；首遍尽力 + rebuild 补全语义注释显式化
+- [X] T034 [P] [US3] 新建 `backend/tests/unit/test_cross_reference_extractor.py`：规则集全分支断言——三类引用形态各产成对边（含跨文件相对链接经 scope 索引解析）、locator 编码、行号归属、标题归一化（中英文锚点）、条文号前缀匹配（中文数字归一）、重复标题文档序消歧、同名 basename 多文件不产边（唯一性消歧）（VS-03）
+- [X] T035 [P] [US3] 在 test_cross_reference_extractor.py 增防误报断言（VS-04，契约 §1 排除项）：叙述性提及（无触发词）、范围引用、相对指代、目标不在语料——四类输入产边数为 0 且不记为提取失败
+- [X] T036 [US3] 新建 `backend/tests/integration/test_cross_reference_e2e.py`：legal 域夹具上入库→提取→边落库（词表校验通过）→同语料重建边集稳定（确定性，含跨文件相对链接边完整，rebuild scope 索引数据面）（VS-03 集成面）
 
 **Checkpoint**: 提取器规则完备、防误报实证；VS-03/VS-04 可全绿。
 

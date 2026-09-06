@@ -100,6 +100,40 @@ def _dedupe_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
+def _extract_heading_from_path(path: str) -> str:
+    """Extract the last heading segment (section_path), stripping '#' markers.
+
+    The markdown parser's section_path is '# 主法规 > ## 第一条 总则'; the last
+    segment ('## 第一条 总则') is the section's own title. Stripping the leading
+    '#' markers yields '第一条 总则' (contract cross-reference-extraction.md §2.2).
+    """
+    if not path:
+        return ""
+    last = path.rsplit(" > ", 1)[-1]
+    return last.lstrip("#").strip()
+
+
+def _basename(filename: str) -> str:
+    return filename.replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def _to_extractor_chunk(chunk_dict: dict[str, Any], filename: str, is_current: bool) -> dict[str, Any]:
+    """Map a parser/persisted chunk to the extractor-facing chunk shape (R10.3)."""
+    path = (
+        chunk_dict.get("section_path")
+        or chunk_dict.get("position_path")
+        or ""
+    )
+    return {
+        "chunk_id": chunk_dict.get("chunk_id"),
+        "heading": _extract_heading_from_path(path),
+        "start_line": chunk_dict.get("start_line"),
+        "end_line": chunk_dict.get("end_line"),
+        "filename": filename,
+        "is_current": is_current,
+    }
+
+
 def backfill_parent_chunk_ids(chunk_dicts: list[dict[str, Any]]) -> None:
     """Backfill ``parent_chunk_id`` for each chunk in-place (FR-007 / US-3).
 
@@ -691,6 +725,47 @@ class IngestionService:
         )
         return result.scalar_one_or_none() or {}
 
+    async def _build_scope_chunk_index(
+        self, source: KnowledgeSource, chunk_dicts: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build the scope-level chunk index for chunk_scope='scope' extractors.
+
+        Returns extractor-facing chunk dicts (chunk_id/heading/start_line/
+        end_line/filename/is_current) for the current source plus every other
+        published source in the same scope, ordered deterministically
+        (current source first, then source_id, then start_line).
+        """
+        from rag_mcp.models.chunk import Chunk
+        from rag_mcp.models.knowledge_source import KnowledgeSource
+
+        current_basename = _basename(source.filename)
+        result: list[dict[str, Any]] = [
+            _to_extractor_chunk(c, current_basename, True) for c in chunk_dicts
+        ]
+
+        rows = await self._session.execute(
+            select(Chunk, KnowledgeSource.filename)
+            .join(KnowledgeSource, KnowledgeSource.source_id == Chunk.source_id)
+            .where(
+                Chunk.knowledge_scope_id == source.knowledge_scope_id,
+                Chunk.source_id != source.source_id,
+                KnowledgeSource.status == "published",
+            )
+            .order_by(Chunk.source_id, Chunk.start_line)
+        )
+        for chunk, filename in rows.all():
+            result.append(_to_extractor_chunk(
+                {
+                    "chunk_id": chunk.chunk_id,
+                    "position_path": chunk.position_path,
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                },
+                _basename(filename),
+                False,
+            ))
+        return result
+
     async def _get_next_version_number(self, scope_id: int) -> int:
         """Determine the next monotonically increasing version number for a scope.
 
@@ -895,7 +970,16 @@ class IngestionService:
         all_edges: list[dict[str, Any]] = []
         for extractor in extractors:
             try:
-                edges = extractor.extract(redacted_text, chunk_dicts, scope)
+                if getattr(extractor, "chunk_scope", "source") == "scope":
+                    # 010 (T033/R10.3): build the scope-level filename->chunk
+                    # index so cross-file relative links resolve (Constitution
+                    # VIII rebuild completeness).
+                    extractor_chunks = await self._build_scope_chunk_index(
+                        source, chunk_dicts,
+                    )
+                else:
+                    extractor_chunks = chunk_dicts
+                edges = extractor.extract(redacted_text, extractor_chunks, scope)
                 # Stamp the ingested version number onto every edge so the
                 # isolation triple (scope, project, index_version) matches the
                 # published version it belongs to.
@@ -910,7 +994,10 @@ class IngestionService:
                 )
         if all_edges:
             deduped = _dedupe_edges(all_edges)
-            written = await store.write_edges(deduped, scope)
+            written = await store.write_edges(
+                deduped, scope,
+                allowed_relation_types=list(graph_relations.keys()),
+            )
             details["hard_edges_written"] = written
             logger.info(
                 "Graph hard relations extracted: source=%s format=%s edges=%d",
