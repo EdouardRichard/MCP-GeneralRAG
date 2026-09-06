@@ -82,8 +82,8 @@ class SoftRelationInference:
 
         Args:
             chunks: chunk sequence forwarded to the LLM callable.
-            scope: mapping with knowledge_scope_id / project_id / index_version
-                (the isolation triple, data-model sec 3).
+            scope: mapping with knowledge_scope_id / index_version (the
+                isolation key, data-model sec 3).
             llm: callable(chunks) -> sequence of 4-tuples.
             model_and_version: identifier of the LLM used (metadata field 3).
             inference_source: provenance label (metadata field 1).

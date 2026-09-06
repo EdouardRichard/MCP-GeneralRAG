@@ -37,12 +37,12 @@ from rag_mcp.services.retrieval_service import RetrievalService
 
 
 @pytest.mark.asyncio
-async def test_graph_scope_triple_no_project_required(db_session):
+async def test_graph_scope_version_no_project_required(db_session):
     sid = await _mk_scope(db_session, "public")
     _, _, _ = await _mk_source_version_chunk(db_session, sid, graph_ready=True)
     await db_session.commit()
     svc = RetrievalService(db_session, None, None, None)
-    version = await svc._graph_scope_triple(sid)
+    version = await svc._graph_scope_version(sid)
     assert version == 1
 
 

@@ -248,3 +248,16 @@ Task: "T022 残留修复 3a alembic 0072 删 project_id 列"
 - [X] T056 验收证据持久化：提交 T043 评测工件（eval/007_hybrid_report.json、007_graph_report.json、007_agentic_report.json、instance_form_smoke_report.json）并在 quickstart.md 记录 10 场景验证结果（自动化测试映射 + 评测工件 + 目标宿主状态）→ eval/ + specs/007-knowledge-domain-generalization/quickstart.md per T043/T047/FR-024/SC-009 (partial)
 
 **Checkpoint**: 全部新测试绿 + 既有套件无回归（byte-compat/双轨/硬指标/001–006 相关子集）+ 契约声明与 v1.3.0 措辞一致 + 验收证据入库可追溯。
+---
+
+## Phase 7: Convergence
+
+**Goal**: /speckit-converge 二次评估发现的三处残余——宪法 v1.3.0 措辞一致性收尾（007 触碰文件内残留 project_id/triple 陈旧措辞）、list_knowledge_domains 空实例 MCP 层验收、FR-017 硬编码 "project" 兜底。
+
+**Independent Test**: 纯措辞/兜底改动零行为变化（Phase 6 既有 20 项测试 + 全量相关子集保持全绿）；空实例测试对新工具即时验证（无活跃域返回空列表成功）。
+
+- [X] T057 宪法 v1.3.0 措辞一致性收尾：移除 007 触碰文件中残留的 project_id/triple 陈旧措辞——retrieval_service._graph_scope_triple 更名 _graph_scope_version 且 docstring 改为「knowledge_scope_id 唯一隔离键、无 Project 行」、graph/store/base.py「Isolation triple.」→「Isolation key (knowledge_scope_id, index_version)」、soft_relation_inference「knowledge_scope_id / project_id / index_version (the isolation triple)」→ 双字段口径、retrieval_pipeline「(isolation triple)」→「(scope metadata)」→ backend/src/rag_mcp/services/retrieval_service.py + backend/src/rag_mcp/graph/store/base.py + backend/src/rag_mcp/graph/soft_relation_inference.py + backend/src/rag_mcp/orchestration/retrieval_pipeline.py per 宪法 v1.3.0 硬约束措辞/FR-018/T055 (partial)
+- [X] T058 list_knowledge_domains 空实例 MCP acceptance 测试：经 FastMCP 入口层调用 + 无活跃域返回 {"domains": []} 成功状态（US3-AC3/SC-006 此前仅由 T029 契约样例覆盖）→ backend/tests/integration/test_list_domains_mcp.py per US3-AC3/SC-006/T053 (partial)
+- [X] T059 FR-017 残留：retrieval_pipeline._enrich_candidates 两处 scope_type_map.get(…, "project") 兜底仍硬编码 "project"，改为空串兜底（未知作用域绝不假设 project）→ backend/src/rag_mcp/orchestration/retrieval_pipeline.py per FR-017/T021 (partial)
+
+**Checkpoint**: 措辞一致 + 空实例 MCP 验收 + FR-017 无硬编码兜底；Phase 6/7 全量测试绿。

@@ -355,7 +355,7 @@ class AgenticRetrievalPipeline:
         """Attach source/version/position/content metadata from PostgreSQL.
 
         Ledger input requires source_version, source_position, project_id and
-        index_version (isolation triple) per candidate (FR-008/FR-009).
+        index_version (scope metadata) per candidate (FR-008/FR-009).
         """
         if not candidates:
             return []
@@ -461,7 +461,7 @@ class AgenticRetrievalPipeline:
                     else payload.get("position_path", "")
                 ),
                 "knowledge_scope_id": scope_id,
-                "knowledge_scope_type": scope_type_map.get(scope_id, "project"),
+                "knowledge_scope_type": scope_type_map.get(scope_id, ""),
                 "project_id": project_map.get(scope_id, 0),
                 "index_version": version_number,
                 "content_excerpt": (chunk.content_text[:500] if chunk is not None else ""),
@@ -478,7 +478,7 @@ class AgenticRetrievalPipeline:
                         "source_id": str(parent.source_id),
                         "source_version": parent_version,
                         "knowledge_scope_id": parent.knowledge_scope_id,
-                        "knowledge_scope_type": scope_type_map.get(parent.knowledge_scope_id, "project"),
+                        "knowledge_scope_type": scope_type_map.get(parent.knowledge_scope_id, ""),
                         "project_id": project_map.get(parent.knowledge_scope_id, 0),
                         "index_version": parent_version,
                     }

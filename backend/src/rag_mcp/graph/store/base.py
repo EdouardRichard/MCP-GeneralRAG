@@ -97,7 +97,7 @@ class GraphStore(ABC):
 
         Args:
             start_chunk_ids: Seeds for expansion.
-            scope: Isolation triple.
+            scope: Isolation key (knowledge_scope_id, index_version).
             hop: Max hops (1-3).
             budget: Total candidate budget (global).
             direction: 'bidirectional' (default), 'out', or 'in'.

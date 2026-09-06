@@ -126,3 +126,35 @@ async def test_list_domains_active_only_and_schema_valid(db_session):
 
     # SC-004: the ACTUAL tool response validates against the declared schema
     Draft202012Validator(_merged_schema()).validate(data)
+
+
+@pytest.mark.asyncio
+async def test_list_domains_empty_instance_empty_success():
+    """US3-AC3 / SC-006: no active domains -> {"domains": []} success (no error).
+
+    Closes the T053 residual: the empty-instance edge was previously deferred to
+    the T029 schema sample and never exercised through the MCP tool layer.
+    """
+    from mcp.server.fastmcp import FastMCP
+
+    class _EmptyScalars:
+        def all(self):
+            return []
+
+    class _EmptyResult:
+        def scalars(self):
+            return _EmptyScalars()
+
+    class _EmptySession:
+        async def execute(self, *args, **kwargs):
+            return _EmptyResult()
+
+    @asynccontextmanager
+    async def sf():
+        yield _EmptySession()
+
+    server = FastMCP("test-list-domains-empty")
+    register_list_knowledge_domains_tool(server, sf)
+    data = _normalize(await server.call_tool("list_knowledge_domains", {}))
+
+    assert data == {"domains": []}

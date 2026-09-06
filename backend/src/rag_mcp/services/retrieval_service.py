@@ -1278,13 +1278,15 @@ class RetrievalService:
         except Exception:  # noqa: BLE001 - tracing must never break search
             logger.error("Failed to record graph expansion trace", exc_info=True)
 
-    async def _graph_scope_triple(self, scope_id: int):
-        """Resolve the GraphScope triple for a scope's graph-eligible version.
+    async def _graph_scope_version(self, scope_id: int):
+        """Resolve a scope's graph-eligible version_number (FR-018).
 
-        Returns (project_id, version_number) of the newest published version
-        that satisfies the capability gate (graph_ready=true AND the FR-015
+        Returns the version_number of the newest published version that
+        satisfies the capability gate (graph_ready=true AND the FR-015
         dense+lexical implication, checked via graph.capabilities), or None
         when the scope has no graph-eligible published version (FR-014).
+        knowledge_scope_id is the sole graph isolation key — no Project row
+        is required (Constitution I v1.3.0, cross-domain isolation).
         """
         from rag_mcp.graph.capabilities import is_graph_ready_version
 
@@ -1356,7 +1358,7 @@ class RetrievalService:
             hop = max(1, min(int(hop), graph_cfg.hop_max))
         graph_results: list[dict[str, Any]] = []
         for scope_id in scope_ids:
-            version_number = await self._graph_scope_triple(scope_id)
+            version_number = await self._graph_scope_version(scope_id)
             if version_number is None:
                 continue
             scope = GraphScope(
