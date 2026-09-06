@@ -72,7 +72,7 @@
         },
         "source_position": {
           "type": "string",
-          "description": "来源位置路径"
+          "description": "来源位置路径。转换层格式的定位粒度为转换后表示（sheet:/path:/msg:/# 标题路径），不做原文档锚点还原（docx 段 ID、PDF 坐标、Excel 单元格坐标等）。"
         },
         "knowledge_scope_id": {
           "type": "string",

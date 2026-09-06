@@ -77,7 +77,10 @@ class TestJSONFormat:
 # T038: format-specific query expansion (003)
 # ---------------------------------------------------------------------------
 
-_NEW_FORMATS = ("openapi", "ddl", "go", "python", "word", "pdf")
+_NEW_FORMATS = (
+    "openapi", "ddl", "go", "python", "word", "pdf",
+    "html", "txt", "csv", "json", "yaml", "xml", "xlsx", "pptx", "eml",
+)
 
 # Format-locator patterns (mirrors format-locators.schema.json)
 _LOCATOR_PATTERNS = {
@@ -99,6 +102,30 @@ _LOCATOR_PATTERNS = {
     ],
     "pdf": [
         r"^page:\d+(?: §.+)?$",
+    ],
+    "html": [
+        r"^#{1,6} .+$",
+    ],
+    "csv": [
+        r"^sheet:[A-Za-z0-9_\-]+$",
+    ],
+    "json": [
+        r"^path:/.*$",
+    ],
+    "yaml": [
+        r"^path:/.*$",
+    ],
+    "xml": [
+        r"^path:/.*$",
+    ],
+    "xlsx": [
+        r"^sheet:.+$",
+    ],
+    "pptx": [
+        r"^#{1,6} .+$",
+    ],
+    "eml": [
+        r"^msg:.+$",
     ],
 }
 
@@ -150,6 +177,8 @@ class TestFormatExpansionQueries:
 
     def test_each_format_has_exact_locator(self, dataset):
         for fmt in _NEW_FORMATS:
+            if fmt not in _LOCATOR_PATTERNS:
+                continue  # txt: document-level (no structural prefix)
             entries = _entries_with_format(dataset, fmt)
             locators = [e for e in entries if _is_exact_locator(e["query"], fmt)]
             assert len(locators) >= 1, (

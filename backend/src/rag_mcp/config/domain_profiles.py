@@ -34,6 +34,7 @@ SE_PLANNER_PROMPT: str = (
 
 GENERIC_FORMATS: tuple[str, ...] = (
     "markdown", "word", "pdf", "html", "txt",
+    "csv", "json", "yaml", "xml", "xlsx", "pptx", "eml",
 )
 
 NEUTRAL_PLANNER_PROMPT: str = (

@@ -23,7 +23,7 @@ class TestTxtBlankLineSegmentation:
     def test_document_level_locator(self):
         chunks = _parse()
         for c in chunks:
-            assert c["section_path"] == ""
+            assert c["position_path"] == ""
             assert c["start_line"] >= 1
             assert c["end_line"] >= c["start_line"]
 

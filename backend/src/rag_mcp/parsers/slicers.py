@@ -68,8 +68,9 @@ def markdown_structure_slicer(markdown_ir: str, fmt: str, filename: str) -> list
     for i, raw in enumerate(lines):
         line = raw.rstrip("\n")
         stripped = line.strip()
-        if not stripped:
-            flush()
+        if not stripped or stripped.startswith("<!--"):
+            if not stripped:
+                flush()
             continue
 
         if stripped.startswith("#"):

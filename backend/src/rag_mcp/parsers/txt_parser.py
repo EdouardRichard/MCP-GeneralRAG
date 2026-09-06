@@ -58,8 +58,8 @@ class TxtParser:
                     for sub in _split_long_paragraph(para):
                         chunks.append({
                             "content_text": sub,
-                            "section_path": "",
-                            "parent_section_path": "",
+                            "position_path": "",
+                            "parent_position_path": "",
                             "chunk_type": "paragraph",
                             "start_line": current_start or 1,
                             "end_line": (current_start or 1) + len(current) - 1,
