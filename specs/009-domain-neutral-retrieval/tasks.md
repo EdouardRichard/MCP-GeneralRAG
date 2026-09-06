@@ -89,12 +89,12 @@
 
 **Independent Test**: 三 Agent 既有 pytest 全绿；双回归闸口非延迟指标 1% 容差；混合域验收集硬指标成立；恶意上传不能改变控制流；DeepSeek Harness 端到端通过 Schema 校验。
 
-- [ ] T023 [US5] 静态审计 + 回归：evidence_analyst / context_orchestrator / injection_detector 已域中立（无 SE 假设）、判定语义不变，既有 pytest 全绿于 backend/tests/unit/（FR-017~FR-019, SC-011）
-- [ ] T024 [US5] 运行全量 pytest（unit + contract）于 backend/（SC-011）
+- [X] T023 [US5] 静态审计 + 回归：evidence_analyst / context_orchestrator / injection_detector 已域中立（无 SE 假设）、判定语义不变，既有 pytest 全绿于 backend/tests/unit/（FR-017~FR-019, SC-011）
+- [X] T024 [US5] 运行全量 pytest（unit + contract）于 backend/（SC-011）
 - [ ] T025 [US5] 运行 005 agentic 回归闸口（44 条）于 eval/run_agentic_comparison.py --dataset eval/eval_dataset.json --agentic-dataset eval/agentic_eval_dataset.json --output eval/agentic_comparison_report.json（SC-001）
-- [ ] T026 [US5] 运行 004 确定性回归闸口（37 条）于 eval/run_graph_comparison.py --dataset eval/eval_dataset.json --output eval/graph_enhanced_comparison_report.json（SC-002）
-- [ ] T027 [US5] 硬指标三件套验收（混合知识域验收集上跨域串库=0、MCP Schema 合法率=100%、来源可定位率=100%）于 backend/tests/contract/（SC-009, FR-020~FR-022）
-- [ ] T028 [US5] 提示注入防护边界验收（恶意上传不能改变控制流/工具选择/提示词脚手架；域档案注入不经 InjectionDetector、与证据结构隔离）于 backend/tests/unit/（SC-010, FR-019）
+- [X] T026 [US5] 运行 004 确定性回归闸口（37 条）于 eval/run_graph_comparison.py --dataset eval/eval_dataset.json --output eval/graph_enhanced_comparison_report.json（SC-002）
+- [X] T027 [US5] 硬指标三件套验收（混合知识域验收集上跨域串库=0、MCP Schema 合法率=100%、来源可定位率=100%）于 backend/tests/contract/（SC-009, FR-020~FR-022）
+- [X] T028 [US5] 提示注入防护边界验收（恶意上传不能改变控制流/工具选择/提示词脚手架；域档案注入不经 InjectionDetector、与证据结构隔离）于 backend/tests/unit/（SC-010, FR-019）
 - [ ] T029 [US5] 目标宿主端到端测试（DeepSeek Harness MCP 端点：se-project + generic 两域 agentic 检索 + activity 字段，通过输出 Schema 校验）于 backend/tests/（SC-006/SC-012, 006 SC-001）
 - [ ] T030 [US5] 运行 quickstart.md 端到端验证（§1~§8 全场景）并确认 SC-001~SC-012 全过（SC-001~SC-012）
 

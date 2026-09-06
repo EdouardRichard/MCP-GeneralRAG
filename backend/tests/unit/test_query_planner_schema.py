@@ -148,3 +148,35 @@ class TestSeProjectVocabBehaviour:
         sp = out["sub_problems"][0]
         assert "graph" in sp["signals"]
         assert sp["relation_directions"] == ["calls"]
+
+
+class TestSeProjectStructuralEquivalence:
+    """T015 structural layer (offline proxy): se-project config output == 1.0 default.
+
+    The 1.0 config-less default IS the pre-009 hardcoded se-project behaviour;
+    a request carrying the se-project domain_planner_config must therefore
+    produce byte-identical sub_problems (signals / relation_directions /
+    graph_hop) to that 1.0 default.
+    """
+
+    def _ctx(self, cfg=None):
+        return {"query": "q", "domain_planner_config": cfg}
+
+    def test_se_project_config_byte_identical_to_1_0_default(self):
+        from rag_mcp.config.domain_profiles import SE_PLANNER_PROMPT
+
+        payload = [
+            {"query": "who calls X", "signals": ["dense", "graph"], "relation_directions": ["calls"], "graph_hop": 1},
+            {"query": "what is Y", "signals": ["dense", "sparse"]},
+            {"query": "traverse Z", "signals": ["graph"]},
+        ]
+        se_cfg = {
+            "distinct_domain_keys": ["se-project"],
+            "relation_vocab": SE_VOCAB,
+            "prompt_override": SE_PLANNER_PROMPT,
+        }
+        out_se = _make_planner(payload).execute(self._ctx(se_cfg))
+        out_10 = _make_planner(payload).execute({"query": "q"})
+        assert out_se == out_10
+        assert out_se["schema_valid"] is True
+
