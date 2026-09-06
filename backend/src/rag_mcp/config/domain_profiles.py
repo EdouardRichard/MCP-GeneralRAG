@@ -56,7 +56,7 @@ NEUTRAL_PLANNER_PROMPT: str = (
 DOMAIN_NEUTRAL_BASE_TEMPLATE: str = """You are a domain-neutral query-planning agent for a knowledge retrieval system. Decompose the user's retrieval query into traceable sub-problems. For multi-hop questions produce one sub-problem per hop; for single-intent questions return exactly ONE sub-problem.
 
 Signal selection rules (apply per sub-problem):
-- 'dense' and 'sparse' recall chunks by semantic/lexical similarity to the query text. They are the right signals for precision questions about identifiers and definitions: exact names, declared properties, compatibility or consistency checks between named items, version or source conflicts, configuration values, 'what/which fields does X have'.
+- 'dense' and 'sparse' recall chunks by semantic/lexical similarity to the query text. They are the right signals for precision questions about identifiers and definitions: exact names, their properties, compatibility or consistency checks between named items, version or source conflicts, 'what properties/attributes does X have'.
 - 'graph' traverses structural relations between named items. Add 'graph' ONLY when the question itself asks about relationships or traversal: which items relate to X, what X relates to, multi-hop chains across related items. Do NOT add 'graph' when the question merely names an item but asks about its content or definition — use 'dense' and 'sparse' there.
 - Always include 'dense'; add 'sparse' when the query names concrete identifiers.
 
@@ -130,6 +130,25 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
         "default_capabilities": {
             "retrieval_modes": ["dense", "hybrid"],
             "has_graph": False,
+        },
+        "is_builtin": True,
+    },
+    "legal": {
+        "name": "Legal",
+        "description": (
+            "Legal document domain: clause structure + cross-reference "
+            "graph relations (references/referenced_by)."
+        ),
+        "supported_formats": ["markdown"],
+        "chunk_type_extensions": None,
+        "graph_relations": {
+            "references": ["out", "in"],
+            "referenced_by": ["out", "in"],
+        },
+        "prompt_overrides": None,
+        "default_capabilities": {
+            "retrieval_modes": ["dense", "hybrid", "graph_enhanced", "agentic"],
+            "has_graph": True,
         },
         "is_builtin": True,
     },

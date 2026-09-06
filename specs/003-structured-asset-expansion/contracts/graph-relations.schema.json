@@ -7,8 +7,8 @@
   "definitions": {
     "RelationType": {
       "type": "string",
-      "enum": ["calls", "called_by", "fk_references", "fk_referenced_by", "other_hard", "inferred"],
-      "description": "关系类型枚举（spec FR-002/Key Entities）。首期四类覆盖 Java 调用图与 DDL 外键；other_hard 保留框架扩展占位；inferred 为软关系。"
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "description": "关系类型宽模式（010 FR-008/R13，加法放宽）。内置词表全集：SE 4（calls/called_by/fk_references/fk_referenced_by）+ references/referenced_by + inferred（软关系）；other_hard 退役（FR-010）。"
     },
     "EdgeDirection": {
       "type": "string",
@@ -81,7 +81,7 @@
       "description": "硬关系约束：is_hard=true 时 relation_type 不得为 inferred、parse_evidence 必填、软关系元数据不得出现（宪法 III）",
       "if": { "properties": { "is_hard": { "const": true } } },
       "then": {
-        "properties": { "relation_type": { "enum": ["calls", "called_by", "fk_references", "fk_referenced_by", "other_hard"] } },
+        "properties": { "relation_type": { "pattern": "^[a-z][a-z0-9_]{0,62}$", "not": { "enum": ["other_hard", "inferred"] } } },
         "required": ["parse_evidence"],
         "not": { "required": ["lifecycle_state"] }
       }

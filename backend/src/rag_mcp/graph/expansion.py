@@ -23,13 +23,6 @@ from rag_mcp.graph.store.postgres_graph_store import PostgresGraphStore
 
 logger = logging.getLogger(__name__)
 
-# Default bidirectional relation pairs (research sec 3). 'inferred' joins the
-# default filter so ACTIVE soft relations participate as low-weight supplement
-# (FR-005); rows are additionally gated by lifecycle_state='active' in SQL.
-_BIDIRECTIONAL_PAIRS = [
-    "calls", "called_by", "fk_references", "fk_referenced_by", "inferred",
-]
-
 
 class GraphExpansionEngine:
     """Config-driven graph expansion engine wrapping PostgresGraphStore.
@@ -70,9 +63,10 @@ class GraphExpansionEngine:
         budget = budget if budget is not None else self._cfg.candidate_budget
         direction = direction if direction is not None else self._cfg.direction_default
 
-        # Default relation types for bidirectional expansion
-        if relation_types is None and direction == "bidirectional":
-            relation_types = list(_BIDIRECTIONAL_PAIRS)
+        # 010 (R6.1): no hard-coded default relation set — relation_types=None
+        # means "no filter" (the write-side vocabulary validation already
+        # guarantees every relation_type in the scope is domain-legal). This is
+        # per-edge equivalent in the se-project scope (SC-001).
 
         candidates = await self._store.expand(
             start_chunk_ids=start_chunk_ids,

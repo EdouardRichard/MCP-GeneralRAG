@@ -12,7 +12,7 @@
         "type": { "type": "string", "enum": ["hard", "soft"], "description": "hard=可验证证据；soft=推断关系" },
         "relation_type": {
           "type": "string",
-          "enum": ["calls", "called_by", "fk_references", "fk_referenced_by", "other_hard", "inferred"]
+          "pattern": "^[a-z][a-z0-9_]{0,62}$"
         },
         "is_hard": { "type": "boolean", "description": "与 type 一致：hard=>true, soft=>false" },
         "edge_id": { "type": "string", "pattern": "^[0-9]+$", "minLength": 1, "description": "来源图边 ID（可审计）" },
@@ -39,7 +39,13 @@
       "allOf": [
         {
           "if": { "properties": { "type": { "const": "hard" } } },
-          "then": { "required": ["edge_id", "parse_evidence"], "properties": { "is_hard": { "const": true } } }
+          "then": {
+            "required": ["edge_id", "parse_evidence"],
+            "properties": {
+              "is_hard": { "const": true },
+              "relation_type": { "not": { "enum": ["other_hard", "inferred"] } }
+            }
+          }
         },
         {
           "if": { "properties": { "type": { "const": "soft" } } },

@@ -86,7 +86,7 @@ async def test_java_ingestion_writes_graph_edges(db_session, java_scope):
 
     # Write edges to DB
     store = PostgresGraphStore(db_session)
-    count = await store.write_edges(edges, scope)
+    count = await store.write_edges(edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     assert count > 0, "Expected edges written to graph_edge"
@@ -134,7 +134,7 @@ async def test_isolation_triple_on_edges(db_session, java_scope):
     extractor = JavaCallGraphExtractor()
     edges = extractor.extract(_JAVA_SOURCE, java_scope["chunks"], scope)
     store = PostgresGraphStore(db_session)
-    await store.write_edges(edges, scope)
+    await store.write_edges(edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     # Verify isolation triple on all edges

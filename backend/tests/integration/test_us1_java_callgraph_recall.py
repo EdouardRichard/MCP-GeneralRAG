@@ -59,9 +59,9 @@ async def us1_two_projects(db_session):
     extractor = JavaCallGraphExtractor()
     store = PostgresGraphStore(db_session)
     edges_a = extractor.extract(_JAVA_SOURCE, list(chunks_a.values()), GraphScope(sa, 1))
-    await store.write_edges(edges_a, GraphScope(sa, 1))
+    await store.write_edges(edges_a, GraphScope(sa, 1), ["calls", "called_by", "fk_references", "fk_referenced_by"])
     edges_b = extractor.extract(_JAVA_SOURCE, list(chunks_b.values()), GraphScope(sb, 1))
-    await store.write_edges(edges_b, GraphScope(sb, 1))
+    await store.write_edges(edges_b, GraphScope(sb, 1), ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     return {
@@ -221,7 +221,7 @@ async def us1_search_env(db_session):
     extractor = JavaCallGraphExtractor()
     store = PostgresGraphStore(db_session)
     edges = extractor.extract(_JAVA_SOURCE, list(chunks.values()), GraphScope(sa, 1))
-    await store.write_edges(edges, GraphScope(sa, 1))
+    await store.write_edges(edges, GraphScope(sa, 1), ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     vt = chunks["validateToken"]["chunk_id"]

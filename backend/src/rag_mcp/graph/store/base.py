@@ -113,10 +113,14 @@ class GraphStore(ABC):
         self,
         edges: list[dict[str, Any]],
         scope: GraphScope,
+        allowed_relation_types: list[str],
     ) -> int:
         """Persist hard-relation edges within the given scope.
 
-        Used by extractors at ingestion time. Returns the number of edges
-        written (duplicates within scope are ignored via unique constraint).
+        ``allowed_relation_types`` is the requesting domain's graph_relations
+        vocabulary (010, R5): any edge whose relation_type is outside this set
+        (or equal to a reserved word) MUST raise ValueError so the caller can
+        degrade deterministically. Returns the number of edges written
+        (duplicates within scope are ignored via unique constraint).
         """
         ...

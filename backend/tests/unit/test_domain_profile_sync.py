@@ -19,10 +19,12 @@ def test_assert_not_builtin_rejects_builtin():
         assert_not_builtin("se-project")
     with pytest.raises(ValueError):
         assert_not_builtin("generic")
+    with pytest.raises(ValueError):
+        assert_not_builtin("legal")
 
 
 def test_assert_not_builtin_allows_custom():
-    assert_not_builtin("legal")  # should not raise
+    assert_not_builtin("custom")  # should not raise
 
 
 def test_builtin_seed_matches_guard():

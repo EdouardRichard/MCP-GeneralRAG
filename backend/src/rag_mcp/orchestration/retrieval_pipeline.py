@@ -34,10 +34,6 @@ from rag_mcp.services.retrieval_service import RetrievalService
 
 logger = logging.getLogger(__name__)
 
-# 004 deterministic bidirectional default (FR-033)
-BIDIRECTIONAL_DEFAULT = ["calls", "called_by", "fk_references", "fk_referenced_by"]
-VALID_DIRECTIONS = {"calls", "called_by", "fk_references", "fk_referenced_by"}
-
 # RRF fused scores are small (~1/(60+rank)); scale into [0, 1] when no
 # dense/sparse/rerank score is available (graph-only candidates).
 _RRF_SCALE = 15.0
@@ -88,17 +84,24 @@ def final_candidate_score(
 def map_graph_params(
     signals: list[str],
     relation_directions: list[str] | None,
+    valid_directions: list[str],
 ) -> tuple[bool, list[str] | None]:
-    """Map planner signals/directions to 004 expansion params (FR-033).
+    """Map planner signals/directions to 004 expansion params (FR-033, 010 R6.2).
 
-    Returns (use_graph, relation_types). Invalid or missing directions fall
-    back to the 004 deterministic bidirectional default.
+    ``valid_directions`` is the requesting domain's relation vocabulary (the
+    domain profile graph_relations key set, threaded from domain_planner_config).
+    Empty or all-invalid planner directions fall back to the full valid set
+    (NOT None — None would change the active-soft-relation participation face
+    and break 004 per-edge equivalence).
+
+    Returns (use_graph, relation_types).
     """
     if "graph" not in (signals or []):
         return False, None
     directions = list(relation_directions or [])
-    if not directions or not all(d in VALID_DIRECTIONS for d in directions):
-        return True, list(BIDIRECTIONAL_DEFAULT)
+    valid_set = set(valid_directions or [])
+    if not directions or not all(d in valid_set for d in directions):
+        return True, list(valid_directions or [])
     return True, directions
 
 
@@ -225,6 +228,7 @@ class AgenticRetrievalPipeline:
         sp: dict[str, Any],
         scope_ids: list[int],
         over_fetch: int,
+        valid_directions: list[str],
     ) -> dict[str, Any] | None:
         """Recall one sub-problem path on its own session (parallel unit).
 
@@ -239,6 +243,7 @@ class AgenticRetrievalPipeline:
         use_graph, relation_types = map_graph_params(
             sp.get("signals") or ["dense"],
             sp.get("relation_directions"),
+            valid_directions,
         )
         async with self._session_factory() as session:
             service = RetrievalService(
@@ -274,6 +279,7 @@ class AgenticRetrievalPipeline:
         sub_problems: list[dict[str, Any]],
         scope_ids: list[int],
         round_index: int,
+        valid_directions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Run step-4 parallel recall + step-5 fusion/rerank for one round.
 
@@ -291,7 +297,7 @@ class AgenticRetrievalPipeline:
 
         recall_results = await asyncio.gather(
             *[
-                self._recall_one(sp, scope_ids, over_fetch)
+                self._recall_one(sp, scope_ids, over_fetch, valid_directions or [])
                 for sp in sub_problems
             ],
             return_exceptions=True,

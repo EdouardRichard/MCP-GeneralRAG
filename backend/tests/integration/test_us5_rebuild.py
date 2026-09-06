@@ -70,7 +70,7 @@ async def test_rebuild_produces_same_edges(db_session, rebuild_scope):
 
     # Original extraction
     edges = extractor.extract(_JAVA_SOURCE, rebuild_scope["chunks"], scope)
-    await store.write_edges(edges, scope)
+    await store.write_edges(edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     # Count original edges
@@ -91,7 +91,7 @@ async def test_rebuild_produces_same_edges(db_session, rebuild_scope):
 
     # Rebuild from source
     rebuilt_edges = extractor.extract(_JAVA_SOURCE, rebuild_scope["chunks"], scope)
-    await store.write_edges(rebuilt_edges, scope)
+    await store.write_edges(rebuilt_edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     # Count rebuilt edges
@@ -114,7 +114,7 @@ async def test_rebuild_deterministic(db_session, rebuild_scope):
 
     # First extraction
     edges1 = extractor.extract(_JAVA_SOURCE, rebuild_scope["chunks"], scope)
-    await store.write_edges(edges1, scope)
+    await store.write_edges(edges1, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     # Get edge pairs
@@ -129,7 +129,7 @@ async def test_rebuild_deterministic(db_session, rebuild_scope):
     await db_session.commit()
 
     edges2 = extractor.extract(_JAVA_SOURCE, rebuild_scope["chunks"], scope)
-    await store.write_edges(edges2, scope)
+    await store.write_edges(edges2, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     result = await db_session.execute(text(

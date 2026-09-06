@@ -66,10 +66,11 @@ async def test_graph_edge_indexes(db_session):
 
 @pytest.mark.asyncio
 async def test_graph_edge_relation_type_check(db_session):
-    """relation_type CHECK must restrict to hard-relation enum."""
+    """relation_type CHECK must be the wide pattern (010, FR-008)."""
     checks = await get_check_constraints(db_session, "graph_edge")
-    # At least one check constraint mentions the hard-relation types
     joined = " ".join(checks)
-    assert "calls" in joined
-    assert "fk_references" in joined
-    assert "inferred" not in joined or "other_hard" in joined
+    # Wide-mode pattern present (PostgreSQL '~' regex match), closed enum
+    # retired: 'other_hard' must no longer appear in the CHECK.
+    assert "relation_type" in joined
+    assert "other_hard" not in joined, "other_hard must be retired from the CHECK"
+    assert "~" in joined or "[a-z]" in joined, "wide pattern CHECK expected"

@@ -59,7 +59,7 @@ async def us2_scope(db_session):
     extractor = DdlFkExtractor()
     store = PostgresGraphStore(db_session)
     edges = extractor.extract(_DDL_SOURCE, list(chunks.values()), GraphScope(sa, 1))
-    await store.write_edges(edges, GraphScope(sa, 1))
+    await store.write_edges(edges, GraphScope(sa, 1), ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
     return {"scope": GraphScope(sa, 1), "chunks": chunks, "sa": sa}
 

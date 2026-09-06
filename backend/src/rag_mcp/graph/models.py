@@ -11,6 +11,7 @@ bidirectional bridge to the runtime trace ledger.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from sqlalchemy import (
@@ -28,9 +29,10 @@ from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from rag_mcp.models import Base
 
-_HARD_RELATION_TYPES = frozenset({
-    "calls", "called_by", "fk_references", "fk_referenced_by", "other_hard",
-})
+# Wide-mode relation_type pattern (010, FR-008): the DB CHECK and ORM validates
+# both use this pattern; the closed enum (incl. other_hard) is retired.
+RELATION_TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+
 _SOFT_LIFECYCLE_STATES = frozenset({
     "inferred", "active", "superseded", "retired",
 })
@@ -43,8 +45,7 @@ class GraphEdge(Base):
     __tablename__ = "graph_edge"
     __table_args__ = (
         CheckConstraint(
-            "relation_type IN ('calls','called_by','fk_references',"
-            "'fk_referenced_by','other_hard')",
+            "relation_type ~ '^[a-z][a-z0-9_]{0,62}$'",
             name="chk_graph_edge_relation_type",
         ),
         CheckConstraint("direction IN ('out','in')", name="chk_graph_edge_direction"),
@@ -90,9 +91,15 @@ class GraphEdge(Base):
                 "graph_edge (hard relation) cannot use relation_type='inferred' "
                 "(soft relations live in soft_relation table, Constitution III)"
             )
-        if value not in _HARD_RELATION_TYPES:
+        if value == "other_hard":
             raise ValueError(
-                f"Invalid hard relation_type '{value}'. Must be one of {sorted(_HARD_RELATION_TYPES)}"
+                "relation_type='other_hard' is retired (010, FR-010); "
+                "relation types are declared by the domain profile vocabulary"
+            )
+        if not RELATION_TYPE_PATTERN.match(value):
+            raise ValueError(
+                f"Invalid hard relation_type '{value}'. "
+                f"Must match {RELATION_TYPE_PATTERN.pattern}"
             )
         return value
 

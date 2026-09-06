@@ -60,7 +60,7 @@ def _make_machine(monkeypatch=None):
     machine.set_context_orchestrator(orchestrator)
 
     class _FakePipeline:
-        async def retrieve_round(self, sub_problems, scope_ids, round_index):
+        async def retrieve_round(self, sub_problems, scope_ids, round_index, valid_directions=None):
             return {
                 "candidates": [{
                     "evidence_id": "ev-1",

@@ -24,6 +24,7 @@ class TestGraphParamMapping:
         use_graph, relation_types = map_graph_params(
             signals=["dense", "sparse", "graph"],
             relation_directions=["calls", "called_by"],
+            valid_directions=["calls", "called_by", "fk_references", "fk_referenced_by"],
         )
         assert use_graph is True
         assert set(relation_types) == {"calls", "called_by"}
@@ -34,6 +35,7 @@ class TestGraphParamMapping:
         use_graph, relation_types = map_graph_params(
             signals=["dense", "sparse"],
             relation_directions=None,
+            valid_directions=["calls", "called_by", "fk_references", "fk_referenced_by"],
         )
         assert use_graph is False
         assert relation_types is None
@@ -44,6 +46,7 @@ class TestGraphParamMapping:
         use_graph, relation_types = map_graph_params(
             signals=["graph"],
             relation_directions=None,
+            valid_directions=["calls", "called_by", "fk_references", "fk_referenced_by"],
         )
         assert use_graph is True
         # 004 deterministic bidirectional default (FR-033)
@@ -57,6 +60,7 @@ class TestGraphParamMapping:
         use_graph, relation_types = map_graph_params(
             signals=["graph"],
             relation_directions=["bogus_direction"],
+            valid_directions=["calls", "called_by", "fk_references", "fk_referenced_by"],
         )
         assert use_graph is True
         assert set(relation_types) == {

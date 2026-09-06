@@ -65,6 +65,27 @@ class TestValidHardEdge:
         }
         jsonschema.validate(edge, schema)
 
+    def test_valid_hard_references_edge(self, schema):
+        """references is legal under the 010 wide pattern (FR-008)."""
+        edge = {
+            "edge_id": "123460",
+            "knowledge_scope_id": "100",
+            "project_id": "200",
+            "index_version": 1,
+            "source_chunk_id": "304",
+            "target_chunk_id": "305",
+            "relation_type": "references",
+            "direction": "out",
+            "is_hard": True,
+            "version": 1,
+            "parse_evidence": {
+                "source_format": "markdown",
+                "locator": "xref:internal:anchor=x",
+                "extractor": "cross_reference",
+            },
+        }
+        jsonschema.validate(edge, schema)
+
 
 class TestValidSoftRelation:
     def test_valid_active_soft_relation(self, schema):
@@ -117,6 +138,29 @@ class TestInvalidHardEdge:
             "edge_id": "1", "knowledge_scope_id": "100", "project_id": "200",
             "index_version": 1, "source_chunk_id": "300", "target_chunk_id": "301",
             "relation_type": "inferred", "direction": "out",
+            "is_hard": True, "version": 1,
+            "parse_evidence": {"source_format": "java", "locator": "x", "extractor": "e"},
+        }
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(edge, schema)
+
+    def test_hard_edge_with_other_hard_rejected(self, schema):
+        """other_hard is retired (010, FR-010): not a legal hard relation_type."""
+        edge = {
+            "edge_id": "1", "knowledge_scope_id": "100", "project_id": "200",
+            "index_version": 1, "source_chunk_id": "300", "target_chunk_id": "301",
+            "relation_type": "other_hard", "direction": "out",
+            "is_hard": True, "version": 1,
+            "parse_evidence": {"source_format": "java", "locator": "x", "extractor": "e"},
+        }
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(edge, schema)
+
+    def test_hard_edge_with_out_of_pattern_rejected(self, schema):
+        edge = {
+            "edge_id": "1", "knowledge_scope_id": "100", "project_id": "200",
+            "index_version": 1, "source_chunk_id": "300", "target_chunk_id": "301",
+            "relation_type": "Invalid-Type!", "direction": "out",
             "is_hard": True, "version": 1,
             "parse_evidence": {"source_format": "java", "locator": "x", "extractor": "e"},
         }

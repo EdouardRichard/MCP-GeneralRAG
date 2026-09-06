@@ -127,6 +127,9 @@ class AgenticStateMachine:
         self._subpath_timings: dict[str, float] = {}
         self._failed_paths: list[str] = []
         self._scope_ids: list[int] = []
+        # 010 (T020): request-domain relation vocabulary threaded into the
+        # graph path (map_graph_params valid_directions).
+        self._valid_directions: list[str] = []
 
         # Parent-context supplementation state (T065)
         self._parent_supplements: list[dict[str, Any]] = []
@@ -676,6 +679,12 @@ class AgenticStateMachine:
                     continue
         self._scope_ids = list(scope_ids)
 
+        # 010 (T020): resolve the request-domain relation vocabulary from the
+        # planner config (entry.py already resolved it) and thread it into the
+        # graph path as map_graph_params valid_directions.
+        dp_config = context.get("domain_planner_config") or {}
+        self._valid_directions = list(dp_config.get("relation_vocab") or [])
+
         graph = self._build_async_graph()
         await graph.ainvoke({"context": context, "scope_ids": scope_ids})
 
@@ -1029,6 +1038,7 @@ class AgenticStateMachine:
                 sub_problems=sub_problems,
                 scope_ids=scope_ids,
                 round_index=self._rounds_completed - 1,
+                valid_directions=self._valid_directions,
             )
         except Exception as exc:  # noqa: BLE001 - degrade, never block (SC-011)
             logger.error("Agentic parallel retrieval failed: %s", exc, exc_info=True)

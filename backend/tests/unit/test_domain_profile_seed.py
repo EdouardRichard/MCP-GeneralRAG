@@ -43,7 +43,27 @@ def test_se_project_prompt_is_se_specific():
 def test_is_builtin():
     assert is_builtin("se-project")
     assert is_builtin("generic")
-    assert not is_builtin("legal")
+    assert is_builtin("legal")
+    assert not is_builtin("custom")
+
+
+def test_legal_has_markdown_format():
+    formats = BUILTIN_DOMAIN_PROFILES["legal"]["supported_formats"]
+    assert formats == ["markdown"]
+
+
+def test_legal_has_references_vocab():
+    graph = BUILTIN_DOMAIN_PROFILES["legal"]["graph_relations"]
+    assert set(graph.keys()) == {"references", "referenced_by"}
+    for directions in graph.values():
+        assert "out" in directions and "in" in directions
+
+
+def test_legal_is_builtin_with_graph_capability():
+    legal = BUILTIN_DOMAIN_PROFILES["legal"]
+    assert legal["is_builtin"] is True
+    assert legal["default_capabilities"]["has_graph"] is True
+    assert "graph_enhanced" in legal["default_capabilities"]["retrieval_modes"]
 
 
 def test_slugify_lexical():

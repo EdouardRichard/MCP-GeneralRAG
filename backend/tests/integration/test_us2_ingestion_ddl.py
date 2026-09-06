@@ -59,7 +59,7 @@ async def test_ddl_ingestion_writes_fk_edges(db_session, ddl_scope):
     assert len(edges) > 0, "Expected FK edges from DDL"
 
     store = PostgresGraphStore(db_session)
-    count = await store.write_edges(edges, scope)
+    count = await store.write_edges(edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
     assert count > 0
 
@@ -89,7 +89,7 @@ async def test_fk_edges_isolation(db_session, ddl_scope):
     extractor = DdlFkExtractor()
     edges = extractor.extract(_DDL_SOURCE, ddl_scope["chunks"], scope)
     store = PostgresGraphStore(db_session)
-    await store.write_edges(edges, scope)
+    await store.write_edges(edges, scope, ["calls", "called_by", "fk_references", "fk_referenced_by"])
     await db_session.commit()
 
     result = await db_session.execute(text(

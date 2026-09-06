@@ -46,7 +46,7 @@ class TestWiring:
         machine.set_evidence_analyst(analyst)
 
         class _FakePipeline:
-            async def retrieve_round(self, sub_problems, scope_ids, round_index):
+            async def retrieve_round(self, sub_problems, scope_ids, round_index, valid_directions=None):
                 return {
                     "candidates": [{
                         "evidence_id": "ev-evil",

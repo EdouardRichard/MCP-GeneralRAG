@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from sqlalchemy import select, text
@@ -19,6 +20,16 @@ from rag_mcp.graph.store.base import GraphCandidate, GraphScope, GraphStore
 from rag_mcp.utils.snowflake import generate_id
 
 logger = logging.getLogger(__name__)
+
+# Wide-mode relation_type pattern (mirrors graph/models.py; kept local to avoid
+# a models<->store import cycle). Used to sanitize vocabulary keys before SQL.
+_RELATION_TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+
+# Reserved relation types that must never appear as a hard edge relation_type,
+# even if a custom domain profile vocabulary declares them (010, FR-010 /
+# Constitution III). Raw SQL INSERTs bypass ORM validates, so the store
+# chokepoint re-enforces the blacklist.
+_RESERVED_RELATION_TYPES = frozenset({"other_hard", "inferred"})
 
 
 class PostgresGraphStore(GraphStore):
@@ -46,10 +57,18 @@ class PostgresGraphStore(GraphStore):
         budget = min(budget, self._graph_cfg.candidate_budget_max)
         cfg = self._graph_cfg
 
-        # Build relation-type filter (safe: enum values, not user input)
+        # Build relation-type filter (010, R6.4): array parameter binding
+        # (ANY(:rts)) instead of string concatenation. Keys may originate from
+        # user-defined domain profile vocabularies, so each element is pattern
+        # sanitized before entering SQL (defense-in-depth with the DB CHECK).
         if relation_types:
-            rt_list = ", ".join("'" + rt + "'" for rt in relation_types)
-            rt_filter = " AND relation_type IN (" + rt_list + ")"
+            for rt in relation_types:
+                if not _RELATION_TYPE_PATTERN.match(rt):
+                    raise ValueError(
+                        f"relation_type {rt!r} does not match wide pattern "
+                        f"{_RELATION_TYPE_PATTERN.pattern}"
+                    )
+            rt_filter = " AND relation_type = ANY(:rts)"
         else:
             rt_filter = ""
 
@@ -63,6 +82,8 @@ class PostgresGraphStore(GraphStore):
             "soft_w": cfg.structure_weight_soft,
             "decay": cfg.structure_weight_hop_decay,
         }
+        if relation_types:
+            params["rts"] = list(relation_types)
 
         fwd = self._forward_edges_cte(rt_filter)
         rev = self._reverse_edges_cte(rt_filter)
@@ -115,10 +136,33 @@ class PostgresGraphStore(GraphStore):
         self,
         edges: list[dict[str, Any]],
         scope: GraphScope,
+        allowed_relation_types: list[str],
     ) -> int:
-        """Persist hard-relation edges within the given scope."""
+        """Persist hard-relation edges within the given scope.
+
+        Validates every edge's relation_type against the requesting domain's
+        graph_relations vocabulary (R5) and the reserved-word blacklist
+        (R5/FR-010) before writing; an out-of-vocabulary or reserved value
+        raises ValueError (fail loud) so the caller degrades deterministically.
+        """
         if not edges:
             return 0
+        allowed = set(allowed_relation_types or [])
+        out_of_vocab: list[str] = []
+        for edge_data in edges:
+            rt = edge_data.get("relation_type")
+            if rt in _RESERVED_RELATION_TYPES:
+                raise ValueError(
+                    f"relation_type={rt!r} is a reserved word; hard edges must "
+                    "never use 'other_hard'/'inferred' (FR-010/Constitution III)"
+                )
+            if rt not in allowed:
+                out_of_vocab.append(str(rt))
+        if out_of_vocab:
+            raise ValueError(
+                f"relation_type(s) {sorted(set(out_of_vocab))!r} not in the "
+                f"domain vocabulary; allowed={sorted(allowed)}"
+            )
         count = 0
         for edge_data in edges:
             edge_id = edge_data.get("edge_id") or generate_id()
@@ -259,7 +303,10 @@ class PostgresGraphStore(GraphStore):
 
         from rag_mcp.services.ingestion_service import _dedupe_edges
 
-        count = await self.write_edges(_dedupe_edges(all_edges), scope)
+        count = await self.write_edges(
+            _dedupe_edges(all_edges), scope,
+            allowed_relation_types=list(graph_relations.keys()),
+        )
         logger.info(
             "Rebuilt %d graph edges for scope %d (format=%s)",
             count, scope.knowledge_scope_id, format,
@@ -281,16 +328,27 @@ class PostgresGraphStore(GraphStore):
             "AND index_version = :iv" + rt_filter
         )
 
+    def _inverse_case_sql(self) -> str:
+        """CASE expression mapping relation_type to its inverse (010, R6.3/R9).
+
+        Generated from GraphExtractorRegistry.inverse_relation_map() so new
+        extractor pairs (e.g. references/referenced_by) are picked up
+        automatically. Keys are already wide-pattern validated at registration.
+        """
+        from rag_mcp.graph.extractors.base import GraphExtractorRegistry
+
+        inverse = GraphExtractorRegistry.instance().inverse_relation_map()
+        whens = " ".join(
+            f"WHEN '{k}' THEN '{v}'" for k, v in sorted(inverse.items())
+        )
+        return f"CASE relation_type {whens} ELSE relation_type END"
+
     def _reverse_edges_cte(self, rt_filter: str) -> str:
+        inverse_case = self._inverse_case_sql()
         return (
             "SELECT target_chunk_id AS from_chunk, source_chunk_id AS to_chunk, "
             "edge_id, "
-            "CASE relation_type "
-            "WHEN 'calls' THEN 'called_by' "
-            "WHEN 'called_by' THEN 'calls' "
-            "WHEN 'fk_references' THEN 'fk_referenced_by' "
-            "WHEN 'fk_referenced_by' THEN 'fk_references' "
-            "ELSE relation_type END AS relation_type, "
+            + inverse_case + " AS relation_type, "
             "CASE direction WHEN 'out' THEN 'in' ELSE 'out' END AS direction, "
             "is_hard FROM graph_edge "
             "WHERE knowledge_scope_id = :ksid "

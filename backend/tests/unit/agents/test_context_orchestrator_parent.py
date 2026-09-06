@@ -75,7 +75,7 @@ def _make_machine(candidates, top_k=5):
     machine.set_context_orchestrator(ContextOrchestratorAgent(model_and_version="t"))
 
     class _FakePipeline:
-        async def retrieve_round(self, sub_problems, scope_ids, round_index):
+        async def retrieve_round(self, sub_problems, scope_ids, round_index, valid_directions=None):
             return {
                 "candidates": candidates,
                 "subpath_timings": {},
