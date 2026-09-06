@@ -15,6 +15,7 @@ from rag_mcp.config.domain_profiles import (
     BUILTIN_DOMAIN_PROFILES,
     BUILTIN_DOMAIN_KEYS,
     is_builtin,
+    relation_vocab_union,
 )
 from rag_mcp.models.domain_profile import DomainProfile
 
@@ -107,6 +108,56 @@ class DomainProfileService:
             select(DomainProfile).order_by(DomainProfile.domain_key)
         )
         return list(result.scalars().all())
+
+    async def resolve_planner_config(self, scope_ids: list[int]) -> dict[str, Any]:
+        """Resolve the planner config for a request's scope set (009, T005, R7).
+
+        Queries knowledge_scopes.domain_key for the scope set, then the
+        domain_profiles rows, and derives the per-request planner config:
+          - distinct_domain_keys: deduped domain_key set (>=1)
+          - relation_vocab: deterministic union of graph_relations keys (R4)
+          - prompt_override: the single profile's query_planner_system_prompt
+            when exactly one distinct domain_key declares it; else None.
+        """
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+
+        if not scope_ids:
+            return {
+                "distinct_domain_keys": [],
+                "relation_vocab": [],
+                "prompt_override": None,
+            }
+
+        result = await self._session.execute(
+            select(KnowledgeScope.domain_key).where(
+                KnowledgeScope.scope_id.in_(list(scope_ids))
+            )
+        )
+        domain_keys = sorted(set(result.scalars().all()))
+        if not domain_keys:
+            return {
+                "distinct_domain_keys": [],
+                "relation_vocab": [],
+                "prompt_override": None,
+            }
+
+        profiles_result = await self._session.execute(
+            select(DomainProfile).where(DomainProfile.domain_key.in_(domain_keys))
+        )
+        profiles = list(profiles_result.scalars().all())
+
+        relation_vocab = relation_vocab_union([p.graph_relations for p in profiles])
+
+        prompt_override = None
+        if len(domain_keys) == 1 and profiles:
+            overrides = profiles[0].prompt_overrides or {}
+            prompt_override = overrides.get("query_planner_system_prompt")
+
+        return {
+            "distinct_domain_keys": domain_keys,
+            "relation_vocab": relation_vocab,
+            "prompt_override": prompt_override,
+        }
 
     async def _get(self, domain_key: str) -> DomainProfile | None:
         result = await self._session.execute(

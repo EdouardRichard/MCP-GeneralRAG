@@ -167,6 +167,23 @@ async def run_agentic_search(
         }
         return (response, _empty_record(request_id)) if return_record else response
 
+    # 009 (T006): resolve the per-request domain planner config from the scope
+    # set and inject it into the planner context (research R7). Resolution
+    # failures fall back to a config-less request (the planner keeps the
+    # 1.0 se-project default), so availability never drops.
+    domain_planner_config = None
+    if scope_ids:
+        try:
+            from rag_mcp.services.domain_profile_service import DomainProfileService
+
+            async with session_factory() as session:
+                domain_planner_config = await DomainProfileService(
+                    session
+                ).resolve_planner_config(scope_ids)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Domain planner config resolution failed: %s", exc)
+            domain_planner_config = None
+
     from rag_mcp.orchestration.retrieval_pipeline import AgenticRetrievalPipeline
     from rag_mcp.orchestration.state_machine import AgenticStateMachine
 
@@ -201,6 +218,7 @@ async def run_agentic_search(
         "task_context": task_context,
         "scope_ids": scope_ids,
         "top_k": top_k,
+        "domain_planner_config": domain_planner_config,
     }
 
     # Run-scoped persistence session (T059): ledger/judgment/selection rows

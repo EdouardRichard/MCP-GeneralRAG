@@ -8,6 +8,13 @@ Decomposes complex/multi-hop queries into traceable sub-problems:
   - schema_valid=true when output passes validation (FR-003)
   - Single-intent query produces 1 sub-problem (no extra overhead)
 
+009 (T007/T009-T012): the planner is domain-neutralized. The system prompt and
+the relation-direction vocabulary are derived per-request from the
+domain_planner_config injected by the entry orchestration (research R1/R2/R7);
+NODE_SCHEMA is built dynamically from the relation vocabulary (research R2).
+When no domain_planner_config is wired (direct construction), the planner
+preserves the 1.0 se-project behaviour as the backward-compatible default.
+
 Constitution VI: the query planner is an Agent whose output is an INPUT
 to the deterministic controller, not an exclusive jump authority.
 """
@@ -15,47 +22,91 @@ to the deterministic controller, not an exclusive jump authority.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from typing import Any
 
-from rag_mcp.agents.base import AgentBase, AgentResult
+from jsonschema import Draft202012Validator
+
+from rag_mcp.agents.base import AgentBase
+from rag_mcp.config.domain_profiles import (
+    SE_PLANNER_PROMPT,
+    SE_PROJECT_GRAPH_RELATIONS,
+    render_neutral_planner_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
 VALID_SIGNALS = {"dense", "sparse", "graph"}
-BIDIRECTIONAL_DEFAULT = ["calls", "called_by", "fk_references", "fk_referenced_by"]
-VALID_DIRECTIONS = {"calls", "called_by", "fk_references", "fk_referenced_by"}
 
-NODE_SCHEMA: dict[str, Any] = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "properties": {
-        "sub_problems": {
+# 1.0 se-project relation vocabulary — the backward-compatible default when no
+# domain_planner_config is wired. Derived from the se-project profile
+# declaration, not hardcoded here (Constitution XI / SC-005).
+_DEFAULT_RELATION_VOCAB = list(SE_PROJECT_GRAPH_RELATIONS)
+
+
+def _build_node_schema(relation_vocab: list[str]) -> dict[str, Any]:
+    """Build the planner NODE_SCHEMA dynamically from the relation vocab (R2).
+
+    Non-empty vocab -> signals enum includes 'graph' and the schema carries
+    relation_directions (items.enum = vocab) + graph_hop. Empty vocab -> both
+    relation_directions and graph_hop are OMITTED and signals is [dense, sparse]
+    (clarification Q4, FR-008).
+    """
+    signals_enum = ["dense", "sparse"]
+    if relation_vocab:
+        signals_enum.append("graph")
+
+    sub_problem_props: dict[str, Any] = {
+        "sub_problem_id": {"type": "integer", "minimum": 1},
+        "query": {"type": "string", "minLength": 1},
+        "signals": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "sub_problem_id": {"type": "integer", "minimum": 1},
-                    "query": {"type": "string", "minLength": 1},
-                    "signals": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": ["dense", "sparse", "graph"]},
-                        "minItems": 1,
-                    },
-                    "relation_directions": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": ["calls", "called_by", "fk_references", "fk_referenced_by"]},
-                    },
-                    "graph_hop": {"type": "integer", "minimum": 1, "maximum": 3},
-                },
-                "required": ["sub_problem_id", "query", "signals"],
-                "additionalProperties": False,
-            },
+            "items": {"type": "string", "enum": signals_enum},
+            "minItems": 1,
         },
-        "schema_valid": {"type": "boolean"},
-    },
-    "required": ["sub_problems", "schema_valid"],
-    "additionalProperties": False,
-}
+    }
+    if relation_vocab:
+        sub_problem_props["relation_directions"] = {
+            "type": "array",
+            "items": {"type": "string", "enum": list(relation_vocab)},
+        }
+        sub_problem_props["graph_hop"] = {"type": "integer", "minimum": 1, "maximum": 3}
+
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "sub_problems": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": sub_problem_props,
+                    "required": ["sub_problem_id", "query", "signals"],
+                    "additionalProperties": False,
+                },
+            },
+            "schema_valid": {"type": "boolean"},
+        },
+        "required": ["sub_problems", "schema_valid"],
+        "additionalProperties": False,
+    }
+
+
+@lru_cache(maxsize=None)
+def _cached_validator(vocab_key: frozenset[str]) -> Draft202012Validator:
+    """Per-request validator cached by the vocab key (research R2).
+
+    Enum order does not affect validation, so a canonical (sorted) order is
+    used here; the two builtin vocab shapes (4 values / empty) hit a 100%
+    cache rate.
+    """
+    return Draft202012Validator(_build_node_schema(sorted(vocab_key)))
+
+
+# Module-level default NODE_SCHEMA: the se-project shape (backward-compatible
+# for direct importers such as test_query_planner_hop.py). The runtime schema
+# is derived per-request from the domain_planner_config vocabulary (R2).
+NODE_SCHEMA: dict[str, Any] = _build_node_schema(list(_DEFAULT_RELATION_VOCAB))
 
 
 class QueryPlannerAgent(AgentBase):
@@ -69,55 +120,74 @@ class QueryPlannerAgent(AgentBase):
     ROLE = "query_planner"
     NODE_SCHEMA = NODE_SCHEMA
 
-    DECOMPOSE_SYSTEM_PROMPT = (
-        "You are a query-planning agent for a code/knowledge retrieval system. "
-        "Decompose the user's retrieval query into traceable sub-problems. "
-        "For multi-hop questions produce one sub-problem per hop; for "
-        "single-intent questions return exactly ONE sub-problem.\n"
-        "\n"
-        "Signal selection rules (apply per sub-problem, T073/FR-001):\n"
-        "- 'dense' and 'sparse' recall chunks by semantic/lexical similarity "
-        "to the query text. They are the right signals for precision questions: "
-        "exact symbols or definitions, column/type/constraint/index/view "
-        "declarations, compatibility or consistency checks between named "
-        "items, version or source conflicts, configuration values, "
-        "'what/which fields does X have'.\n"
-        "- 'graph' traverses structural relations (method call edges, "
-        "foreign-key edges). Add 'graph' ONLY when the question itself asks "
-        "about relationships or traversal: who calls X, which methods X "
-        "invokes, which tables reference a table/column, callers/callees, "
-        "multi-hop chains across symbols or tables. Do NOT add 'graph' when "
-        "the question merely names a symbol, table or column but asks about "
-        "its content, definition or compatibility — use 'dense' and 'sparse' "
-        "there.\n"
-        "- Always include 'dense'; add 'sparse' when the query names "
-        "concrete identifiers (class, method, table, column, constraint "
-        "names).\n"
-        "\n"
-        "'relation_directions' (optional, only when 'graph' is in signals) "
-        "is a subset of [\"calls\", \"called_by\", \"fk_references\", "
-        "\"fk_referenced_by\"]. Pick the minimal direction the question "
-        "needs: who calls X -> [\"called_by\"]; what does X call -> "
-        "[\"calls\"]; FK-reference questions -> [\"fk_references\", "
-        "\"fk_referenced_by\"].\n"
-        "'graph_hop' (optional integer 1-3, only when 'graph' is in "
-        "signals): 1 for direct relations, 2 for one intermediate hop. "
-        "Omit when unsure.\n"
-        "\n"
-        "Respond with ONLY a JSON object of the exact shape:\n"
-        '{"sub_problems": [{"query": string, "signals": [string], '
-        '"relation_directions": [string]}]}\n'
-        "No markdown fences, no extra keys, no commentary."
-    )
+    # Backward-compatible 1.0 se-project system prompt (the equivalence gate,
+    # FR-002/SC-001 text layer). Kept as an alias for legacy importers; the
+    # runtime prompt is resolved per-request in execute().
+    DECOMPOSE_SYSTEM_PROMPT = SE_PLANNER_PROMPT
 
     def __init__(self, model_and_version: str = "", llm_client=None) -> None:
         super().__init__(model_and_version=model_and_version)
         self._sub_problem_counter = 0
         self._llm_client = llm_client
+        self._relation_vocab = list(_DEFAULT_RELATION_VOCAB)
+        self._system_prompt = SE_PLANNER_PROMPT
+
+    # ------------------------------------------------------------------
+    # Per-request domain config resolution (009, T007, research R1/R2)
+    # ------------------------------------------------------------------
+
+    def _resolve_config(
+        self, context: dict[str, Any],
+    ) -> tuple[list[str], list[str], str | None]:
+        """Resolve (distinct_domain_keys, relation_vocab, prompt_override).
+
+        When domain_planner_config is absent/None (direct construction), the
+        1.0 se-project default is preserved. Otherwise the config's fields are
+        honoured; a non-single override is normalised to None (FR-003).
+        """
+        cfg = context.get("domain_planner_config")
+        if not isinstance(cfg, dict) or not cfg:
+            return ["se-project"], list(_DEFAULT_RELATION_VOCAB), SE_PLANNER_PROMPT
+
+        distinct_keys = list(cfg.get("distinct_domain_keys") or [])
+        vocab = list(cfg.get("relation_vocab") or [])
+        prompt_override = cfg.get("prompt_override")
+        if len(distinct_keys) != 1 or not prompt_override:
+            prompt_override = None
+        return distinct_keys, vocab, prompt_override
+
+    def _resolve_system_prompt(
+        self,
+        distinct_keys: list[str],
+        vocab: list[str],
+        prompt_override: str | None,
+    ) -> str:
+        """Resolve the system prompt (research R1 / FR-003).
+
+        Single profile with a query_planner_system_prompt override -> the
+        override (the complete system prompt). Heterogeneous / no override ->
+        the domain-neutral base template with the relation-vocab slot filled.
+        """
+        if len(distinct_keys) == 1 and prompt_override:
+            return prompt_override
+        return render_neutral_planner_prompt(vocab)
+
+    def _prepare(self, context: dict[str, Any]) -> None:
+        """Derive per-request vocab/prompt/validator state (T007/T009)."""
+        distinct_keys, vocab, prompt_override = self._resolve_config(context)
+        self._relation_vocab = list(vocab)
+        self._system_prompt = self._resolve_system_prompt(
+            distinct_keys, vocab, prompt_override,
+        )
+        self._validator = _cached_validator(frozenset(self._relation_vocab))
 
     def get_default_directions(self) -> list[str]:
-        """Return the 004 deterministic bidirectional default (FR-033)."""
-        return list(BIDIRECTIONAL_DEFAULT)
+        """Return the 004 deterministic bidirectional default (FR-033).
+
+        Derived from the current request's relation vocabulary; falls back to
+        the 1.0 se-project default when no request has been prepared yet.
+        """
+        return list(self._relation_vocab)
 
     def _next_sub_problem_id(self) -> int:
         """Return the next sub_problem_id (starts from 1, monotonic, FR-032)."""
@@ -137,7 +207,7 @@ class QueryPlannerAgent(AgentBase):
             return None
         try:
             payload = self._llm_client.chat_json(
-                self.DECOMPOSE_SYSTEM_PROMPT,
+                self._system_prompt,
                 {"query": query, "task_context": context.get("task_context")},
             )
         except Exception as exc:
@@ -152,6 +222,8 @@ class QueryPlannerAgent(AgentBase):
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         """Decompose the query into sub-problems (FR-001/FR-032/FR-033)."""
+        self._prepare(context)
+
         query = context.get("query", "")
         if not query:
             return {"sub_problems": [], "schema_valid": True}
@@ -187,26 +259,41 @@ class QueryPlannerAgent(AgentBase):
 
     def fallback(self, context: dict[str, Any]) -> dict[str, Any]:
         """Deterministic fallback: single sub-problem with the original query (SC-011)."""
+        self._prepare(context)
         query = context.get("query", "")
         return self._build_fallback_output(query)
 
     def _build_fallback_output(self, query: str) -> dict[str, Any]:
-        """Build a valid single-sub-problem output (deterministic, SC-011)."""
+        """Build a valid single-sub-problem output (deterministic, SC-011).
+
+        009 (T012): when the current domain declares no relation vocabulary,
+        relation_directions/graph_hop are omitted (fallback matches the
+        dynamic schema, FR-008).
+        """
         self._sub_problem_counter = 0
         sub_id = self._next_sub_problem_id()
+        sub_problem: dict[str, Any] = {
+            "sub_problem_id": sub_id,
+            "query": query,
+            "signals": ["dense"],
+        }
+        if self._relation_vocab:
+            sub_problem["relation_directions"] = list(self._relation_vocab)
         return {
-            "sub_problems": [{
-                "sub_problem_id": sub_id,
-                "query": query,
-                "signals": ["dense"],
-                "relation_directions": list(BIDIRECTIONAL_DEFAULT),
-            }],
+            "sub_problems": [sub_problem],
             "schema_valid": True,
         }
 
     def _validate_signals(self, signals: list[str]) -> list[str]:
-        """Validate signals against {dense, sparse, graph} (FR-001)."""
-        valid = [s for s in signals if s in VALID_SIGNALS]
+        """Validate signals against the current domain's capability (FR-006/FR-008).
+
+        'graph' is only allowed when the current domain declares a non-empty
+        relation vocabulary (a no-graph domain cannot plan graph traversal).
+        """
+        allowed = {"dense", "sparse"}
+        if self._relation_vocab:
+            allowed.add("graph")
+        valid = [s for s in signals if s in allowed]
         if not valid:
             valid = ["dense"]  # default fallback
         return valid
@@ -230,24 +317,29 @@ class QueryPlannerAgent(AgentBase):
         directions: list[str] | None,
         signals: list[str],
     ) -> list[str]:
-        """Validate relation_directions and fall back to 004 default (FR-033).
+        """Validate relation_directions and fall back to the domain default (FR-033).
 
         - If signals do not include graph, directions are optional (may be empty).
         - If directions are missing or empty and graph signal is present,
-          use the 004 bidirectional default.
-        - If any direction is invalid, fall back to the full default set.
+          use the current domain's default vocabulary.
+        - If any direction is invalid, fall back to the full domain vocabulary.
+        - A no-graph domain has no default vocabulary and produces no directions.
         """
         has_graph = "graph" in signals
+        vocab = self._relation_vocab
+
+        if not vocab:
+            return []  # no-graph domain: no directions are plannable
 
         if not directions:
             if has_graph:
-                return list(BIDIRECTIONAL_DEFAULT)
+                return list(vocab)
             return []  # non-graph signals: no directions needed
 
         # Check if all directions are valid
-        all_valid = all(d in VALID_DIRECTIONS for d in directions)
+        all_valid = all(d in vocab for d in directions)
         if not all_valid:
             # Any invalid -> fall back to full default (FR-033)
-            return list(BIDIRECTIONAL_DEFAULT)
+            return list(vocab)
 
         return list(directions)

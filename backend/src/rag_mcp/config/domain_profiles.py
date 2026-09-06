@@ -4,9 +4,16 @@ Constitution XI / ADR-3: domain differences are expressed declaratively through
 DomainProfile declarations. This module is the single source of truth for the two
 builtin profiles (se-project = 1.0 behaviour, generic = domain-neutral forward
 declaration) and the scope-slug lexical generator (FR-012).
+
+009 (T003/T004): the se-project planner override is upgraded to the verbatim
+1.0 DECOMPOSE_SYSTEM_PROMPT (equivalence gate text layer, FR-002/SC-001); a
+domain-neutral base template with a relation-vocabulary slot is added for
+heterogeneous / override-less requests (FR-001/FR-003), plus the relation-vocab
+union and slot-filling helpers.
 """
 from __future__ import annotations
 
+import json
 import re
 
 SE_PROJECT_FORMATS: tuple[str, ...] = (
@@ -20,17 +27,19 @@ SE_PROJECT_GRAPH_RELATIONS: dict[str, list[str]] = {
     "fk_referenced_by": ["out", "in"],
 }
 
-SE_PLANNER_PROMPT: str = (
-    "You are a query-planning agent for a code/knowledge retrieval system. "
-    "Decompose the user's retrieval query into traceable sub-problems. "
-    "For multi-hop questions produce one sub-problem per hop; for "
-    "single-intent questions return exactly ONE sub-problem. "
-    "Signal selection rules: use 'dense' and 'sparse' for precision questions "
-    "about exact symbols or definitions, columns/types/constraints, versions or "
-    "configuration; add 'graph' only when the question asks about relationships "
-    "or traversal (who calls X, callers/callees, foreign-key references, "
-    "multi-hop chains)."
-)
+SE_PLANNER_PROMPT: str = """You are a query-planning agent for a code/knowledge retrieval system. Decompose the user's retrieval query into traceable sub-problems. For multi-hop questions produce one sub-problem per hop; for single-intent questions return exactly ONE sub-problem.
+
+Signal selection rules (apply per sub-problem, T073/FR-001):
+- 'dense' and 'sparse' recall chunks by semantic/lexical similarity to the query text. They are the right signals for precision questions: exact symbols or definitions, column/type/constraint/index/view declarations, compatibility or consistency checks between named items, version or source conflicts, configuration values, 'what/which fields does X have'.
+- 'graph' traverses structural relations (method call edges, foreign-key edges). Add 'graph' ONLY when the question itself asks about relationships or traversal: who calls X, which methods X invokes, which tables reference a table/column, callers/callees, multi-hop chains across symbols or tables. Do NOT add 'graph' when the question merely names a symbol, table or column but asks about its content, definition or compatibility — use 'dense' and 'sparse' there.
+- Always include 'dense'; add 'sparse' when the query names concrete identifiers (class, method, table, column, constraint names).
+
+'relation_directions' (optional, only when 'graph' is in signals) is a subset of ["calls", "called_by", "fk_references", "fk_referenced_by"]. Pick the minimal direction the question needs: who calls X -> ["called_by"]; what does X call -> ["calls"]; FK-reference questions -> ["fk_references", "fk_referenced_by"].
+'graph_hop' (optional integer 1-3, only when 'graph' is in signals): 1 for direct relations, 2 for one intermediate hop. Omit when unsure.
+
+Respond with ONLY a JSON object of the exact shape:
+{"sub_problems": [{"query": string, "signals": [string], "relation_directions": [string]}]}
+No markdown fences, no extra keys, no commentary."""
 
 GENERIC_FORMATS: tuple[str, ...] = (
     "markdown", "word", "pdf", "html", "txt",
@@ -43,6 +52,53 @@ NEUTRAL_PLANNER_PROMPT: str = (
     "without assuming any specific domain vocabulary, file formats, or graph "
     "structure. Prefer dense and lexical signals; do not add a graph signal."
 )
+
+DOMAIN_NEUTRAL_BASE_TEMPLATE: str = """You are a domain-neutral query-planning agent for a knowledge retrieval system. Decompose the user's retrieval query into traceable sub-problems. For multi-hop questions produce one sub-problem per hop; for single-intent questions return exactly ONE sub-problem.
+
+Signal selection rules (apply per sub-problem):
+- 'dense' and 'sparse' recall chunks by semantic/lexical similarity to the query text. They are the right signals for precision questions about identifiers and definitions: exact names, declared properties, compatibility or consistency checks between named items, version or source conflicts, configuration values, 'what/which fields does X have'.
+- 'graph' traverses structural relations between named items. Add 'graph' ONLY when the question itself asks about relationships or traversal: which items relate to X, what X relates to, multi-hop chains across related items. Do NOT add 'graph' when the question merely names an item but asks about its content or definition — use 'dense' and 'sparse' there.
+- Always include 'dense'; add 'sparse' when the query names concrete identifiers.
+
+{relation_vocab_slot}
+
+Respond with ONLY a JSON object of the exact shape:
+{"sub_problems": [{"query": string, "signals": [string], "relation_directions": [string]}]}
+No markdown fences, no extra keys, no commentary."""
+
+
+def render_neutral_planner_prompt(relation_vocab: list[str] | None) -> str:
+    """Fill the domain-neutral base template's relation-vocabulary slot (R1/R2)."""
+    vocab = sorted(set(relation_vocab or []))
+    if vocab:
+        slot = (
+            "'relation_directions' (optional, only when 'graph' is in signals) "
+            "is a subset of " + json.dumps(vocab) + ". Pick the minimal "
+            "direction the question needs."
+        )
+    else:
+        slot = (
+            "No graph relations are declared for the current knowledge domain. "
+            "Do NOT add 'graph' to signals; omit 'relation_directions' and "
+            "'graph_hop'."
+        )
+    return DOMAIN_NEUTRAL_BASE_TEMPLATE.replace("{relation_vocab_slot}", slot)
+
+
+def relation_vocab_union(graph_relations_list: list[dict]) -> list[str]:
+    """Deterministic union of graph_relations key sets (research R4).
+
+    The builtin se-project vocabulary keeps its declared 1.0 order (the
+    equivalence gate requires se-project word order to match 1.0); any
+    additional custom keys are appended in sorted order for determinism.
+    """
+    keys: set[str] = set()
+    for gr in graph_relations_list or []:
+        keys.update(gr.keys())
+    canonical = [k for k in SE_PROJECT_GRAPH_RELATIONS if k in keys]
+    extras = sorted(keys - set(SE_PROJECT_GRAPH_RELATIONS))
+    return canonical + extras
+
 
 BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
     "se-project": {
