@@ -226,6 +226,13 @@ class FormatHandlerRegistry:
             )
         return handler
 
+    def _check_converter_available(self, handler: FormatHandler) -> None:
+        """Reject a converter-tier format when its converter dependency is missing (T016)."""
+        if handler.tier == "converter" and handler.converter_spec is not None:
+            converter = handler.converter_spec.converter
+            if converter is not None and not converter.available():
+                raise RegistryFormatError(f"converter unavailable: {handler.format}")
+
     # ------------------------------------------------------------------
     # Dispatch APIs (contracts/format-handler-registry.md §3)
     # ------------------------------------------------------------------
@@ -244,6 +251,7 @@ class FormatHandlerRegistry:
                 return "openapi"
             generic = self._by_ext.get(ext)
             if generic is not None:
+                self._check_converter_available(generic)
                 return generic.format
             raise RegistryFormatError("Unsupported file format. " + _unsupported_message(self._accepted))
 
@@ -254,6 +262,7 @@ class FormatHandlerRegistry:
         # Extension/content mismatch guard for .go (spec edge case).
         if handler.format == "go" and content is not None:
             _check_go_package(content, filename)
+        self._check_converter_available(handler)
         return handler.format
 
     def parse_content(self, content: Any, fmt: str, filename: str) -> list[dict[str, Any]]:

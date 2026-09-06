@@ -205,6 +205,13 @@ class Settings:
         in ("1", "true", "yes", "on")
     )
 
+    # 008 (FR-015): unified upload size ceiling (default 20MB, configurable).
+    max_upload_size_bytes: int = field(
+        default_factory=lambda: int(
+            os.getenv("MAX_UPLOAD_SIZE_BYTES", str(20 * 1024 * 1024))
+        )
+    )
+
     # Maintenance
     retrieval_ttl_cleanup_interval_s: int = field(
         default_factory=lambda: int(os.getenv("RETRIEVAL_TTL_CLEANUP_INTERVAL_S", "3600"))

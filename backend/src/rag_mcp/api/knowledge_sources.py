@@ -337,6 +337,14 @@ async def upload_knowledge_source(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
 
+    # 008 (FR-015/T016): unified upload size ceiling (fail fast).
+    max_size = get_settings().max_upload_size_bytes
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the maximum upload size of {max_size} bytes",
+        )
+
     # Validate format (extension + content based, FR-010)
     try:
         fmt = _detect_format(file.filename or "", content)

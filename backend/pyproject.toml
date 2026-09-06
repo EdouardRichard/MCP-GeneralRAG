@@ -41,6 +41,9 @@ dependencies = [
     "pdfplumber>=0.11.0",
     "pyyaml>=6.0.0",
 
+    # 008: universal format conversion (core dep, FR-014; only xlsx/pptx extras, not [all])
+    "markitdown[xlsx,pptx]==0.1.7",
+
     # CJK tokenization (002 hybrid retrieval)
     "jieba>=0.42.1",
 

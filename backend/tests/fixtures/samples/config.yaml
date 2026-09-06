@@ -1,0 +1,8 @@
+service:
+  host: api.internal
+  port: 8080
+users:
+  - name: alice
+    role: admin
+  - name: bob
+    role: viewer

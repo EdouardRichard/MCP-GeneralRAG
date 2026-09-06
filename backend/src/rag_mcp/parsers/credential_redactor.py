@@ -22,7 +22,7 @@ import re
 # API keys: api_key, api-key, apikey (case-insensitive)
 _API_KEY_RE = re.compile(
     r"(?i)"
-    r"((?:api[_\-]?key|apikey)\s*[:=]\s*)"   # group 1: field name + operator
+    r"((?:['\"]?(?:api[_\-]?key|apikey)['\"]?)\s*[:=]\s*)"   # group 1: field name + operator
     r"(['\"]?)"                                # group 2: opening quote (optional)
     r"([A-Za-z0-9_\-]{16,})"                  # group 3: value (≥16 chars)
     r"(['\"]?)"                                # group 4: closing quote (optional)
@@ -31,7 +31,7 @@ _API_KEY_RE = re.compile(
 # Passwords: password, passwd, pwd
 _PASSWORD_RE = re.compile(
     r"(?i)"
-    r"((?:password|passwd|pwd)\s*[:=]\s*)"
+    r"((?:['\"]?(?:password|passwd|pwd)['\"]?)\s*[:=]\s*)"
     r"(['\"]?)"
     r"([^\s'\"]{4,})"                          # value: ≥4 non-whitespace/non-quote chars
     r"(['\"]?)"
@@ -40,7 +40,7 @@ _PASSWORD_RE = re.compile(
 # Tokens: bearer, authorization, token (and compounds like bearer_token)
 _TOKEN_RE = re.compile(
     r"(?i)"
-    r"((?:bearer|authorization|token)[_\w]*\s*[:=]\s*)"
+    r"((?:['\"]?(?:bearer|authorization|token)[_\w]*['\"]?)\s*[:=]\s*)"
     r"(['\"]?)"
     r"([A-Za-z0-9_\-\.]{20,})"                # value: ≥20 chars (JWT-like)
     r"(['\"]?)"
@@ -49,7 +49,7 @@ _TOKEN_RE = re.compile(
 # Secrets: secret, client_secret
 _SECRET_RE = re.compile(
     r"(?i)"
-    r"((?:client_)?secret\s*[:=]\s*)"
+    r"((?:['\"]?(?:client_)?secret['\"]?)\s*[:=]\s*)"
     r"(['\"]?)"
     r"([A-Za-z0-9_\-]{8,})"                   # value: ≥8 chars
     r"(['\"]?)"

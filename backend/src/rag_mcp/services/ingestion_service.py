@@ -30,8 +30,9 @@ from rag_mcp.models import (
 from rag_mcp.parsers.credential_redactor import redact_credentials
 from rag_mcp.parsers.java_parser import JavaParser
 from rag_mcp.parsers.markdown_parser import MarkdownParser
+from rag_mcp.parsers.converter import ConverterError
 from rag_mcp.parsers.registry import FormatHandlerRegistry
-from rag_mcp.parsers.text_extractor import extract_text, TextExtractionError
+from rag_mcp.parsers.text_extractor import TextExtractionError
 from rag_mcp.providers.base import EmbeddingProvider
 from rag_mcp.utils.snowflake import generate_id
 
@@ -224,13 +225,29 @@ class IngestionService:
             # 3. Read raw file as bytes
             raw_bytes = await self._read_raw_bytes(source)
 
-            # 3b. Text extraction for binary formats (FR-011, before credential_scan)
-            if FormatHandlerRegistry.instance().is_binary(source.format):
-                stage_start = datetime.now(timezone.utc)
-                try:
-                    text_content = extract_text(raw_bytes, source.format)
-                except TextExtractionError as exc:
-                    raise ValueError(str(exc)) from exc
+            # 3b. Convert raw bytes to text (008 FR-016/FR-017), before redaction.
+            # converter tier -> registry conversion (Markdown IR);
+            # native binary -> extract_text; native text -> UTF-8 decode.
+            registry = FormatHandlerRegistry.instance()
+            stage_start = datetime.now(timezone.utc)
+            try:
+                text_content = registry.to_text(raw_bytes, source.format, source.filename)
+            except (TextExtractionError, ConverterError) as exc:
+                raise ValueError(str(exc)) from exc
+
+            if registry.is_converter(source.format):
+                stages.append({
+                    "stage": "conversion",
+                    "status": "completed",
+                    "started_at": stage_start.isoformat(),
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "details": {
+                        "converter": "markitdown",
+                        "format": source.format,
+                        "input_bytes": len(raw_bytes),
+                    },
+                })
+            elif registry.is_binary(source.format):
                 stages.append({
                     "stage": "text_extraction",
                     "status": "completed",
@@ -238,8 +255,6 @@ class IngestionService:
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                     "details": {"format": source.format},
                 })
-            else:
-                text_content = raw_bytes.decode("utf-8", errors="replace")
 
             # 4. Redact credentials
             stage_start = datetime.now(timezone.utc)

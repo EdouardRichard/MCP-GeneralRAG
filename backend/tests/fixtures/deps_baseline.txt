@@ -8,6 +8,7 @@ langchain
 langchain-community
 langgraph
 markdown-it-py
+markitdown
 mcp
 pdfplumber
 psycopg2-binary
