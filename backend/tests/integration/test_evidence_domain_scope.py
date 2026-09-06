@@ -60,22 +60,24 @@ async def test_get_evidence_numeric_domain_scope(db_session):
 
 @pytest.mark.asyncio
 async def test_get_evidence_slug_domain_scope(db_session):
-    sid = await _mk_scope(db_session, slug="regs-lib")
+    slug = "slug-" + str(generate_id())
+    sid = await _mk_scope(db_session, slug=slug)
     cid = await _mk_chunk(db_session, sid)
     await db_session.commit()
     result = await EvidenceService(db_session).get_evidence(
-        evidence_id=str(cid), project_scopes=[], domain_scopes=["regs-lib"])
+        evidence_id=str(cid), project_scopes=[], domain_scopes=[slug])
     assert result["status"] == "available"
     assert result["knowledge_scope_id"] == str(sid)
 
 
 @pytest.mark.asyncio
 async def test_get_evidence_type_name_domain_scope(db_session):
-    sid = await _mk_scope(db_session, name="法规库")
+    name = "Domain-" + str(generate_id())
+    sid = await _mk_scope(db_session, name=name)
     cid = await _mk_chunk(db_session, sid)
     await db_session.commit()
     result = await EvidenceService(db_session).get_evidence(
-        evidence_id=str(cid), project_scopes=[], domain_scopes=["public:法规库"])
+        evidence_id=str(cid), project_scopes=[], domain_scopes=["public:" + name])
     assert result["status"] == "available"
     assert result["knowledge_scope_id"] == str(sid)
 
@@ -85,10 +87,11 @@ async def test_get_evidence_rejects_foreign_domain(db_session):
     """Edge case: evidence not belonging to any requested domain is rejected."""
     sid_a = await _mk_scope(db_session)
     cid_a = await _mk_chunk(db_session, sid_a)
-    sid_b = await _mk_scope(db_session, slug="other-lib")
+    other_slug = "slug-" + str(generate_id())
+    await _mk_scope(db_session, slug=other_slug)
     await db_session.commit()
     result = await EvidenceService(db_session).get_evidence(
-        evidence_id=str(cid_a), project_scopes=[], domain_scopes=["other-lib"])
+        evidence_id=str(cid_a), project_scopes=[], domain_scopes=[other_slug])
     assert result["status"] == "scope_mismatch"
     assert result["error"]["code"] == "SCOPE_MISMATCH"
 
@@ -96,11 +99,12 @@ async def test_get_evidence_rejects_foreign_domain(db_session):
 @pytest.mark.asyncio
 async def test_get_evidence_union_project_and_domain(db_session):
     """project_scope and domain_scope resolve as a union; either owning scope passes."""
-    sid_a = await _mk_scope(db_session, name="域A", slug="domain-a")
+    slug_a = "slug-" + str(generate_id())
+    sid_a = await _mk_scope(db_session, name="DomainA-" + str(generate_id()), slug=slug_a)
     cid_a = await _mk_chunk(db_session, sid_a)
-    sid_b = await _mk_scope(db_session, name="域B", slug="domain-b")
+    sid_b = await _mk_scope(db_session, name="DomainB-" + str(generate_id()), slug="slug-" + str(generate_id()))
     await db_session.commit()
-    # request both scopes: union [a, b]; evidence a passes via domain-scope a
+    # request both scopes: union [b, a]; evidence a passes via domain-scope a
     result = await EvidenceService(db_session).get_evidence(
-        evidence_id=str(cid_a), project_scopes=[str(sid_b)], domain_scopes=["domain-a"])
+        evidence_id=str(cid_a), project_scopes=[str(sid_b)], domain_scopes=[slug_a])
     assert result["status"] == "available"
