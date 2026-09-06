@@ -240,7 +240,7 @@ Task: "T022 残留修复 3a alembic 0072 删 project_id 列"
 
 - [X] T049 补齐 T031：get_evidence tool description 声明「project_scope 与 domain_scope 至少一个非空」+ module/参数 docstrings 纳入 domain_scope（同步修正 search_knowledge docstring 措辞）→ backend/src/rag_mcp/mcp/get_evidence.py + backend/src/rag_mcp/mcp/search_knowledge.py per T031/FR-019/宪法 I (partial)
 - [X] T050 FR-017 回归测试盲区：agentic 父级上下文条目 knowledge_scope_type 行为测试（public 域父级="public"、project 域不变；夹具须含 parent_chunk_id 链）→ backend/tests/unit/test_agentic_scope_type.py per FR-017/US4-AC2/SC-007 (missing)
-- [ ] T051 FR-016 回归测试盲区：public 域 search_knowledge → get_evidence 同作用域端到端链路测试（FakeStore/FakeEmbedding 模式）+ 来源可定位断言（source ID/版本/位置）→ backend/tests/integration/test_public_evidence.py per FR-016/US4-AC1/SC-007/SC-005 (missing)
+- [X] T051 FR-016 回归测试盲区：public 域 search_knowledge → get_evidence 同作用域端到端链路测试（FakeStore/FakeEmbedding 模式）+ 来源可定位断言（source ID/版本/位置）→ backend/tests/integration/test_public_evidence.py per FR-016/US4-AC1/SC-007/SC-005 (missing)
 - [ ] T052 get_evidence domain_scope 寻址验收测试：数字/slug/type:name 解析展开 + 证据不属于请求域时拒绝 → backend/tests/integration/test_evidence_domain_scope.py per FR-007/US2-AC1/Edge Cases (missing)
 - [ ] T053 list_knowledge_domains MCP acceptance 测试：经 FastMCP 入口层调用 + 实际输出过 list-domains.output.schema.json 校验 + archived/deleting 排除 + 空实例空列表成功状态 → backend/tests/integration/test_list_domains_mcp.py per FR-014/FR-015/SC-004/SC-006/T046 (missing)
 - [ ] T054 search_knowledge domain_scope 成功路径 MCP acceptance 测试：三形态（数字 ID/slug/type:name）经工具入口寻址命中目标域 + 输出过 mcp-search-output.schema.json + 双参数并集去重不放大 → backend/tests/integration/test_search_domain_scope_mcp.py per SC-002/FR-008/T046 (missing)
