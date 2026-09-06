@@ -43,10 +43,9 @@ class RetrievalRun(Base):
             "(subpath_timings IS NOT NULL AND subpath_timings::text <> 'null')",
             name="chk_hybrid_timings",
         ),
-        # 003: format must be NULL or one of the 8 valid values (FR-027)
+        # 008 (FR-018): format is NULL or matches the wide-mode pattern
         CheckConstraint(
-            "format IS NULL OR format IN "
-            "('markdown','java','openapi','ddl','go','python','word','pdf')",
+            "format IS NULL OR format ~ '^[a-z][a-z0-9_]{0,31}$'",
             name="chk_retrieval_run_format",
         ),
         # 006: tool attribution (FR-016, aggregation by Tool)
@@ -106,11 +105,11 @@ class RetrievalRun(Base):
         server_default=text("'[]'::jsonb"),
         comment="Returned evidence IDs for problem tracing",
     )
-    # 003: format of top-1 evidence hit (FR-027, internal audit, not in MCP contract)
+    # 003/008: format of top-1 evidence hit (FR-027, internal audit, not in MCP contract)
     format: Mapped[str | None] = mapped_column(
-        String(8),
+        String(32),
         nullable=True,
-        comment="Format of top-1 evidence hit: markdown/java/openapi/ddl/go/python/word/pdf or NULL",
+        comment="Format of top-1 evidence hit (wide-mode, application-validated)",
     )
     # 006 runtime columns (data-model §4.1)
     tool: Mapped[str] = mapped_column(

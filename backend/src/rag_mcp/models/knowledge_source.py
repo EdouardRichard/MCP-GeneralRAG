@@ -23,11 +23,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from rag_mcp.models import Base
 
-# All supported formats (003 extends 001/002 markdown+java to 8 values)
-_SUPPORTED_FORMATS = (
-    "markdown", "java", "openapi", "ddl", "go", "python", "word", "pdf",
-)
-
 if TYPE_CHECKING:
     from rag_mcp.models.chunk import Chunk
     from rag_mcp.models.knowledge_scope import KnowledgeScope
@@ -38,7 +33,7 @@ class KnowledgeSource(Base):
     __tablename__ = "knowledge_sources"
     __table_args__ = (
         CheckConstraint(
-            "format IN ('markdown','java','openapi','ddl','go','python','word','pdf')",
+            "format ~ '^[a-z][a-z0-9_]{0,31}$'",
             name="knowledge_sources_format_check",
         ),
     )
@@ -56,8 +51,8 @@ class KnowledgeSource(Base):
         String(64), nullable=False, comment="SHA-256 hex digest"
     )
     format: Mapped[str] = mapped_column(
-        String(16), nullable=False,
-        comment="Source format: markdown, java, openapi, ddl, go, python, word, or pdf",
+        String(32), nullable=False,
+        comment="Source format (validated at the application layer by the FormatHandler registry)",
     )
     size_bytes: Mapped[int] = mapped_column(
         BigInteger, nullable=False, comment="File size in bytes, >= 0"

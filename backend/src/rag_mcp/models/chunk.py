@@ -24,7 +24,7 @@ class Chunk(Base):
     __tablename__ = "chunks"
     __table_args__ = (
         CheckConstraint(
-            "chunk_type IN ('section','symbol','endpoint','schema','table','column','constraint','index','view','procedure','function','method','type','interface','class','heading','paragraph','list')",
+            "chunk_type ~ '^[a-z][a-z0-9_]{0,31}$' OR chunk_type ~ '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$'",
             name="chunks_chunk_type_check",
         ),
     )
@@ -61,8 +61,8 @@ class Chunk(Base):
         String(1024), nullable=False, comment="Section path or fully-qualified symbol path"
     )
     chunk_type: Mapped[str] = mapped_column(
-        String(16), nullable=False,
-        comment="Chunk structure type: section, symbol, endpoint, schema, table, column, constraint, index, view, procedure, function, method, type, interface, class, heading, paragraph, list"
+        String(32), nullable=False,
+        comment="Chunk structure type (L1 closed set + L2 namespace + legacy values; application-validated)"
     )
     start_line: Mapped[int] = mapped_column(
         Integer, nullable=False, comment="1-based inclusive start line, > 0"

@@ -30,6 +30,7 @@ from rag_mcp.models import (
 from rag_mcp.parsers.credential_redactor import redact_credentials
 from rag_mcp.parsers.java_parser import JavaParser
 from rag_mcp.parsers.markdown_parser import MarkdownParser
+from rag_mcp.parsers.chunk_type_vocab import validate_chunk_type
 from rag_mcp.parsers.converter import ConverterError
 from rag_mcp.parsers.registry import FormatHandlerRegistry
 from rag_mcp.parsers.text_extractor import TextExtractionError
@@ -372,6 +373,12 @@ class IngestionService:
             self._session.add(version)
             await self._session.flush()
 
+            # 008 (FR-019): application-layer chunk_type gate (L1 + legacy + declared
+            # L2 namespace). The DB wide-mode CHECK is only a pattern backstop.
+            chunk_type_extensions = await self._resolve_chunk_type_extensions(scope_id)
+            for chunk_dict in chunk_dicts:
+                validate_chunk_type(chunk_dict["chunk_type"], chunk_type_extensions)
+
             # Create Chunk records in PostgreSQL
             chunk_records: list[Chunk] = []
             for i, chunk_dict in enumerate(chunk_dicts):
@@ -606,6 +613,18 @@ class IngestionService:
         chunk slicer over the converted Markdown IR.
         """
         return FormatHandlerRegistry.instance().parse_content(content, fmt, filename)
+
+    async def _resolve_chunk_type_extensions(self, scope_id: int):
+        """Resolve the scope's domain-profile chunk_type_extensions (L2 gate)."""
+        from rag_mcp.models.domain_profile import DomainProfile
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+
+        result = await self._session.execute(
+            select(DomainProfile.chunk_type_extensions)
+            .join(KnowledgeScope, KnowledgeScope.domain_key == DomainProfile.domain_key)
+            .where(KnowledgeScope.scope_id == scope_id)
+        )
+        return result.scalar_one_or_none()
 
     async def _get_next_version_number(self, scope_id: int) -> int:
         """Determine the next monotonically increasing version number for a scope.
