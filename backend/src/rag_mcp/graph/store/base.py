@@ -18,10 +18,12 @@ from typing import Any
 
 @dataclass(frozen=True)
 class GraphScope:
-    """Isolation triple for graph operations (Constitution I, FR-010).
+    """Isolation key for graph operations (Constitution I v1.3.0).
 
-    Graph edges and expansion candidates MUST be filtered to this scope;
-    cross-scope traversal is forbidden (leakage=0).
+    Graph edges and expansion candidates MUST be filtered to this
+    knowledge_scope_id; cross-scope traversal is forbidden (cross-domain
+    leakage = 0). 'index_version' additionally scopes to the active index
+    version (Constitution VIII).
     """
     knowledge_scope_id: int
     index_version: int
@@ -69,7 +71,7 @@ class GraphStore(ABC):
             direction: 'out', 'in', or 'bidirectional'.
             hop: Max hops (1-3, guardrail FR-017).
             budget: Total candidate budget (global, not per-hop, FR-017).
-            scope: Isolation triple (knowledge_scope_id, project_id, index_version).
+            scope: Isolation key (knowledge_scope_id, index_version).
 
         Returns:
             List of GraphCandidate sorted by structure_weight descending,

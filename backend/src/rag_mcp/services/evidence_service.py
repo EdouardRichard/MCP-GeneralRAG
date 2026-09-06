@@ -2,7 +2,7 @@
 
 Provides the get_evidence operation that expands a single evidence_id
 (from search_knowledge results) into its full content, parent context,
-and metadata. Enforces scope isolation to prevent cross-project data leakage.
+and metadata. Enforces knowledge-domain isolation to prevent cross-domain data leakage.
 
 Conforms to mcp-get-evidence.schema.json output structure.
 """

@@ -411,7 +411,7 @@ class AgenticRetrievalPipeline:
                 version_number_map[vid] = vnum
                 version_scope_map[vid] = sid
 
-        # scope -> project_id (isolation triple)
+        # scope -> project_id (evidence metadata; graph isolation is knowledge_scope_id-only, FR-018)
         project_map: dict[int, int] = {}
         if scope_ids:
             presult = await session.execute(
