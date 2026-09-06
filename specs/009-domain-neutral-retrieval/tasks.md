@@ -54,7 +54,7 @@
 
 - [X] T013 [P] [US2] 编写动态词表单测（se-project=4 值 / generic=空 / 异构=排序并集；signals 枚举与 graph_hop 存在性随词表）于 backend/tests/unit/test_query_planner_schema.py（FR-006, SC-004, research R4）
 - [X] T014 [P] [US2] 编写空词表行为单测（NODE_SCHEMA 省略 relation_directions/graph_hop、signals 不含 graph、fallback 省略、产出 schema_valid=true）于 backend/tests/unit/test_query_planner_schema.py（FR-008, 澄清 Q4）
-- [ ] T015 [US2] 运行 005 agentic 结构等价回归（44 条 signals/relation_directions 逐条与 1.0 一致；AGENTIC_LLM_CACHE_PATH + temperature=0.0 字节复现）于 eval/run_agentic_comparison.py（SC-001, research R5 结构层）
+- [X] T015 [US2] 运行 005 agentic 结构等价回归（44 条 signals/relation_directions 逐条与 1.0 一致；AGENTIC_LLM_CACHE_PATH + temperature=0.0 字节复现）于 eval/run_agentic_comparison.py（SC-001, research R5 结构层）
 
 **Checkpoint**: 动态词表正确、无图档案省略字段、005 结构等价层通过。
 
@@ -91,7 +91,7 @@
 
 - [X] T023 [US5] 静态审计 + 回归：evidence_analyst / context_orchestrator / injection_detector 已域中立（无 SE 假设）、判定语义不变，既有 pytest 全绿于 backend/tests/unit/（FR-017~FR-019, SC-011）
 - [X] T024 [US5] 运行全量 pytest（unit + contract）于 backend/（SC-011）
-- [ ] T025 [US5] 运行 005 agentic 回归闸口（44 条）于 eval/run_agentic_comparison.py --dataset eval/eval_dataset.json --agentic-dataset eval/agentic_eval_dataset.json --output eval/agentic_comparison_report.json（SC-001）
+- [X] T025 [US5] 运行 005 agentic 回归闸口（44 条）于 eval/run_agentic_comparison.py --dataset eval/eval_dataset.json --agentic-dataset eval/agentic_eval_dataset.json --output eval/agentic_comparison_report.json（SC-001）
 - [X] T026 [US5] 运行 004 确定性回归闸口（37 条）于 eval/run_graph_comparison.py --dataset eval/eval_dataset.json --output eval/graph_enhanced_comparison_report.json（SC-002）
 - [X] T027 [US5] 硬指标三件套验收（混合知识域验收集上跨域串库=0、MCP Schema 合法率=100%、来源可定位率=100%）于 backend/tests/contract/（SC-009, FR-020~FR-022）
 - [X] T028 [US5] 提示注入防护边界验收（恶意上传不能改变控制流/工具选择/提示词脚手架；域档案注入不经 InjectionDetector、与证据结构隔离）于 backend/tests/unit/（SC-010, FR-019）
