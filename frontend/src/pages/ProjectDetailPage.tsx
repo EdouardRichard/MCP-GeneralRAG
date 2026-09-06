@@ -273,7 +273,7 @@ export default function ProjectDetailPage() {
 
       <Card title="Upload Knowledge Source">
         <Dragger
-          accept=".md,.markdown,.java,.json,.yaml,.yml,.sql,.go,.py,.docx,.pdf"
+          accept=".md,.markdown,.java,.json,.yaml,.yml,.sql,.go,.py,.docx,.pdf,.html,.htm,.txt,.csv,.xml,.xlsx,.pptx,.eml"
           multiple={false}
           showUploadList={false}
           disabled={uploading}
@@ -287,7 +287,7 @@ export default function ProjectDetailPage() {
           </p>
           <p className="ant-upload-text">Click or drag file to upload</p>
           <p className="ant-upload-hint">
-            Supports .md (Markdown), .java, .json/.yaml/.yml (OpenAPI), .sql (DDL), .go, .py, .docx (Word), .pdf files.
+            Supports .md (Markdown), .java, .json/.yaml/.yml (OpenAPI), .sql (DDL), .go, .py, .docx (Word), .pdf, .html/.htm, .txt, .csv, .xml, .xlsx, .pptx, .eml files.
           </p>
         </Dragger>
       </Card>

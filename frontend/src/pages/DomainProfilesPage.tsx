@@ -27,7 +27,7 @@ export default function DomainProfilesPage() {
   useEffect(() => { fetchProfiles(); }, [fetchProfiles]);
 
   const openCreate = () => { setEditing(null); form.resetFields(); setModalOpen(true); };
-  const openEdit = (p: DomainProfile) => { setEditing(p); form.setFieldsValue(p); setModalOpen(true); };
+  const openEdit = (p: DomainProfile) => { setEditing(p); form.setFieldsValue(p as unknown as Record<string, unknown>); setModalOpen(true); };
 
   const handleSave = async () => {
     try {

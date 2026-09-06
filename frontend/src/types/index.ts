@@ -16,7 +16,7 @@ export interface KnowledgeSource {
   knowledge_scope_id?: string;
   filename: string;
   content_hash: string;
-  format: 'markdown' | 'java';
+  format: 'markdown' | 'java' | 'openapi' | 'ddl' | 'go' | 'python' | 'word' | 'pdf' | 'html' | 'txt' | 'csv' | 'json' | 'yaml' | 'xml' | 'xlsx' | 'pptx' | 'eml';
   size_bytes: number;
   status: 'uploaded' | 'processing' | 'published' | 'failed' | 'deleted';
   processing_error?: string;
