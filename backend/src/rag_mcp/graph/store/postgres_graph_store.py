@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_mcp.config import get_settings
@@ -218,18 +218,48 @@ class PostgresGraphStore(GraphStore):
         # Delete existing edges
         await self.delete_graph_relations(scope)
 
-        # Select extractor via the FormatHandler registry (008 FR-006): the
-        # registry is the single source of truth for graph-extractor dispatch.
-        from rag_mcp.parsers.registry import FormatHandlerRegistry
+        # Dispatch via the graph relation registry (010, R3):
+        #   scope -> domain_key -> DomainProfile.graph_relations
+        #   -> registry.discover(format, vocab)
+        # Each discovered extractor runs in declaration order; edges are merged
+        # and deduplicated. No matching extractor = 0 edges (normal skip).
+        from rag_mcp.graph.extractors.base import GraphExtractorRegistry
+        from rag_mcp.models.domain_profile import DomainProfile
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
 
-        extractor_factory = FormatHandlerRegistry.instance().graph_extractor(format)
-        if extractor_factory is None:
-            logger.warning("No graph extractor for format %s; skipping rebuild", format)
+        graph_relations = {}
+        result = await self._session.execute(
+            select(DomainProfile.graph_relations)
+            .join(KnowledgeScope, KnowledgeScope.domain_key == DomainProfile.domain_key)
+            .where(KnowledgeScope.scope_id == scope.knowledge_scope_id)
+        )
+        resolved = result.scalar_one_or_none()
+        if resolved is not None:
+            graph_relations = resolved
+
+        extractors = GraphExtractorRegistry.instance().discover(
+            format, graph_relations,
+        )
+        all_edges: list[dict[str, Any]] = []
+        for extractor in extractors:
+            try:
+                edges = extractor.extract(source_code, chunks, scope)
+                all_edges.extend(edges)
+            except Exception as exc:  # noqa: BLE001 - degrade, never fabricate
+                logger.warning(
+                    "Graph rebuild extraction degraded for scope %s (format=%s): %s",
+                    scope.knowledge_scope_id, format, exc,
+                )
+        if not all_edges:
+            logger.info(
+                "No graph edges to rebuild for scope %d (format=%s)",
+                scope.knowledge_scope_id, format,
+            )
             return 0
-        extractor = extractor_factory()
 
-        edges = extractor.extract(source_code, chunks, scope)
-        count = await self.write_edges(edges, scope)
+        from rag_mcp.services.ingestion_service import _dedupe_edges
+
+        count = await self.write_edges(_dedupe_edges(all_edges), scope)
         logger.info(
             "Rebuilt %d graph edges for scope %d (format=%s)",
             count, scope.knowledge_scope_id, format,

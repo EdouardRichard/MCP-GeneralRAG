@@ -17,9 +17,13 @@ class FormatHandler:
     binary: bool                 # 是否二进制
     parser_factory: Callable[..., Any] | None   # native tier 必填
     converter_spec: ConverterSpec | None         # converter tier 必填
-    graph_extractor: Callable[..., Any] | None   # 可选；None 则跳过图提取
     locator_prefix: LocatorPrefix                 # sheet/path/msg/heading/page/symbol
 ```
+
+> **Supersession（010 起）**：`graph_extractor` 字段与 §3 的 `graph_extractor(fmt)` 查询、§4 的「图提取分派」行自 010 起由
+> `specs/010-graph-relation-registry/contracts/graph-extractor-registry.md` 承载（research R2）。图提取分派的单一事实源
+> 迁至图层 `GraphExtractorRegistry`（format + 域词表双轴），FormatHandlerRegistry 仍是格式检测 / 解析分派 / 二进制
+> 声明的单一事实源（其余契约不变）。
 
 不变式：
 - `native` tier：`parser_factory` 非空、`converter_spec` 为空。
@@ -62,9 +66,9 @@ class FormatHandlerRegistry:
         # native → parser_factory(content)；converter → converter.convert → 切片。
 
     def is_binary(self, fmt: str) -> bool: ...
-
-    def graph_extractor(self, fmt: str) -> Callable | None: ...
 ```
+
+（`graph_extractor(fmt)` 查询自 010 起退役，图提取分派见 `graph-extractor-registry.md`。）
 
 ## 4. 四处分发点委托契约
 
@@ -73,7 +77,7 @@ class FormatHandlerRegistry:
 | 格式检测 | `api/knowledge_sources.py::_detect_format` | `registry.detect_format` |
 | 解析分派 | `services/ingestion_service.py::_parse_content` | `registry.parse_content` |
 | 二进制声明 | `parsers/text_extractor.py::BINARY_FORMATS` | `registry.is_binary` |
-| 图提取分派 | `services/ingestion_service.py::_extract_graph_relations` | `registry.graph_extractor` |
+| 图提取分派 | ~~`services/ingestion_service.py::_extract_graph_relations`~~ | ~~`registry.graph_extractor`~~ → **superseded by 010 `GraphExtractorRegistry.discover`** |
 
 - `BINARY_FORMATS` 常量由注册表 `binary` 声明取代（FR-005）。
 - 错误消息由注册表统一生成（FR-007），四处文案一致。

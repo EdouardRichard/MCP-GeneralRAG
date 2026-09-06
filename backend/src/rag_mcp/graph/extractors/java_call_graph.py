@@ -10,6 +10,7 @@ import logging
 from typing import Any
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser, Node
+from rag_mcp.graph.extractors.base import GraphExtractor
 from rag_mcp.graph.store.base import GraphScope
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,17 @@ def _extract_method_name_from_decl(decl, source):
     return None
 
 
-class JavaCallGraphExtractor:
+class JavaCallGraphExtractor(GraphExtractor):
+    """Java calls/called_by call-graph extractor (plugin interface, 010 T003).
+
+    Declares format="java" + relation_pairs={"calls": "called_by"} with
+    chunk_scope="source"; the 004 extraction logic is unchanged (FR-005).
+    """
+
+    format = "java"
+    relation_pairs = {"calls": "called_by"}
+    chunk_scope = "source"
+
     def extract(self, source_code, chunks, scope):
         if not source_code or not source_code.strip():
             return []

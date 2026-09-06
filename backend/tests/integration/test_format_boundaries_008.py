@@ -78,7 +78,6 @@ class TestConverterUnavailable:
             tier="converter",
             binary=True,
             converter_spec=ConverterSpec(converter=NoopConverter(), chunk_slicer=lambda *a: []),
-            graph_extractor=None,
             locator_prefix=LocatorPrefix.HEADING,
         )
         registry = FormatHandlerRegistry.build()

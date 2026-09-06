@@ -173,7 +173,7 @@ class TestIngestPipelineSoftWiring:
             "FROM soft_relation WHERE knowledge_scope_id = :k"
         ), {"k": scope_id})).fetchall()
         assert rows, "ingest() MUST write soft_relation rows when LLM configured (T042)"
-        for rt, is_hard, state, conf, mv, ins, ev, ksid, pid, iv in rows:
+        for rt, is_hard, state, conf, mv, ins, ev, ksid, iv in rows:
             assert rt == "inferred"
             assert is_hard is False
             assert state in ("inferred", "active")
@@ -181,7 +181,6 @@ class TestIngestPipelineSoftWiring:
             assert ins
             assert ev is not None
             assert ksid == scope_id
-            assert pid == project_id
             assert iv == 1
 
     @pytest.mark.asyncio

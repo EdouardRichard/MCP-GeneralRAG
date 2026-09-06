@@ -119,7 +119,6 @@ async def test_as2_3_cross_project_fk_isolation(db_session, us2_scope):
     ), {"cids": chunk_ids})
     rows = result.fetchall()
     assert len(rows) > 0, "Should have FK edges for this scope"
-    for ksid, pid, iv in rows:
+    for ksid, iv in rows:
         assert ksid == scope.knowledge_scope_id, "FK edge scope mismatch"
-        assert pid == scope.project_id, "FK edge project mismatch"
-        assert iv == 1
+        assert iv == scope.index_version, "FK edge index_version mismatch"

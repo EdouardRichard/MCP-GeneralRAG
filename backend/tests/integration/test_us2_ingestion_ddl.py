@@ -98,9 +98,8 @@ async def test_fk_edges_isolation(db_session, ddl_scope):
     ), {"ksid": scope.knowledge_scope_id})
     for row in result:
         assert row[0] == scope.knowledge_scope_id
-        assert row[1] == scope.project_id
-        assert row[2] == 1
-        assert row[3] is True
+        assert row[1] == scope.index_version
+        assert row[2] is True
 
 class TestIngestPipelineGraphWiring:
     """T042: the ingestion pipeline itself MUST trigger DDL FK extraction."""
@@ -137,10 +136,9 @@ class TestIngestPipelineGraphWiring:
         rel_types = {r[0] for r in rows}
         assert "fk_references" in rel_types
         assert "fk_referenced_by" in rel_types
-        for rel_type, is_hard, ksid, pid, iv, pe in rows:
+        for rel_type, is_hard, ksid, iv, pe in rows:
             assert is_hard is True
             assert ksid == scope_id
-            assert pid == project_id
             assert iv == 1
             assert pe.get("extractor") == "ddl_fk"
 

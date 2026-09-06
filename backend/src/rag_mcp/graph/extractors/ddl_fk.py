@@ -16,6 +16,7 @@ import logging
 import re
 from typing import Any
 
+from rag_mcp.graph.extractors.base import GraphExtractor
 from rag_mcp.graph.store.base import GraphScope
 
 logger = logging.getLogger(__name__)
@@ -78,14 +79,22 @@ def _matching_paren(text: str, open_idx: int) -> int:
     return n - 1
 
 
-class DdlFkExtractor:
+class DdlFkExtractor(GraphExtractor):
     """Deterministic DDL fk_references/fk_referenced_by extractor.
 
     Mirrors the JavaCallGraphExtractor contract: extract(source_code, chunks,
     scope) -> list[edge dict]. Each FK relationship yields a pair of reciprocal
     hard edges: fk_references (referencing -> referenced) and fk_referenced_by
     (referenced -> referencing).
+
+    Declares format="ddl" + relation_pairs={"fk_references": "fk_referenced_by"}
+    with chunk_scope="source" (plugin interface, 010 T004); extraction logic
+    unchanged (FR-005).
     """
+
+    format = "ddl"
+    relation_pairs = {"fk_references": "fk_referenced_by"}
+    chunk_scope = "source"
 
     def extract(
         self,

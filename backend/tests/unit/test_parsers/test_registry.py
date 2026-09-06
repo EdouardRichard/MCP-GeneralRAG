@@ -89,25 +89,32 @@ class TestIsBinary:
 
 
 # ---------------------------------------------------------------------------
-# Graph-extractor dispatch equivalence (only java/ddl have hooks)
+# Graph-extractor dispatch supersession (010): the 008 FormatHandlerRegistry
+# graph hook is retired; graph dispatch now lives in GraphExtractorRegistry.
 # ---------------------------------------------------------------------------
 
-class TestGraphExtractor:
-    def test_java_has_extractor(self, registry):
-        extractor = registry.graph_extractor("java")
-        assert extractor is not None
-        assert callable(extractor)
+class TestGraphExtractorHookRetired:
+    def test_no_graph_extractor_method(self, registry):
+        assert not hasattr(registry, "graph_extractor"), (
+            "FormatHandlerRegistry.graph_extractor hook is retired (010, R2); "
+            "graph dispatch moved to GraphExtractorRegistry"
+        )
 
-    def test_ddl_has_extractor(self, registry):
-        extractor = registry.graph_extractor("ddl")
-        assert extractor is not None
-        assert callable(extractor)
+    def test_java_dispatch_moved_to_graph_registry(self):
+        from rag_mcp.graph.extractors.base import GraphExtractorRegistry
 
-    @pytest.mark.parametrize(
-        "fmt", ["markdown", "openapi", "go", "python", "word", "pdf"]
-    )
-    def test_other_formats_have_no_extractor(self, registry, fmt):
-        assert registry.graph_extractor(fmt) is None
+        found = GraphExtractorRegistry.instance().discover(
+            "java", {"calls": ["out", "in"], "called_by": ["out", "in"]},
+        )
+        assert [type(e).__name__ for e in found] == ["JavaCallGraphExtractor"]
+
+    def test_ddl_dispatch_moved_to_graph_registry(self):
+        from rag_mcp.graph.extractors.base import GraphExtractorRegistry
+
+        found = GraphExtractorRegistry.instance().discover(
+            "ddl", {"fk_references": ["out", "in"], "fk_referenced_by": ["out", "in"]},
+        )
+        assert [type(e).__name__ for e in found] == ["DdlFkExtractor"]
 
 
 # ---------------------------------------------------------------------------

@@ -62,7 +62,6 @@ class FormatHandler:
     binary: bool
     parser_factory: Callable[..., Any] | None = None
     converter_spec: ConverterSpec | None = None
-    graph_extractor: Callable[..., Any] | None = None
     text_extractor: Callable[..., Any] | None = None
     locator_prefix: LocatorPrefix = LocatorPrefix.HEADING
 
@@ -128,7 +127,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: MarkdownParser().parse(content),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
             FormatHandler(
@@ -137,7 +135,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: JavaParser().parse(content, filename=filename),
-                graph_extractor=_java_graph_extractor,
                 locator_prefix=LocatorPrefix.SYMBOL,
             ),
             FormatHandler(
@@ -146,7 +143,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: OpenAPIParser().parse(content, filename=filename),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.SYMBOL,
             ),
             FormatHandler(
@@ -155,7 +151,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: DDLParser().parse(content, filename=filename),
-                graph_extractor=_ddl_graph_extractor,
                 locator_prefix=LocatorPrefix.SYMBOL,
             ),
             FormatHandler(
@@ -164,7 +159,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: GoParser().parse(content, filename=filename),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.SYMBOL,
             ),
             FormatHandler(
@@ -173,7 +167,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: PythonParser().parse(content, filename=filename),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.SYMBOL,
             ),
             FormatHandler(
@@ -182,7 +175,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=True,
                 parser_factory=lambda content, filename: WordParser().parse(content, filename=filename),
-                graph_extractor=None,
                 text_extractor=_word_text_extractor,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
@@ -192,7 +184,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=True,
                 parser_factory=lambda content, filename: PDFParser().parse(content, filename=filename),
-                graph_extractor=None,
                 text_extractor=_pdf_text_extractor,
                 locator_prefix=LocatorPrefix.PAGE,
             ),
@@ -202,7 +193,6 @@ class FormatHandlerRegistry:
                 tier="native",
                 binary=False,
                 parser_factory=lambda content, filename: TxtParser().parse(content, filename=filename),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
             FormatHandler(
@@ -214,7 +204,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(),
                     chunk_slicer=slicers.csv_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.SHEET,
             ),
             FormatHandler(
@@ -226,7 +215,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(),
                     chunk_slicer=slicers.markdown_structure_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
             FormatHandler(
@@ -238,7 +226,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(),
                     chunk_slicer=slicers.json_yaml_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.PATH,
             ),
             FormatHandler(
@@ -250,7 +237,6 @@ class FormatHandlerRegistry:
                     converter=YamlAdapter(),
                     chunk_slicer=slicers.json_yaml_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.PATH,
             ),
             FormatHandler(
@@ -262,7 +248,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(),
                     chunk_slicer=slicers.xml_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.PATH,
             ),
             FormatHandler(
@@ -274,7 +259,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(extras=("xlsx",)),
                     chunk_slicer=slicers.xlsx_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.SHEET,
             ),
             FormatHandler(
@@ -286,7 +270,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(extras=("pptx",)),
                     chunk_slicer=slicers.markdown_structure_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.HEADING,
             ),
             FormatHandler(
@@ -298,7 +281,6 @@ class FormatHandlerRegistry:
                     converter=MarkitdownConverter(),
                     chunk_slicer=slicers.eml_slicer,
                 ),
-                graph_extractor=None,
                 locator_prefix=LocatorPrefix.MSG,
             ),
         ]
@@ -421,26 +403,10 @@ class FormatHandlerRegistry:
     def is_converter(self, fmt: str) -> bool:
         return self._by_format_or_raise(fmt).tier == "converter"
 
-    def graph_extractor(self, fmt: str) -> Callable[..., Any] | None:
-        """Return the format's graph-extractor factory, or None when no hook."""
-        return self._by_format_or_raise(fmt).graph_extractor
-
 
 # ---------------------------------------------------------------------------
-# Frozen native graph-extractor factories (lazy: graph deps are heavy)
+# Frozen native text-extractor factories (lazy: heavy deps)
 # ---------------------------------------------------------------------------
-
-def _java_graph_extractor():
-    from rag_mcp.graph.extractors.java_call_graph import JavaCallGraphExtractor
-
-    return JavaCallGraphExtractor()
-
-
-def _ddl_graph_extractor():
-    from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
-
-    return DdlFkExtractor()
-
 
 def _word_text_extractor(raw_bytes):
     from rag_mcp.parsers.text_extractor import _extract_word_text

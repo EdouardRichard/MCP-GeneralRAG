@@ -101,11 +101,10 @@ async def test_java_ingestion_writes_graph_edges(db_session, java_scope):
     assert len(rows) > 0
 
     for row in rows:
-        rel_type, src, tgt, is_hard, ksid, pid, iv = row
+        rel_type, src, tgt, is_hard, ksid, iv = row
         assert rel_type in ("calls", "called_by")
         assert is_hard is True
         assert ksid == java_scope["scope_id"]
-        assert pid == java_scope["project_id"]
         assert iv == 1
 
     # Verify both calls and called_by exist
@@ -144,9 +143,8 @@ async def test_isolation_triple_on_edges(db_session, java_scope):
         "FROM graph_edge WHERE knowledge_scope_id = :ksid"
     ), {"ksid": java_scope["scope_id"]})
     for row in result:
-        ksid, pid, iv, pe = row
+        ksid, iv, pe = row
         assert ksid == java_scope["scope_id"]
-        assert pid == java_scope["project_id"]
         assert iv == 1
         assert pe is not None
 
@@ -190,10 +188,9 @@ class TestIngestPipelineGraphWiring:
 
         rel_types = {r[0] for r in rows}
         assert "calls" in rel_types and "called_by" in rel_types
-        for rel_type, is_hard, ksid, pid, iv, pe in rows:
+        for rel_type, is_hard, ksid, iv, pe in rows:
             assert is_hard is True
             assert ksid == scope_id
-            assert pid == project_id
             assert iv == 1, "graph index_version MUST equal the version_number"
             assert pe.get("extractor") == "java_call_graph"
 

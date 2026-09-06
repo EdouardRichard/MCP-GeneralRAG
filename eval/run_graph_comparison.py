@@ -172,8 +172,9 @@ async def _extract_scope_graph(
     session, scope_id: int, version: KnowledgeVersion, data_root: Path,
 ) -> int:
     """Extract hard relations for every java/ddl source of a version."""
-    from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
-    from rag_mcp.graph.extractors.java_call_graph import JavaCallGraphExtractor
+    from rag_mcp.graph.extractors.base import GraphExtractorRegistry
+    from rag_mcp.models.domain_profile import DomainProfile
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
 
     sources = (await session.execute(
         sa_select(KnowledgeSource).where(
@@ -181,6 +182,15 @@ async def _extract_scope_graph(
             KnowledgeSource.format.in_(["java", "ddl"]),
         )
     )).scalars().all()
+
+    graph_relations = {}
+    resolved = (await session.execute(
+        sa_select(DomainProfile.graph_relations)
+        .join(KnowledgeScope, KnowledgeScope.domain_key == DomainProfile.domain_key)
+        .where(KnowledgeScope.scope_id == scope_id)
+    )).scalar_one_or_none()
+    if resolved is not None:
+        graph_relations = resolved
 
     store = PostgresGraphStore(session)
     scope = GraphScope(scope_id, version.version_number)
@@ -201,14 +211,13 @@ async def _extract_scope_graph(
         )).scalars().all()
         chunk_dicts = [_chunk_to_extractor_dict(c) for c in chunk_rows]
 
-        if source.format == "java":
-            extractor = JavaCallGraphExtractor()
-        else:
-            extractor = DdlFkExtractor()
-        edges = extractor.extract(raw_text, chunk_dicts, scope)
-        for edge in edges:
-            edge["version"] = version.version_number
-        total += await store.write_edges(edges, scope)
+        for extractor in GraphExtractorRegistry.instance().discover(
+            source.format, graph_relations,
+        ):
+            edges = extractor.extract(raw_text, chunk_dicts, scope)
+            for edge in edges:
+                edge["version"] = version.version_number
+            total += await store.write_edges(edges, scope)
     return total
 
 
@@ -647,6 +656,7 @@ async def run_graph_comparison(
     top_k: int = 5,
     qdrant_url: str | None = None,
     skip_reproducibility: bool = False,
+    limit: int | None = None,
 ) -> int:
     settings = get_settings()
 
@@ -659,6 +669,10 @@ async def run_graph_comparison(
     if not dataset:
         logger.error("Dataset is empty")
         return 1
+    # 010 (R0): --limit truncates to the first N queries (004 graph set = 0..36
+    # = 37 entries). Reuses the eval --limit precedent from run_comparison.py.
+    if limit is not None and limit > 0:
+        dataset = dataset[:limit]
     logger.info("Loaded %d queries from %s", len(dataset), ds_path)
 
     embedding_provider = _EvalEmbeddingProvider(settings.embedding_model)
@@ -985,6 +999,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output", "-o", default="eval/graph_enhanced_comparison_report.json"
     )
     parser.add_argument("--top-k", "-k", type=int, default=5)
+    parser.add_argument(
+        "--limit", "-n", type=int, default=None,
+        help="Truncate the dataset to the first N queries "
+             "(010: 004 graph set regression runs with --limit 37).",
+    )
     parser.add_argument("--qdrant-url", type=str, default=None)
     parser.add_argument("--skip-reproducibility", action="store_true", default=False)
     parser.add_argument("--verbose", "-v", action="store_true", default=False)
@@ -1003,6 +1022,7 @@ async def main(argv: list[str] | None = None) -> int:
         top_k=args.top_k,
         qdrant_url=args.qdrant_url,
         skip_reproducibility=args.skip_reproducibility,
+        limit=args.limit,
     )
 
 

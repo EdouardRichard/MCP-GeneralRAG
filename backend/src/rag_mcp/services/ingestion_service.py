@@ -74,6 +74,32 @@ def _validate_collection_dimension(embedding_provider, existing_dimension: int |
         raise ValueError("; ".join(e.message for e in result.errors))
 
 
+def _dedupe_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dedupe hard-relation edges by the unique graph_edge key (010, R3).
+
+    Unique key = (knowledge_scope_id, index_version, source_chunk_id,
+    target_chunk_id, relation_type, direction, version). First occurrence
+    wins; order is preserved (deterministic).
+    """
+    seen: set[tuple] = set()
+    deduped: list[dict[str, Any]] = []
+    for edge in edges:
+        key = (
+            edge.get("knowledge_scope_id"),
+            edge.get("index_version"),
+            edge.get("source_chunk_id"),
+            edge.get("target_chunk_id"),
+            edge.get("relation_type"),
+            edge.get("direction"),
+            edge.get("version"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(edge)
+    return deduped
+
+
 def backfill_parent_chunk_ids(chunk_dicts: list[dict[str, Any]]) -> None:
     """Backfill ``parent_chunk_id`` for each chunk in-place (FR-007 / US-3).
 
@@ -647,6 +673,24 @@ class IngestionService:
         )
         return result.scalar_one_or_none()
 
+    async def _resolve_graph_relations(self, scope_id: int) -> dict[str, Any]:
+        """Resolve the scope's domain-profile graph_relations vocabulary (010, R3).
+
+        Discovery order: scope_id -> KnowledgeScope.domain_key ->
+        DomainProfile.graph_relations. An empty vocabulary (or a scope without
+        a domain row) yields {} so no extractor is discovered (0 edges, not
+        an error).
+        """
+        from rag_mcp.models.domain_profile import DomainProfile
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+
+        result = await self._session.execute(
+            select(DomainProfile.graph_relations)
+            .join(KnowledgeScope, KnowledgeScope.domain_key == DomainProfile.domain_key)
+            .where(KnowledgeScope.scope_id == scope_id)
+        )
+        return result.scalar_one_or_none() or {}
+
     async def _get_next_version_number(self, scope_id: int) -> int:
         """Determine the next monotonically increasing version number for a scope.
 
@@ -836,31 +880,42 @@ class IngestionService:
         )
         store = PostgresGraphStore(self._session)
 
-        # 1) Deterministic hard-relation extraction (FR-001), dispatched via
-        # the registry (008, FR-006): formats without a graph hook are skipped.
-        extractor_factory = FormatHandlerRegistry.instance().graph_extractor(source.format)
-        if extractor_factory is not None:
-            try:
-                extractor = extractor_factory()
+        # 1) Deterministic hard-relation extraction (FR-001/FR-006), dispatched
+        # via the graph relation registry (010, R3):
+        #   scope_id -> KnowledgeScope.domain_key -> DomainProfile.graph_relations
+        #   -> registry.discover(source.format, graph_relations)
+        # Each discovered extractor runs in declaration order; their edges are
+        # merged and deduplicated. No matching extractor = 0 edges (not an error).
+        from rag_mcp.graph.extractors.base import GraphExtractorRegistry
 
+        graph_relations = await self._resolve_graph_relations(scope_id)
+        extractors = GraphExtractorRegistry.instance().discover(
+            source.format, graph_relations,
+        )
+        all_edges: list[dict[str, Any]] = []
+        for extractor in extractors:
+            try:
                 edges = extractor.extract(redacted_text, chunk_dicts, scope)
                 # Stamp the ingested version number onto every edge so the
                 # isolation triple (scope, project, index_version) matches the
                 # published version it belongs to.
                 for edge in edges:
                     edge["version"] = version_number
-                written = await store.write_edges(edges, scope)
-                details["hard_edges_written"] = written
-                logger.info(
-                    "Graph hard relations extracted: source=%s format=%s edges=%d",
-                    source.source_id, source.format, written,
-                )
+                all_edges.extend(edges)
             except Exception as exc:  # noqa: BLE001 - degrade, never fabricate
                 details["hard_degraded_reason"] = f"{type(exc).__name__}: {exc}"
                 logger.warning(
                     "Graph hard-relation extraction degraded for source %s: %s",
                     source.source_id, exc,
                 )
+        if all_edges:
+            deduped = _dedupe_edges(all_edges)
+            written = await store.write_edges(deduped, scope)
+            details["hard_edges_written"] = written
+            logger.info(
+                "Graph hard relations extracted: source=%s format=%s edges=%d",
+                source.source_id, source.format, written,
+            )
 
         # 2) Offline soft-relation inference (FR-003; only with a configured LLM)
         if self._soft_relation_llm is not None:
