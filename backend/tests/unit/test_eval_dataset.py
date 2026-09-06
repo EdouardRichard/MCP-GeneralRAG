@@ -127,6 +127,9 @@ _LOCATOR_PATTERNS = {
     "eml": [
         r"^msg:.+$",
     ],
+    "txt": [
+        r"^#{1,6} .+$",
+    ],
 }
 
 
@@ -178,7 +181,7 @@ class TestFormatExpansionQueries:
     def test_each_format_has_exact_locator(self, dataset):
         for fmt in _NEW_FORMATS:
             if fmt not in _LOCATOR_PATTERNS:
-                continue  # txt: document-level (no structural prefix)
+                continue
             entries = _entries_with_format(dataset, fmt)
             locators = [e for e in entries if _is_exact_locator(e["query"], fmt)]
             assert len(locators) >= 1, (

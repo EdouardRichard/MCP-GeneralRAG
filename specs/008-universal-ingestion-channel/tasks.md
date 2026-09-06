@@ -303,3 +303,29 @@ description: "Task list for feature implementation: 通用摄入通道（FormatH
 - 在任何 Checkpoint 停下可独立验证该 Phase。
 - 避免：含糊任务、同文件冲突、跨故事依赖破坏独立性。
 - 迁移编号以本清单的 0073 为准（覆盖 plan.md 中过时的 0070/0062）。
+
+## Phase 7: Convergence
+
+**Purpose**: 收敛 008 通用摄入通道实现与 spec/plan/tasks 的差距——残留硬编码格式分支、错误消息漂移、转换层异常路径（超时/毒文件/空产物）降级语义、评测查询覆盖与验收记录缺口。
+
+- [x] T052 [US2] 实现 json/yaml/xml 嵌套键/元素路径切片（顶层键 path:/key、嵌套键 path:/a/b/c、超长叶子值自然边界二次切分），使结构化评测查询 path:/service/host、path:/root/item 可被切片产出满足 per FR-011 (partial)——当前 json_yaml_slicer/xml_slicer 仅产出顶层路径（path:/service、path:/item），嵌套路径不可检索。
+
+- [x] T053 [US2] 为转换层 markitdown convert 增加超时护栏（纳入 plan 30s 总超时评估），超时降级为失败并说明原因，防毒文件（XML 实体膨胀/zip 炸弹等）挂起后台摄入 per FR-015 (missing)——当前 registry.to_text → converter.convert 同步执行且无超时。
+
+- [x] T054 [US2] 转换层二进制格式（xlsx/pptx）损坏/毒文件在转换阶段 fail-fast 并说明"损坏/无法解析"原因，而非 markitdown 静默降级为纯文本后在切片阶段以通用 "No chunks produced" 丢失原因 per FR-015 (partial)。
+
+- [x] T055 [US1] 将 text_extractor.extract_text 的 word/pdf if/elif 分发委托注册表（FormatHandler 增加文本提取工厂），消除残留硬编码格式分支 per FR-005 (partial)。
+
+- [x] T056 [US1] 将 postgres_graph_store.rebuild_graph_edges 的 java/ddl if/elif 图提取分发委托 registry.graph_extractor，消除第二处图提取硬编码分支 per FR-006 (partial)。
+
+- [x] T057 [US1] 上传大小超限错误消息改为注册表统一生成（当前硬编码 "File exceeds the maximum upload size of X bytes"），消除文案漂移 per FR-015 (partial)。
+
+- [x] T058 [US2] 转换层切片器实现 512–1024 token 目标 + 自然边界二次切分（超长 CSV 窗口/JSON 叶子/XLSX 表/HTML 段落），当前仅 TxtParser 实现超长二次切分 per FR-012 (partial)。
+
+- [x] T059 [US2] 转换层 chunk 建立父子索引（slicers 设置非空 parent_position_path 使 backfill_parent_chunk_ids 生效），当前全部转换层 chunk 无父引用 per FR-013 (partial)。
+
+- [x] T060 [US2] 记录 008 评测基线并落实 FR-037 硬指标三件套实测：运行混合评测集（8 原生 + 9 新）生成含 9 新格式 Recall@K/MRR/nDCG 的基线报告，并将跨域串库=0/Schema=100%/可定位=100% 落实为混合评测集实测而非 test_hard_metrics.py 的浅层 by-design 断言（当前 format_expansion_report.json 仅覆盖 8 原生格式且早于 008） per SC-003/FR-037 (partial)。
+
+- [x] T061 [US1] 统一注册表错误消息前缀文案（detect_format 的 "Unsupported file format." vs _by_format_or_raise 的 "Unsupported format {fmt!r}."），确保各入口文案一致 per FR-007 (partial)。
+
+- [x] T062 [US2] 为 txt 补充结构定位查询（或文档化其无前缀行区间定位的评测口径），当前 eval 中 txt 两条查询均为自然语言 per FR-034 (partial)。

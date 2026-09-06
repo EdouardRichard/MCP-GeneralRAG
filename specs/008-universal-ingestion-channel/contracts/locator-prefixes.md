@@ -15,7 +15,7 @@
 | openapi | native | 结构路径 | 003 既有 endpoint/schema 模式 | `GET /pets` |
 | ddl | native | 结构路径 | 003 既有 table/column 模式 | `schema.table` |
 | html | converter | `# 标题路径` | `^#.*$（标题层级）` | `# 季度报告 > ## 销售明细` |
-| txt | native(轻量) | 文档级（行区间） | 空 section_path（filename + start/end_line 定位） | （空） |
+| txt | native(轻量) | 文档级（行区间） | 空 section_path（filename + start/end_line 定位），实现定稿为 `# <文件基名>` 兜底以保 100% 可定位 | `# notes` |
 | csv | converter | `sheet:<文件基名>` | `^sheet:[A-Za-z0-9_\-]+$` | `sheet:report` |
 | json | converter | `path:/key/sub` | `^path:/.*$（键路径）` | `path:/service/host` |
 | yaml | converter | `path:/key/sub` | `^path:/.*$（键路径）` | `path:/service/host` |
