@@ -13,9 +13,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-BINARY_FORMATS = frozenset({"word", "pdf"})
-
-
 class TextExtractionError(Exception):
     """Raised when text extraction fails (FR-011/FR-019)."""
 

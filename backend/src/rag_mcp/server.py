@@ -257,6 +257,14 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
 
+    # 008 (FR-001/FR-007): build the FormatHandler registry at startup. A build
+    # failure (missing frozen-native-parser dependency, duplicate format or
+    # extension registration) fails startup loudly — there is no silent
+    # fallback to the legacy if/elif dispatch chains.
+    from rag_mcp.parsers.registry import FormatHandlerRegistry
+
+    FormatHandlerRegistry.build()
+
     app = FastAPI(
         title="RAG MCP Management API",
         description="AI Engineering RAG MCP Server - Management REST API",

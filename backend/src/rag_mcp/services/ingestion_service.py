@@ -30,7 +30,8 @@ from rag_mcp.models import (
 from rag_mcp.parsers.credential_redactor import redact_credentials
 from rag_mcp.parsers.java_parser import JavaParser
 from rag_mcp.parsers.markdown_parser import MarkdownParser
-from rag_mcp.parsers.text_extractor import BINARY_FORMATS, extract_text, TextExtractionError
+from rag_mcp.parsers.registry import FormatHandlerRegistry
+from rag_mcp.parsers.text_extractor import extract_text, TextExtractionError
 from rag_mcp.providers.base import EmbeddingProvider
 from rag_mcp.utils.snowflake import generate_id
 
@@ -224,7 +225,7 @@ class IngestionService:
             raw_bytes = await self._read_raw_bytes(source)
 
             # 3b. Text extraction for binary formats (FR-011, before credential_scan)
-            if source.format in BINARY_FORMATS:
+            if FormatHandlerRegistry.instance().is_binary(source.format):
                 stage_start = datetime.now(timezone.utc)
                 try:
                     text_content = extract_text(raw_bytes, source.format)
@@ -582,53 +583,14 @@ class IngestionService:
     def _parse_content(
         self, content, fmt: str, filename: str
     ) -> list[dict[str, Any]]:
-        """Parse content using the appropriate format parser (FR-009, 003 extends to 8 formats).
+        """Parse content via the FormatHandler registry (008, FR-001/FR-004).
 
-        Args:
-            content: Credential-redacted text (str) for text formats, or raw
-                bytes for binary formats (word, pdf).
-            fmt: Format string ('markdown', 'java', 'openapi', 'ddl', 'go',
-                'python', 'word', 'pdf').
-            filename: Original filename for diagnostics.
-
-        Returns:
-            List of chunk dicts from the parser.
-
-        Raises:
-            ValueError: If the format is unsupported or parsing fails.
+        The registry is the single source of truth for parse dispatch,
+        replacing the legacy if/elif chain. native tier delegates to the
+        frozen parser factory; converter tier delegates to the format's
+        chunk slicer over the converted Markdown IR.
         """
-        if fmt == "markdown":
-            parser = MarkdownParser()
-            return parser.parse(content)
-        elif fmt == "java":
-            parser = JavaParser()
-            return parser.parse(content, filename=filename)
-        elif fmt == "openapi":
-            from rag_mcp.parsers.openapi_parser import OpenAPIParser
-            return OpenAPIParser().parse(content, filename=filename)
-        elif fmt == "ddl":
-            from rag_mcp.parsers.ddl_parser import DDLParser
-            return DDLParser().parse(content, filename=filename)
-        elif fmt == "go":
-            from rag_mcp.parsers.go_parser import GoParser
-            return GoParser().parse(content, filename=filename)
-        elif fmt == "python":
-            from rag_mcp.parsers.python_parser import PythonParser
-            return PythonParser().parse(content, filename=filename)
-        elif fmt in ("word", "pdf"):
-            # Binary formats: content is the extracted+redacted text string
-            # (text_extraction stage already ran, preserving structure markers)
-            if fmt == "word":
-                from rag_mcp.parsers.word_parser import WordParser
-                return WordParser().parse(content, filename=filename)
-            else:
-                from rag_mcp.parsers.pdf_parser import PDFParser
-                return PDFParser().parse(content, filename=filename)
-        else:
-            raise ValueError(
-                f"Unsupported format {fmt!r} for file {filename}. "
-                f"Supported: markdown, java, openapi, ddl, go, python, word, pdf"
-            )
+        return FormatHandlerRegistry.instance().parse_content(content, fmt, filename)
 
     async def _get_next_version_number(self, scope_id: int) -> int:
         """Determine the next monotonically increasing version number for a scope.
@@ -819,17 +781,12 @@ class IngestionService:
         )
         store = PostgresGraphStore(self._session)
 
-        # 1) Deterministic hard-relation extraction (FR-001)
-        if source.format in ("java", "ddl"):
+        # 1) Deterministic hard-relation extraction (FR-001), dispatched via
+        # the registry (008, FR-006): formats without a graph hook are skipped.
+        extractor_factory = FormatHandlerRegistry.instance().graph_extractor(source.format)
+        if extractor_factory is not None:
             try:
-                if source.format == "java":
-                    from rag_mcp.graph.extractors.java_call_graph import (
-                        JavaCallGraphExtractor,
-                    )
-                    extractor = JavaCallGraphExtractor()
-                else:
-                    from rag_mcp.graph.extractors.ddl_fk import DdlFkExtractor
-                    extractor = DdlFkExtractor()
+                extractor = extractor_factory()
 
                 edges = extractor.extract(redacted_text, chunk_dicts, scope)
                 # Stamp the ingested version number onto every edge so the

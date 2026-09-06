@@ -12,6 +12,7 @@ from rag_mcp.schemas.knowledge_source import (
     KnowledgeSourceListResponse,
     KnowledgeSourceResponse,
 )
+from rag_mcp.parsers.registry import RegistryFormatError
 from rag_mcp.utils.hashing import hash_bytes
 
 router = APIRouter(prefix="/api/knowledge-sources", tags=["knowledge-sources"])
@@ -302,101 +303,18 @@ def _schedule_derived_data_cleanup(kind: str, target_id: int) -> None:
         logger.warning("No running event loop; skipping %s cleanup", kind)
 
 
-def _detect_format(filename: str, content: bytes | None = None) -> str | None:
-    """Detect file format from extension and content (FR-010).
+def _detect_format(filename: str, content: bytes | None = None) -> str:
+    """Detect file format via the FormatHandler registry (008, FR-001/FR-003).
 
-    Returns one of: 'markdown', 'java', 'openapi', 'ddl', 'go', 'python',
-    'word', 'pdf', or None (unsupported).
-
-    For .json/.yaml/.yml files, validates content is an OpenAPI/Swagger
-    specification (FR-010).  For .go files, checks content for a Go package
-    declaration to detect extension/content mismatch (spec edge case).
+    The registry is the single source of truth for format detection, replacing
+    the legacy if/elif chain. Raises RegistryFormatError for unsupported
+    formats and extension/content mismatches (.go without a package
+    declaration, or a non-OpenAPI .json/.yaml/.yml when no generic entry is
+    registered).
     """
-    ext = Path(filename).suffix.lower()
-    if ext in (".md", ".markdown"):
-        return "markdown"
-    elif ext == ".java":
-        return "java"
-    elif ext == ".sql":
-        return "ddl"
-    elif ext == ".go":
-        # Content check: Go source must contain a package declaration (spec edge case)
-        if content is not None:
-            text = content.decode("utf-8", errors="replace")
-            lines = [
-                l.strip() for l in text.splitlines()
-                if l.strip() and not l.strip().startswith("//")
-            ]
-            if not any(
-                l.lower().startswith("package ") or l.lower() == "package"
-                for l in lines[:5]
-            ):
-                raise _FormatMismatchError(
-                    f"File '{filename}' has .go extension but content does not "
-                    f"contain a Go package declaration. This appears to be a "
-                    f"format mismatch (extension/content mismatch)."
-                )
-        return "go"
-    elif ext == ".py":
-        return "python"
-    elif ext == ".docx":
-        return "word"
-    elif ext == ".pdf":
-        return "pdf"
-    elif ext in (".json", ".yaml", ".yml"):
-        # Content-based detection: must be OpenAPI/Swagger spec (FR-010)
-        if content is None:
-            return None
-        return _detect_openapi(content, filename)
-    return None
+    from rag_mcp.parsers.registry import FormatHandlerRegistry
 
-
-class _FormatMismatchError(ValueError):
-    """Raised when file content does not match the detected format (spec edge case)."""
-    pass
-
-
-def _detect_openapi(content: bytes, filename: str) -> str:
-    """Detect if JSON/YAML content is an OpenAPI/Swagger spec.
-
-    Returns 'openapi' if the content is a valid OpenAPI 3.x or Swagger 2.0
-    specification, otherwise raises ValueError explaining the rejection.
-    """
-    text = content.decode("utf-8", errors="replace")
-    data = None
-    ext = Path(filename).suffix.lower()
-
-    try:
-        if ext == ".json":
-            import json
-            data = json.loads(text)
-        else:  # .yaml or .yml
-            import yaml
-            data = yaml.safe_load(text)
-    except Exception as exc:
-        raise _FormatMismatchError(
-            f"File '{filename}' could not be parsed as "
-            f"{'JSON' if ext == '.json' else 'YAML'}: {exc}"
-        ) from exc
-
-    if not isinstance(data, dict):
-        raise _FormatMismatchError(
-            f"File '{filename}' is valid {'JSON' if ext == '.json' else 'YAML'} "
-            f"but is not an OpenAPI/Swagger specification (not an object)."
-        )
-
-    # Check for OpenAPI 3.x version field
-    if "openapi" in data:
-        return "openapi"
-    # Check for Swagger 2.0 version field
-    if "swagger" in data:
-        return "openapi"
-
-    raise _FormatMismatchError(
-        f"File '{filename}' is valid {'JSON' if ext == '.json' else 'YAML'} "
-        f"but is not an OpenAPI/Swagger specification "
-        f"(missing 'openapi' or 'swagger' version field)."
-    )
+    return FormatHandlerRegistry.instance().detect_format(filename, content)
 
 
 @router.post("", response_model=KnowledgeSourceResponse, status_code=201)
@@ -422,15 +340,8 @@ async def upload_knowledge_source(
     # Validate format (extension + content based, FR-010)
     try:
         fmt = _detect_format(file.filename or "", content)
-    except _FormatMismatchError as exc:
+    except RegistryFormatError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    if fmt is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file format: {file.filename}. "
-            f"Supported: .md, .java, .json/.yaml/.yml (OpenAPI), "
-            f".sql, .go, .py, .docx, .pdf",
-        )
 
     content_hash = hash_bytes(content)
     settings = get_settings()
