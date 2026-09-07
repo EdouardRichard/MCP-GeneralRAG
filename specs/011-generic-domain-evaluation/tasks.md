@@ -74,13 +74,13 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 **Independent Test**: python eval/run_regression_011.py（六组重跑 1% 容差、历史报告零覆盖）；人工审计 roadmap/README/spec Status 与交付事实一致。
 
-- [ ] T022 [US5] 新建 eval/run_regression_011.py（FR-016，research R11）：六组重跑编排——001 Dense 基线 11 条（run_eval.py --mode dense 前 11 条）、002 混合对照 18 条（run_comparison.py --limit 18）、003 格式集 37 条 + 逐格式对照、004 图集 37 条（run_graph_comparison.py --limit 37）、005 agentic 组合全集（run_agentic_comparison.py）、006 双形态冒烟（run_instance_form_smoke.py）；产物落 011 前缀新文件（不覆盖历史报告）；非延迟指标 1% 相对容差比对
-- [ ] T023 [US5] 运行 001–006 全集回归并确认无回归（SC-005）：产物 eval/011_*_regression_report.json，非延迟指标（Recall@K/MRR/nDCG）与历史报告 1% 容差内一致；历史报告文件零改动
-- [ ] T024 [US5] 复跑 010 交叉引用对照口径确认提取器行为不变（FR-017）：按 eval/run_cross_reference_comparison.py 的机制复跑（其经注册表显式触发提取器、不依赖 legal 档案词表）并对照 eval/cross_reference_comparison_report.json 历史口径，确认 legal 档案扩展与新语料未造成口径漂移
-- [ ] T025 [US6] 更新 docs/1.0-iteration-roadmap.md 至 2.0 收官状态（FR-018）：补齐 003–011 交付记录（含 2.0 视角迭代史）、状态行更新（现"002 Delivered"过时）、Remaining Gaps 与 2.0 触发条件（蓝图 §9）对齐
-- [ ] T026 [P] [US6] 更新 eval/README.md（FR-018）：登记两域数据集（generic/legal_domain_eval_dataset.json）、两份域基线报告、域基线/受益/回归运行器用法与 001–006 重跑口径（沿用既有登记纪律）
-- [ ] T027 [P] [US6] 纠正根 README.md 过时陈述（FR-019）："仅包含规划与规格工件，尚无业务实现代码"、"当前仓库处于规格设计阶段"、"首个纵向 Feature：001"等更新为如实反映已交付系统（MCP 检索四路径、多知识域、转换层摄入、评测体系），不超售
-- [ ] T028 [P] [US6] 更新 specs/001-* 至 specs/010-* 各 spec.md 的 Status 行（FR-020）：001–006 必须更新为已交付状态、007–010 同步核对（若仍为 Draft 一并更新），措辞全库统一；仅改 Status 行与文档性陈述、规格正文语义零改动
+- [x] T022 [US5] 新建 eval/run_regression_011.py（FR-016，research R11）：六组重跑编排——001 Dense 基线 11 条（run_eval.py --mode dense 前 11 条）、002 混合对照 18 条（run_comparison.py --limit 18）、003 格式集 37 条 + 逐格式对照、004 图集 37 条（run_graph_comparison.py --limit 37）、005 agentic 组合全集（run_agentic_comparison.py）、006 双形态冒烟（run_instance_form_smoke.py）；产物落 011 前缀新文件（不覆盖历史报告）；非延迟指标 1% 相对容差比对
+- [x] T023 [US5] 运行 001–006 全集回归并确认无回归（SC-005）：产物 eval/011_*_regression_report.json，非延迟指标（Recall@K/MRR/nDCG）与历史报告 1% 容差内一致；历史报告文件零改动
+- [x] T024 [US5] 复跑 010 交叉引用对照口径确认提取器行为不变（FR-017）：按 eval/run_cross_reference_comparison.py 的机制复跑（其经注册表显式触发提取器、不依赖 legal 档案词表）并对照 eval/cross_reference_comparison_report.json 历史口径，确认 legal 档案扩展与新语料未造成口径漂移
+- [x] T025 [US6] 更新 docs/1.0-iteration-roadmap.md 至 2.0 收官状态（FR-018）：补齐 003–011 交付记录（含 2.0 视角迭代史）、状态行更新（现"002 Delivered"过时）、Remaining Gaps 与 2.0 触发条件（蓝图 §9）对齐
+- [x] T026 [P] [US6] 更新 eval/README.md（FR-018）：登记两域数据集（generic/legal_domain_eval_dataset.json）、两份域基线报告、域基线/受益/回归运行器用法与 001–006 重跑口径（沿用既有登记纪律）
+- [x] T027 [P] [US6] 纠正根 README.md 过时陈述（FR-019）："仅包含规划与规格工件，尚无业务实现代码"、"当前仓库处于规格设计阶段"、"首个纵向 Feature：001"等更新为如实反映已交付系统（MCP 检索四路径、多知识域、转换层摄入、评测体系），不超售
+- [x] T028 [P] [US6] 更新 specs/001-* 至 specs/010-* 各 spec.md 的 Status 行（FR-020）：001–006 必须更新为已交付状态、007–010 同步核对（若仍为 Draft 一并更新），措辞全库统一；仅改 Status 行与文档性陈述、规格正文语义零改动
 
 **Checkpoint**: 全集回归无回归、文档债核销（roadmap/README/spec Status 与事实一致）。
 
@@ -99,7 +99,7 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 - [ ] T033 [P] [US7] 修改 frontend/src/pages/ProjectsPage.tsx（FR-029/FR-030）：硬编码字符串 → t(key)；后端 err.message 与领域数据（项目名/slug/domain_key/状态码）原样展示不翻译
 - [ ] T034 [P] [US7] 修改 frontend/src/pages/ProjectDetailPage.tsx（FR-029/FR-030）：同 T033
 - [ ] T035 [P] [US7] 修改 frontend/src/pages/DomainProfilesPage.tsx（FR-029/FR-030）：同 T033
-- [ ] T036 [US7] 执行前端零残留与持久化验收（SC-011，VS-08；覆盖 frontend/src/ 三页面 + App.tsx）：中文态英文残留=0 / 英文态中文残留=0（含 antd 分页/日期/确认组件）、后端错误消息与领域数据字节级不变、刷新后偏好保留
+- [x] T036 [US7] 执行前端零残留与持久化验收（SC-011，VS-08；覆盖 frontend/src/ 三页面 + App.tsx）：中文态英文残留=0 / 英文态中文残留=0（含 antd 分页/日期/确认组件）、后端错误消息与领域数据字节级不变、刷新后偏好保留
 
 **Checkpoint**: 前端三页面双语完整覆盖、零残留、后端与 MCP 契约零改动。
 

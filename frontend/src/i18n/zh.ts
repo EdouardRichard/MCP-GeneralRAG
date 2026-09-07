@@ -19,7 +19,7 @@ export const zh: LocaleDict = {
   'common.delete': '删除',
   'common.edit': '编辑',
   'common.domainKey': '域标识',
-  'common.slug': 'Slug',
+  'common.slug': '短标识',
   'common.yes': '是',
   'common.no': '否',
 
@@ -86,6 +86,7 @@ export const zh: LocaleDict = {
   'domainProfiles.formats': '格式',
   'domainProfiles.graph': '图',
   'domainProfiles.builtin': '内置',
+  'domainProfiles.builtinHeader': '内置',
   'domainProfiles.custom': '自定义',
   'domainProfiles.editTitle': '编辑域档案',
   'domainProfiles.createTitle': '创建域档案',

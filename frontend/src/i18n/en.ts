@@ -83,6 +83,7 @@ export const en = {
   'domainProfiles.formats': 'Formats',
   'domainProfiles.graph': 'Graph',
   'domainProfiles.builtin': 'builtin',
+  'domainProfiles.builtinHeader': 'Builtin',
   'domainProfiles.custom': 'custom',
   'domainProfiles.editTitle': 'Edit Domain Profile',
   'domainProfiles.createTitle': 'Create Domain Profile',

@@ -76,7 +76,7 @@ export default function DomainProfilesPage() {
       render: (g: Record<string, unknown>) => (g && Object.keys(g).length > 0) ? t('common.yes') : t('common.no'),
     },
     {
-      title: t('domainProfiles.builtin'), dataIndex: 'is_builtin', key: 'is_builtin',
+      title: t('domainProfiles.builtinHeader'), dataIndex: 'is_builtin', key: 'is_builtin',
       render: (b: boolean) => (b ? <Tag color="gold">{t('domainProfiles.builtin')}</Tag> : <Tag color="blue">{t('domainProfiles.custom')}</Tag>),
     },
     {
