@@ -111,8 +111,8 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 **Independent Test**: 人工审计 docs/2.0-finalization.md（§1.3 五项目标逐项达成判定 + 证据指针）；python -m pytest backend/tests/ 全绿；quickstart VS-01~VS-10 全部通过。
 
-- [ ] T037 [US6] 新建 docs/2.0-finalization.md（FR-021，SC-009）：对蓝图 §1.3 五项演进目标逐项核销——目标 1（domain_scope 检索）→007 domain_scope + 多域验收报告；目标 2（新格式边际成本 ≤2 文件）→008 注册表记录；目标 3（首批格式可上传/切片/检索/定位）→008 格式集验收 + 011 个人域语料覆盖；目标 4（两验证域 ≥10 条 + 基线 + 1.0 评测集无回归）→011 两域评测集与基线 + 001–006 回归；目标 5（混合域硬指标三件套）→011 多域验收报告；未达成项显式标注原因与去向（蓝图正文冻结不改）
-- [ ] T038 [Polish] 运行 quickstart.md VS-01~VS-10 全场景验证（含域基线/受益/多域验收/回归/前端 i18n/文档债/核销），确认全部通过
+- [x] T037 [US6] 新建 docs/2.0-finalization.md（FR-021，SC-009）：对蓝图 §1.3 五项演进目标逐项核销——目标 1（domain_scope 检索）→007 domain_scope + 多域验收报告；目标 2（新格式边际成本 ≤2 文件）→008 注册表记录；目标 3（首批格式可上传/切片/检索/定位）→008 格式集验收 + 011 个人域语料覆盖；目标 4（两验证域 ≥10 条 + 基线 + 1.0 评测集无回归）→011 两域评测集与基线 + 001–006 回归；目标 5（混合域硬指标三件套）→011 多域验收报告；未达成项显式标注原因与去向（蓝图正文冻结不改）
+- [x] T038 [Polish] 运行 quickstart.md VS-01~VS-10 全场景验证（含域基线/受益/多域验收/回归/前端 i18n/文档债/核销），确认全部通过
 - [ ] T039 [Polish] 运行 python -m pytest backend/tests/ 全集（001–010 既有测试零回归）+ 前端 pnpm build 成功，确认 011 变更未破坏既有交付
 
 **Checkpoint**: 2.0 定稿核销记录落盘、quickstart 与 pytest 全集通过、Feature 收敛。
