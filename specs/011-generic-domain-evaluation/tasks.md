@@ -92,13 +92,13 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 **Independent Test**: cd frontend && pnpm dev 后人工逐页面审计（VS-08）：三页面 + App 头部前端自产文案随切换、中文态英文残留=0 / 英文态中文残留=0、后端消息与领域数据原样、刷新后偏好保留、默认英文。
 
-- [ ] T029 [P] [US7] 新建 frontend/src/i18n/en.ts（FR-027，research R10）：将现状硬编码英文文案迁移为类型化字典（projects./projectDetail./domainProfiles./common. 分组，约 65 键）
-- [ ] T030 [P] [US7] 新建 frontend/src/i18n/zh.ts（FR-027）：中文资源（与 en.ts 同键、同类型 Record）
-- [ ] T031 [US7] 新建 frontend/src/i18n/index.ts（FR-027）：LocaleProvider（React Context）+ useLocale() + t(key) hook + localStorage 持久化（键 rag-mcp.locale，损坏/缺失回落英文）
-- [ ] T032 [US7] 修改 frontend/src/App.tsx（FR-028）：ConfigProvider 挂 antd locale（zhCN / enUS 随语言）+ Header 增语言切换器
-- [ ] T033 [P] [US7] 修改 frontend/src/pages/ProjectsPage.tsx（FR-029/FR-030）：硬编码字符串 → t(key)；后端 err.message 与领域数据（项目名/slug/domain_key/状态码）原样展示不翻译
-- [ ] T034 [P] [US7] 修改 frontend/src/pages/ProjectDetailPage.tsx（FR-029/FR-030）：同 T033
-- [ ] T035 [P] [US7] 修改 frontend/src/pages/DomainProfilesPage.tsx（FR-029/FR-030）：同 T033
+- [x] T029 [P] [US7] 新建 frontend/src/i18n/en.ts（FR-027，research R10）：将现状硬编码英文文案迁移为类型化字典（projects./projectDetail./domainProfiles./common. 分组，约 65 键）
+- [x] T030 [P] [US7] 新建 frontend/src/i18n/zh.ts（FR-027）：中文资源（与 en.ts 同键、同类型 Record）
+- [x] T031 [US7] 新建 frontend/src/i18n/index.ts（FR-027）：LocaleProvider（React Context）+ useLocale() + t(key) hook + localStorage 持久化（键 rag-mcp.locale，损坏/缺失回落英文）
+- [x] T032 [US7] 修改 frontend/src/App.tsx（FR-028）：ConfigProvider 挂 antd locale（zhCN / enUS 随语言）+ Header 增语言切换器
+- [x] T033 [P] [US7] 修改 frontend/src/pages/ProjectsPage.tsx（FR-029/FR-030）：硬编码字符串 → t(key)；后端 err.message 与领域数据（项目名/slug/domain_key/状态码）原样展示不翻译
+- [x] T034 [P] [US7] 修改 frontend/src/pages/ProjectDetailPage.tsx（FR-029/FR-030）：同 T033
+- [x] T035 [P] [US7] 修改 frontend/src/pages/DomainProfilesPage.tsx（FR-029/FR-030）：同 T033
 - [x] T036 [US7] 执行前端零残留与持久化验收（SC-011，VS-08；覆盖 frontend/src/ 三页面 + App.tsx）：中文态英文残留=0 / 英文态中文残留=0（含 antd 分页/日期/确认组件）、后端错误消息与领域数据字节级不变、刷新后偏好保留
 
 **Checkpoint**: 前端三页面双语完整覆盖、零残留、后端与 MCP 契约零改动。
@@ -113,7 +113,7 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 - [x] T037 [US6] 新建 docs/2.0-finalization.md（FR-021，SC-009）：对蓝图 §1.3 五项演进目标逐项核销——目标 1（domain_scope 检索）→007 domain_scope + 多域验收报告；目标 2（新格式边际成本 ≤2 文件）→008 注册表记录；目标 3（首批格式可上传/切片/检索/定位）→008 格式集验收 + 011 个人域语料覆盖；目标 4（两验证域 ≥10 条 + 基线 + 1.0 评测集无回归）→011 两域评测集与基线 + 001–006 回归；目标 5（混合域硬指标三件套）→011 多域验收报告；未达成项显式标注原因与去向（蓝图正文冻结不改）
 - [x] T038 [Polish] 运行 quickstart.md VS-01~VS-10 全场景验证（含域基线/受益/多域验收/回归/前端 i18n/文档债/核销），确认全部通过
-- [ ] T039 [Polish] 运行 python -m pytest backend/tests/ 全集（001–010 既有测试零回归）+ 前端 pnpm build 成功，确认 011 变更未破坏既有交付
+- [x] T039 [Polish] 运行 python -m pytest backend/tests/ 全集（001–010 既有测试零回归）+ 前端 pnpm build 成功，确认 011 变更未破坏既有交付
 
 **Checkpoint**: 2.0 定稿核销记录落盘、quickstart 与 pytest 全集通过、Feature 收敛。
 
