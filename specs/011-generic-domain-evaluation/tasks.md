@@ -20,9 +20,9 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 **Independent Test**: python -m pytest backend/tests/unit/test_domain_profile_seed.py backend/tests/integration/test_011_corpus_ingest.py -v（VS-01/VS-02）；语料入库后 list_knowledge_domains 列出 personal/generic/legal scope 与能力摘要。
 
-- [ ] T001 [P] [US1] 在 backend/src/rag_mcp/config/domain_profiles.py 的 BUILTIN_DOMAIN_PROFILES 新增 personal 内置档案（第四内置）：domain_key="personal"、supported_formats=通用格式族全集（与 generic 一致）、graph_relations={}、prompt_overrides=NEUTRAL_PLANNER_PROMPT、default_capabilities={"retrieval_modes":["dense","hybrid"],"has_graph":false}、is_builtin=True（FR-001，research R8）；se-project/generic 条目逐字段不动
-- [ ] T002 [US1] 在 backend/src/rag_mcp/config/domain_profiles.py 扩展 legal 内置档案 supported_formats 为 ["markdown","word","pdf"]（FR-003）；graph_relations 维持现状（受益闸口结果在 Phase 2 T016 后视情况启用，格式扩展与闸口解耦）
-- [ ] T003 [P] [US1] 扩展 backend/tests/unit/test_domain_profile_seed.py：personal 档案断言（格式族/空词表/is_builtin）+ legal 格式扩展断言（含 chunk_type_extensions 保持 None，R13）+ se-project/generic 等价不回归（VS-01）
+- [x] T001 [P] [US1] 在 backend/src/rag_mcp/config/domain_profiles.py 的 BUILTIN_DOMAIN_PROFILES 新增 personal 内置档案（第四内置）：domain_key="personal"、supported_formats=通用格式族全集（与 generic 一致）、graph_relations={}、prompt_overrides=NEUTRAL_PLANNER_PROMPT、default_capabilities={"retrieval_modes":["dense","hybrid"],"has_graph":false}、is_builtin=True（FR-001，research R8）；se-project/generic 条目逐字段不动
+- [x] T002 [US1] 在 backend/src/rag_mcp/config/domain_profiles.py 扩展 legal 内置档案 supported_formats 为 ["markdown","word","pdf"]（FR-003）；graph_relations 维持现状（受益闸口结果在 Phase 2 T016 后视情况启用，格式扩展与闸口解耦）
+- [x] T003 [P] [US1] 扩展 backend/tests/unit/test_domain_profile_seed.py：personal 档案断言（格式族/空词表/is_builtin）+ legal 格式扩展断言（含 chunk_type_extensions 保持 None，R13）+ se-project/generic 等价不回归（VS-01）
 - [ ] T004 [P] [US1] 建设个人/团队通用知识库域语料 eval/corpora/generic/（FR-002，research R3）：markdown/txt/html/csv 四格式各 ≥2 个知识源、合计 5–15 文件，构造虚构样例（个人笔记/会议记录/清单/数据表/网页存档），含中文内容；语料结构形态完整（markdown 标题层级、txt 空行分段、html 标题、csv 表头）
 - [ ] T005 [P] [US1] 扩充法律合规域语料 eval/corpora/legal/（FR-004，research R3）：Word 合同（"第X条"标题样式）+ PDF 法规（数字编号 X.Y 标题，因 PDF 解析器仅认数字编号）+ markdown 交叉引用语料（内部锚点/跨文件相对链接/中文条文引用三类形态）；采用公开法规/标准合同模板（Q2=B，版权与逐字转载边界处置见 spec Edge Cases）
 - [ ] T006 [US1] 新建 eval/ingest_domain_corpora.py（FR-002/FR-004/SC-010，research R7）：幂等 scope 创建（public+personal、public+generic、public+legal）+ 语料入库 + 版本发布，走既有链路（域档案格式校验 + FormatHandler 注册表 + 转换层/原生切片 + 脱敏）；复用 run_cross_reference_comparison.py 的 scope 创建先例；失败 fail-loud

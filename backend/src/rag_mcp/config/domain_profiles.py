@@ -10,6 +10,11 @@ declaration) and the scope-slug lexical generator (FR-012).
 domain-neutral base template with a relation-vocabulary slot is added for
 heterogeneous / override-less requests (FR-001/FR-003), plus the relation-vocab
 union and slot-filling helpers.
+
+011 (T001/T002): personal lands as the fourth builtin profile (full generic
+format family, empty graph vocabulary, NEUTRAL_PLANNER_PROMPT — FR-001/R8);
+legal supported_formats extends to markdown/word/pdf (FR-003, decoupled from
+the Q1=A cross-reference benefit gate which governs only graph_relations).
 """
 from __future__ import annotations
 
@@ -133,18 +138,38 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
         },
         "is_builtin": True,
     },
+    "personal": {
+        "name": "Personal Knowledge",
+        "description": (
+            "Personal/team knowledge-base domain: general document formats, "
+            "no graph relation vocabulary, domain-neutral planner prompt "
+            "(011 FR-001, research R8 — fourth builtin profile)."
+        ),
+        "supported_formats": list(GENERIC_FORMATS),
+        "chunk_type_extensions": None,
+        "graph_relations": {},
+        "prompt_overrides": {"query_planner_system_prompt": NEUTRAL_PLANNER_PROMPT},
+        "default_capabilities": {
+            "retrieval_modes": ["dense", "hybrid"],
+            "has_graph": False,
+        },
+        "is_builtin": True,
+    },
     "legal": {
         "name": "Legal",
         "description": (
-            "Legal document domain: clause structure + cross-reference "
-            "graph relations (references/referenced_by). The cross-reference "
-            "benefit gate (SC-002) did not pass with the 010 preliminary corpus, "
-            "so the builtin profile ships with an empty graph vocabulary (research "
-            "R11 declarative remedy); the cross_reference extractor remains "
-            "deliverable and can be enabled by a custom profile declaring the "
-            "references/referenced_by vocabulary."
+            "Legal document domain: clause structure (Word '第X条' heading "
+            "style + PDF numeric X.Y headings, 011 FR-003 format extension) "
+            "+ cross-reference graph relations (references/referenced_by). "
+            "The 010 cross-reference benefit gate did not pass on the "
+            "preliminary corpus, so the builtin profile ships with an empty "
+            "graph vocabulary (research R11 declarative remedy); the "
+            "cross_reference extractor remains deliverable and can be "
+            "enabled by a custom profile declaring the "
+            "references/referenced_by vocabulary (011 Q1=A re-verification "
+            "may flip this disposition — FR-011)."
         ),
-        "supported_formats": ["markdown"],
+        "supported_formats": ["markdown", "word", "pdf"],
         "chunk_type_extensions": None,
         "graph_relations": {},
         "prompt_overrides": None,
