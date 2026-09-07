@@ -20,6 +20,7 @@ import { getProject } from '../api/projects';
 import { listKnowledgeSources, uploadKnowledgeSource, reprocessSource, deleteSource, clearScope } from '../api/knowledgeSources';
 import { useSSE } from '../hooks/useSSE';
 import type { Project } from '../types';
+import { useLocale } from '../i18n';
 
 const { Dragger } = Upload;
 const { Text } = Typography;
@@ -35,6 +36,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [project, setProject] = useState<Project | null>(null);
   const [sources, setSources] = useState<KnowledgeSource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +48,9 @@ export default function ProjectDetailPage() {
       const data = await getProject(id);
       setProject(data);
     } catch (err) {
-      message.error(`Failed to load project: ${(err as Error).message}`);
+      message.error(t('projectDetail.loadFailed') + (err as Error).message);
     }
-  }, [id]);
+  }, [id, t]);
 
   const fetchSources = useCallback(async () => {
     if (!project?.knowledge_scope_id) return;
@@ -56,9 +58,9 @@ export default function ProjectDetailPage() {
       const data = await listKnowledgeSources(project.knowledge_scope_id);
       setSources(data);
     } catch (err) {
-      message.error(`Failed to load sources: ${(err as Error).message}`);
+      message.error(t('projectDetail.loadSourcesFailed') + (err as Error).message);
     }
-  }, [project?.knowledge_scope_id]);
+  }, [project?.knowledge_scope_id, t]);
 
   useEffect(() => {
     setLoading(true);
@@ -78,20 +80,22 @@ export default function ProjectDetailPage() {
     if (lastEvent) {
       fetchSources();
       if (lastEvent.event === 'error') {
-        message.error(lastEvent.data.message || 'Processing error occurred');
+        // SSE data.message is backend content — displayed verbatim (FR-029).
+        message.error(lastEvent.data.message || t('projectDetail.processingError'));
       }
     }
-  }, [lastEvent, fetchSources]);
+  }, [lastEvent, fetchSources, t]);
 
   const handleUpload = async (file: File) => {
     if (!project) return false;
     setUploading(true);
     try {
       await uploadKnowledgeSource(project.knowledge_scope_id, file);
-      message.success(`${file.name} uploaded successfully`);
+      // filename is domain data (verbatim); only the suffix is translated.
+      message.success(`${file.name} ${t('projectDetail.uploadedSuccess')}`);
       fetchSources();
     } catch (err) {
-      message.error(`Upload failed: ${(err as Error).message}`);
+      message.error(t('projectDetail.uploadFailed') + (err as Error).message);
     } finally {
       setUploading(false);
     }
@@ -101,20 +105,20 @@ export default function ProjectDetailPage() {
   const handleReprocess = async (sourceId: string) => {
     try {
       await reprocessSource(sourceId);
-      message.success('Reprocessing started');
+      message.success(t('projectDetail.reprocessingStarted'));
       fetchSources();
     } catch (err) {
-      message.error(`Reprocess failed: ${(err as Error).message}`);
+      message.error(t('projectDetail.reprocessFailed') + (err as Error).message);
     }
   };
 
   const handleDeleteSource = async (sourceId: string) => {
     try {
       await deleteSource(sourceId);
-      message.success('Source deleted');
+      message.success(t('projectDetail.sourceDeleted'));
       fetchSources();
     } catch (err) {
-      message.error(`Delete failed: ${(err as Error).message}`);
+      message.error(t('projectDetail.deleteFailed') + (err as Error).message);
     }
   };
 
@@ -122,43 +126,44 @@ export default function ProjectDetailPage() {
     if (!project) return;
     try {
       await clearScope(project.knowledge_scope_id);
-      message.success('Knowledge scope cleared');
+      message.success(t('projectDetail.scopeCleared'));
       fetchSources();
     } catch (err) {
-      message.error(`Clear scope failed: ${(err as Error).message}`);
+      message.error(t('projectDetail.clearScopeFailed') + (err as Error).message);
     }
   };
 
   const columns: ColumnsType<KnowledgeSource> = [
     {
-      title: 'Filename',
+      title: t('projectDetail.filename'),
       dataIndex: 'filename',
       key: 'filename',
     },
     {
-      title: 'Format',
+      title: t('projectDetail.format'),
       dataIndex: 'format',
       key: 'format',
       width: 100,
     },
     {
-      title: 'Size',
+      title: t('projectDetail.size'),
       dataIndex: 'size_bytes',
       key: 'size_bytes',
       width: 120,
       render: (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`,
     },
     {
-      title: 'Status',
+      title: t('projectDetail.status'),
       dataIndex: 'status',
       key: 'status',
       width: 120,
       render: (status: string) => (
+        // status is domain data (backend status code) — verbatim (FR-029).
         <Tag color={STATUS_COLORS[status] || 'default'}>{status.toUpperCase()}</Tag>
       ),
     },
     {
-      title: 'Error',
+      title: t('projectDetail.error'),
       dataIndex: 'processing_error',
       key: 'processing_error',
       ellipsis: true,
@@ -166,14 +171,14 @@ export default function ProjectDetailPage() {
         err ? <Text type="danger">{err}</Text> : '-',
     },
     {
-      title: 'Updated',
+      title: t('common.updated'),
       dataIndex: 'updated_at',
       key: 'updated_at',
       width: 180,
       render: (val: string) => new Date(val).toLocaleString(),
     },
     {
-      title: 'Actions',
+      title: t('common.actions'),
       key: 'actions',
       width: 160,
       render: (_: unknown, record: KnowledgeSource) => (
@@ -184,17 +189,17 @@ export default function ProjectDetailPage() {
             disabled={record.status === 'processing'}
             onClick={() => handleReprocess(record.source_id)}
           >
-            Reprocess
+            {t('projectDetail.reprocess')}
           </Button>
           <Popconfirm
-            title="Delete this source?"
-            description="This will delete the source and its indexed data."
+            title={t('projectDetail.deleteSourceTitle')}
+            description={t('projectDetail.deleteSourceDesc')}
             onConfirm={() => handleDeleteSource(record.source_id)}
-            okText="Yes"
-            cancelText="No"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button size="small" danger icon={<DeleteOutlined />}>
-              Delete
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -211,53 +216,53 @@ export default function ProjectDetailPage() {
   }
 
   if (!project) {
-    return <div>Project not found</div>;
+    return <div>{t('projectDetail.notFound')}</div>;
   }
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>
-        Back to Projects
+        {t('projectDetail.backToProjects')}
       </Button>
 
-      <Card title="Project Details">
+      <Card title={t('projectDetail.projectDetails')}>
         <Descriptions column={2} bordered size="small">
-          <Descriptions.Item label="Project ID">{project.project_id}</Descriptions.Item>
-          <Descriptions.Item label="Name">{project.name}</Descriptions.Item>
-          <Descriptions.Item label="Alias">{project.alias || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Repo Path">{project.repo_path || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Knowledge Scope ID">
+          <Descriptions.Item label={t('projectDetail.projectId')}>{project.project_id}</Descriptions.Item>
+          <Descriptions.Item label={t('common.name')}>{project.name}</Descriptions.Item>
+          <Descriptions.Item label={t('common.alias')}>{project.alias || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('projects.repoPathLabel')}>{project.repo_path || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('projectDetail.knowledgeScopeId')}>
             {project.knowledge_scope_id}
           </Descriptions.Item>
-          <Descriptions.Item label="Scope Type">{project.scope_type || 'project'}</Descriptions.Item>
-          <Descriptions.Item label="Domain Key">{project.domain_key || 'se-project'}</Descriptions.Item>
-          <Descriptions.Item label="Slug">{project.slug || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Created">
+          <Descriptions.Item label={t('projectDetail.scopeType')}>{project.scope_type || 'project'}</Descriptions.Item>
+          <Descriptions.Item label={t('common.domainKey')}>{project.domain_key || 'se-project'}</Descriptions.Item>
+          <Descriptions.Item label={t('common.slug')}>{project.slug || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('common.created')}>
             {new Date(project.created_at).toLocaleString()}
           </Descriptions.Item>
-          <Descriptions.Item label="Updated">
+          <Descriptions.Item label={t('common.updated')}>
             {new Date(project.updated_at).toLocaleString()}
           </Descriptions.Item>
-          <Descriptions.Item label="SSE Connection">
+          <Descriptions.Item label={t('projectDetail.sseConnection')}>
             <Tag color={connected ? 'green' : 'red'}>
-              {connected ? 'Connected' : 'Disconnected'}
+              {connected ? t('projectDetail.connected') : t('projectDetail.disconnected')}
             </Tag>
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
       <Card
-        title="Knowledge Sources"
+        title={t('projectDetail.knowledgeSources')}
         extra={
           <Popconfirm
-            title="Clear all knowledge in this project?"
-            description="This deletes all sources and their indexed data."
+            title={t('projectDetail.clearScopeTitle')}
+            description={t('projectDetail.clearScopeDesc')}
             onConfirm={handleClearScope}
-            okText="Yes"
-            cancelText="No"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button size="small" danger icon={<ClearOutlined />}>
-              Clear Scope
+              {t('projectDetail.clearScope')}
             </Button>
           </Popconfirm>
         }
@@ -271,7 +276,7 @@ export default function ProjectDetailPage() {
         />
       </Card>
 
-      <Card title="Upload Knowledge Source">
+      <Card title={t('projectDetail.uploadTitle')}>
         <Dragger
           accept=".md,.markdown,.java,.json,.yaml,.yml,.sql,.go,.py,.docx,.pdf,.html,.htm,.txt,.csv,.xml,.xlsx,.pptx,.eml"
           multiple={false}
@@ -285,9 +290,9 @@ export default function ProjectDetailPage() {
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
           </p>
-          <p className="ant-upload-text">Click or drag file to upload</p>
+          <p className="ant-upload-text">{t('projectDetail.uploadText')}</p>
           <p className="ant-upload-hint">
-            Supports .md (Markdown), .java, .json/.yaml/.yml (OpenAPI), .sql (DDL), .go, .py, .docx (Word), .pdf, .html/.htm, .txt, .csv, .xml, .xlsx, .pptx, .eml files.
+            {t('projectDetail.uploadHint')}
           </p>
         </Dragger>
       </Card>
