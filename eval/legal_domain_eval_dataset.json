@@ -1,0 +1,167 @@
+[
+  {
+    "query": "标准服务合同里违约责任条款怎么规定的",
+    "domain_scope": [
+      "legal-eval-svc-contract"
+    ],
+    "expected_heading": "第六条 违约责任",
+    "format": "word",
+    "language": "zh",
+    "is_structural_benefit": false,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "条文结构检索：Word 合同标题路径锚定《第六条 违约责任》",
+      "grounded_source": "eval/corpora/legal/标准服务合同模板.docx"
+    }
+  },
+  {
+    "query": "数据处理协议对跨境提供个人数据有什么要求",
+    "domain_scope": [
+      "legal-eval-dpa"
+    ],
+    "expected_heading": "第七条 跨境提供",
+    "format": "word",
+    "language": "zh",
+    "is_structural_benefit": false,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "条文结构检索：Word 协议《第七条 跨境提供》标题路径",
+      "grounded_source": "eval/corpora/legal/数据处理协议模板.docx"
+    }
+  },
+  {
+    "query": "数据安全管理办法对重要数据处理者有什么义务",
+    "domain_scope": [
+      "legal-eval-data-security"
+    ],
+    "expected_heading": "3.2 重要数据处理者义务",
+    "format": "pdf",
+    "language": "zh",
+    "is_structural_benefit": false,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "条文结构检索：PDF 数字编号标题 3.2 定位（page:N §3.2）",
+      "grounded_source": "eval/corpora/legal/数据安全管理办法.pdf"
+    }
+  },
+  {
+    "query": "个人信息保护规范里敏感个人信息包括哪些",
+    "domain_scope": [
+      "legal-eval-pip"
+    ],
+    "expected_heading": "2.2 敏感个人信息",
+    "format": "pdf",
+    "language": "zh",
+    "is_structural_benefit": false,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "条文结构检索：PDF 数字编号标题 2.2 定位",
+      "grounded_source": "eval/corpora/legal/个人信息保护规范.pdf"
+    }
+  },
+  {
+    "query": "标准服务合同有效期是多久",
+    "domain_scope": [
+      "legal-eval-svc-contract"
+    ],
+    "expected_heading": "第九条 合同期限与终止",
+    "format": "word",
+    "language": "zh",
+    "is_structural_benefit": false,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "条文结构检索：Word 合同《第九条 合同期限与终止》（十二个月）",
+      "grounded_source": "eval/corpora/legal/标准服务合同模板.docx"
+    }
+  },
+  {
+    "query": "谁引用了第二条适用范围",
+    "domain_scope": [
+      "legal-eval-regulation"
+    ],
+    "expected_heading": "第三条 数据处理原则",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：referenced_by 第二条 → 第三条（依据第二条确定）",
+      "grounded_source": "eval/corpora/legal/数据治理条例.md"
+    }
+  },
+  {
+    "query": "数据安全规范被哪条引用",
+    "domain_scope": [
+      "legal-eval-regulation"
+    ],
+    "expected_heading": "第五条 数据安全",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：第五条 references [安全规范] 内部锚点",
+      "grounded_source": "eval/corpora/legal/数据治理条例.md"
+    }
+  },
+  {
+    "query": "跨境提供数据依照哪条执行安全评估",
+    "domain_scope": [
+      "legal-eval-regulation"
+    ],
+    "expected_heading": "第六条 跨境提供",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：第六条 references 第五条（中文条文引用）",
+      "grounded_source": "eval/corpora/legal/数据治理条例.md"
+    }
+  },
+  {
+    "query": "数据处理原则依据什么确定",
+    "domain_scope": [
+      "legal-eval-regulation"
+    ],
+    "expected_heading": "第三条 数据处理原则",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：第三条 references 第二条（依据第二条确定适用范围）",
+      "grounded_source": "eval/corpora/legal/数据治理条例.md"
+    }
+  },
+  {
+    "query": "实施细则依据什么制定",
+    "domain_scope": [
+      "legal-eval-rules"
+    ],
+    "expected_heading": "第二条 依据",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：跨文件相对链接 references 数据治理条例第二条",
+      "grounded_source": "eval/corpora/legal/实施细则.md"
+    }
+  },
+  {
+    "query": "跨境数据安全评估程序按照什么执行",
+    "domain_scope": [
+      "legal-eval-rules"
+    ],
+    "expected_heading": "第四条 评估程序",
+    "format": "markdown",
+    "language": "zh",
+    "is_structural_benefit": true,
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "交叉引用受益：第四条 references 条例第六条（中文条文引用）",
+      "grounded_source": "eval/corpora/legal/实施细则.md"
+    }
+  }
+]

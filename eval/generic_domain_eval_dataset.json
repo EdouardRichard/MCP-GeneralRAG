@@ -1,0 +1,184 @@
+[
+  {
+    "query": "嵌入模型选型时本地部署首选哪个模型",
+    "domain_scope": [
+      "personal-eval-rag-notes"
+    ],
+    "expected_heading": "嵌入模型选型笔记",
+    "format": "markdown",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：锚定个人学习笔记《嵌入模型选型笔记》小节，含 bge-m3 首选结论",
+      "grounded_source": "eval/corpora/generic/个人学习笔记-RAG系统.md"
+    }
+  },
+  {
+    "query": "混合检索笔记这一节讲了什么",
+    "domain_scope": [
+      "personal-eval-rag-notes"
+    ],
+    "expected_heading": "混合检索笔记",
+    "format": "markdown",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：按标题路径定位《混合检索笔记》小节（RRF k=60）",
+      "grounded_source": "eval/corpora/generic/个人学习笔记-RAG系统.md"
+    }
+  },
+  {
+    "query": "本周三上午有什么安排",
+    "domain_scope": [
+      "personal-eval-weekly-plan"
+    ],
+    "expected_heading": "个人周计划",
+    "format": "txt",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：定位个人周计划文档（txt 文档级锚点）中的牙医预约",
+      "grounded_source": "eval/corpora/generic/个人周计划.txt"
+    }
+  },
+  {
+    "query": "个人周计划里健身目标是什么",
+    "domain_scope": [
+      "personal-eval-weekly-plan"
+    ],
+    "expected_heading": "个人周计划",
+    "format": "txt",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：txt 文档级定位前缀 # 个人周计划",
+      "grounded_source": "eval/corpora/generic/个人周计划.txt"
+    }
+  },
+  {
+    "query": "个人开支记录里九月房租是多少",
+    "domain_scope": [
+      "personal-eval-expenses"
+    ],
+    "expected_heading": "sheet:个人开支记录",
+    "format": "csv",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：sheet: 前缀定位开支表，九月房租 3500 元",
+      "grounded_source": "eval/corpora/generic/个人开支记录.csv"
+    }
+  },
+  {
+    "query": "这个月餐饮支出主要有哪些",
+    "domain_scope": [
+      "personal-eval-expenses"
+    ],
+    "expected_heading": "sheet:个人开支记录",
+    "format": "csv",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：跨行检索餐饮类别记录",
+      "grounded_source": "eval/corpora/generic/个人开支记录.csv"
+    }
+  },
+  {
+    "query": "RAG 的开山之作是哪篇论文",
+    "domain_scope": [
+      "personal-eval-bookmarks"
+    ],
+    "expected_heading": "必读论文与教程",
+    "format": "html",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：定位《检索增强生成入门》下的《必读论文与教程》",
+      "grounded_source": "eval/corpora/generic/学习资源收藏.html"
+    }
+  },
+  {
+    "query": "经典书籍这一节推荐了哪些书",
+    "domain_scope": [
+      "personal-eval-bookmarks"
+    ],
+    "expected_heading": "经典书籍",
+    "format": "html",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：按 h2 标题路径定位《经典书籍》",
+      "grounded_source": "eval/corpora/generic/学习资源收藏.html"
+    }
+  },
+  {
+    "query": "hybrid A/B test 的 Recall@5 结果如何",
+    "domain_scope": [
+      "generic-eval-meeting-notes"
+    ],
+    "expected_heading": "2026-09-01 Weekly Sync",
+    "format": "markdown",
+    "language": "en",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：定位 2026-09-01 会议纪要（hybrid 0.71→0.79）",
+      "grounded_source": "eval/corpora/generic/team_meeting_notes.md"
+    }
+  },
+  {
+    "query": "架构评审会议确定了哪些决策",
+    "domain_scope": [
+      "generic-eval-meeting-notes"
+    ],
+    "expected_heading": "2026-08-25 Architecture Review",
+    "format": "markdown",
+    "language": "zh",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：按标题路径定位 Architecture Review 纪要",
+      "grounded_source": "eval/corpora/generic/team_meeting_notes.md"
+    }
+  },
+  {
+    "query": "Reading queue curator 这个点子是什么",
+    "domain_scope": [
+      "generic-eval-brainstorm"
+    ],
+    "expected_heading": "brainstorm_ideas",
+    "format": "txt",
+    "language": "en",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：定位头脑风暴文档 Idea 3",
+      "grounded_source": "eval/corpora/generic/brainstorm_ideas.txt"
+    }
+  },
+  {
+    "query": "reading tracker 里评分 5 分的书有哪些",
+    "domain_scope": [
+      "generic-eval-reading-tracker"
+    ],
+    "expected_heading": "sheet:reading_tracker",
+    "format": "csv",
+    "language": "en",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "结构定位查询：sheet: 前缀定位阅读追踪表，rating=5 的三本书",
+      "grounded_source": "eval/corpora/generic/reading_tracker.csv"
+    }
+  },
+  {
+    "query": "vector database 对比的结论是什么",
+    "domain_scope": [
+      "generic-eval-bookmarks"
+    ],
+    "expected_heading": "Vector Databases",
+    "format": "html",
+    "language": "en",
+    "_meta": {
+      "review_status": "reviewed",
+      "review_notes": "自然语言查询：定位 Vector Databases 小节（pgvector <5M 结论）",
+      "grounded_source": "eval/corpora/generic/bookmark_archive.html"
+    }
+  }
+]
