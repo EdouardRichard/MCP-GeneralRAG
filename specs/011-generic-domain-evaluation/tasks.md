@@ -58,11 +58,11 @@ description: "Task list for 011 generic-domain-evaluation implementation"
 
 **Independent Test**: python -m pytest backend/tests/integration/test_011_multidomain_acceptance.py backend/tests/integration/test_deepseek_harness_dual_form.py backend/tests/e2e/test_deepseek_harness_e2e.py -v（VS-06，DeepSeek Harness 必过目标宿主）；验收记录 eval/multi_domain_acceptance_report.json 落盘。
 
-- [ ] T017 [US4] 新建 backend/tests/integration/test_011_multidomain_acceptance.py（FR-012/FR-013，SC-004）：混合域环境四语义轴 scope；list_knowledge_domains 发现 → 以返回 slug/ID 构造 domain_scope（数字 ID / slug / type:name 三形态）→ search_knowledge 检索 → get_evidence 展开的完整闭环断言；发现条目仅含域元数据无知识内容
-- [ ] T018 [US4] 在 backend/tests/integration/test_011_multidomain_acceptance.py 增硬指标三件套实测断言（FR-014/FR-023~FR-025，SC-003）：跨域串库=0（单域引用不返回他域证据 + 多域引用各证据归属正确）、三工具 Schema 合法率=100%、来源可定位率=100%（含 Word 标题路径与 PDF page:N §编号前缀证据）
-- [ ] T019 [US4] 在 backend/tests/integration/test_011_multidomain_acceptance.py 增四类引用场景断言（FR-022）：仅 project_scope（旧码不变）、仅 domain_scope、双参数混用（并集去重）、两参数皆空（拒绝不回退全库）
-- [ ] T020 [US4] 扩展 backend/tests/integration/test_deepseek_harness_dual_form.py（FR-015/SC-006）：混合域验收集（三域）在 writer/reader 双实例形态下各跑一轮，单侧非回归判定（006 口径，复用房规既有 dual-form 测试）
-- [ ] T021 [US4] 扩展 backend/tests/e2e/test_deepseek_harness_e2e.py（FR-015 目标宿主测试）：MCP 双工具以 domain_scope 三形态寻址 + list_knowledge_domains 跨三域闭环，DeepSeek Harness 必过参考客户端；并持久化多域验收记录 eval/multi_domain_acceptance_report.json（FR-014）：场景清单 + 三件套逐条实测记录 + 参考客户端结论（ChatGPT/Claude 记录兼容状态）
+- [x] T017 [US4] 新建 backend/tests/integration/test_011_multidomain_acceptance.py（FR-012/FR-013，SC-004）：混合域环境四语义轴 scope；list_knowledge_domains 发现 → 以返回 slug/ID 构造 domain_scope（数字 ID / slug / type:name 三形态）→ search_knowledge 检索 → get_evidence 展开的完整闭环断言；发现条目仅含域元数据无知识内容
+- [x] T018 [US4] 在 backend/tests/integration/test_011_multidomain_acceptance.py 增硬指标三件套实测断言（FR-014/FR-023~FR-025，SC-003）：跨域串库=0（单域引用不返回他域证据 + 多域引用各证据归属正确）、三工具 Schema 合法率=100%、来源可定位率=100%（含 Word 标题路径与 PDF page:N §编号前缀证据）
+- [x] T019 [US4] 在 backend/tests/integration/test_011_multidomain_acceptance.py 增四类引用场景断言（FR-022）：仅 project_scope（旧码不变）、仅 domain_scope、双参数混用（并集去重）、两参数皆空（拒绝不回退全库）
+- [x] T020 [US4] 扩展 backend/tests/integration/test_deepseek_harness_dual_form.py（FR-015/SC-006）：混合域验收集（三域）在 writer/reader 双实例形态下各跑一轮，单侧非回归判定（006 口径，复用房规既有 dual-form 测试）
+- [x] T021 [US4] 扩展 backend/tests/e2e/test_deepseek_harness_e2e.py（FR-015 目标宿主测试）：MCP 双工具以 domain_scope 三形态寻址 + list_knowledge_domains 跨三域闭环，DeepSeek Harness 必过参考客户端；并持久化多域验收记录 eval/multi_domain_acceptance_report.json（FR-014）：场景清单 + 三件套逐条实测记录 + 参考客户端结论（ChatGPT/Claude 记录兼容状态）
 
 **Checkpoint**: 多域端到端闭环走通、硬指标三件套全量实测通过、验收记录落盘。
 

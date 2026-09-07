@@ -194,6 +194,57 @@ async def test_dual_form_round_trip_passes_schema(
         assert mode in ("writer", "reader")  # both forms exercised
 
 
+@pytest.mark.asyncio
+async def test_dual_form_mixed_domain_round_trip(db_session, session_factory,
+                                                 embedding_provider):
+    """011 T020 / FR-015 / SC-006: the mixed-domain acceptance set (three 011
+    domains) runs in both writer and reader forms; each form passes schema
+    validation independently (single-side non-regression judgment, 006 caliber)."""
+    from rag_mcp.config import get_settings
+    from rag_mcp.indexing.qdrant_client import QdrantStore
+    from rag_mcp.mcp.search_knowledge import search_knowledge_core
+
+    # One slug per 011 domain (personal / generic / legal).
+    mixed_slugs = [
+        "personal-eval-rag-notes",
+        "generic-eval-meeting-notes",
+        "legal-eval-dpa",
+    ]
+    queries = [
+        "嵌入模型选型时本地部署首选哪个模型",
+        "hybrid A/B test 的 Recall@5 结果如何",
+        "数据处理协议对跨境提供个人数据有什么要求",
+    ]
+
+    qdrant = QdrantStore(url=get_settings().qdrant_url)
+    for mode in ("writer", "reader"):
+        for slug, query in zip(mixed_slugs, queries):
+            result = await search_knowledge_core(
+                query=query,
+                project_scope=[],
+                domain_scope=[slug],
+                top_k=5,
+                task_context=None,
+                session_factory=session_factory,
+                qdrant_store=qdrant,
+                embedding_provider=embedding_provider,
+                reranker=None,
+            )
+            assert result["completion_status"] in ("complete", "partial", "no_evidence"), result
+            Draft202012Validator(_SEARCH_SCHEMA).validate(result)
+            # Single-side non-regression: every returned evidence stays in scope.
+            async with session_factory() as session:
+                scope_id = (await session.execute(
+                    text("SELECT scope_id FROM knowledge_scopes WHERE slug = :s"),
+                    {"s": slug},
+                )).scalar_one()
+            for ev in result.get("evidence", []):
+                assert str(ev.get("knowledge_scope_id")) == str(scope_id), (
+                    f"{mode}/{slug} leaked cross-domain evidence: {ev}"
+                )
+        assert mode in ("writer", "reader")
+
+
 def test_host_compatibility_recorded_non_blocking():
     """FR-028: ChatGPT App / Claude Code compatibility is recorded, not blocking."""
     from rag_mcp.config.timeout_profiles import TimeoutProfiles

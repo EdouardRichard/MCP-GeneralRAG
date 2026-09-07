@@ -1,0 +1,82 @@
+{
+  "report_type": "multi_domain_acceptance",
+  "generated_at": "2026-09-07T11:30:06.025983+00:00",
+  "scenarios": [
+    {
+      "id": "discovery_four_axes",
+      "description": "list_knowledge_domains covers personal/generic/legal/se-project",
+      "status": "passed"
+    },
+    {
+      "id": "three_form_addressing_closed_loop",
+      "description": "domain_scope numeric/slug/type:name addressing + get_evidence expansion",
+      "status": "passed"
+    },
+    {
+      "id": "hard_metrics_three_piece",
+      "description": "跨域串库=0 / Schema 100% / 定位 100%",
+      "status": "passed"
+    }
+  ],
+  "hard_constraints": {
+    "cross_domain_leakage_events": 0,
+    "schema_validity_rate": 1.0,
+    "source_locatability_rate": 1.0,
+    "all_passed": true
+  },
+  "per_query_measurements": [
+    {
+      "domain_key": "personal",
+      "slug": "personal-eval-rag-notes",
+      "query": "嵌入模型选型时本地部署首选哪个模型",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "generic",
+      "slug": "generic-eval-meeting-notes",
+      "query": "hybrid A/B test 的 Recall@5 结果如何",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 3,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "legal",
+      "slug": "legal-eval-dpa",
+      "query": "数据处理协议对跨境提供个人数据有什么要求",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "legal",
+      "slug": "legal-eval-data-security",
+      "query": "数据安全管理办法对重要数据处理者有什么义务",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    }
+  ],
+  "reference_client": {
+    "deepseek_harness": "passed",
+    "chatgpt_app": "recorded_non_blocking",
+    "claude_code": "recorded_non_blocking"
+  }
+}
