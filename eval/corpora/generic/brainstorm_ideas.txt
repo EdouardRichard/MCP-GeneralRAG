@@ -1,0 +1,26 @@
+Product brainstorm — unfiltered ideas for the knowledge platform (Q3 2026).
+
+Idea 1: Personal knowledge graph. Let users declare links between their own
+notes (note A references note B) and surface those links during retrieval.
+Risk: manual linking is high-friction; extraction heuristics may misfire.
+
+Idea 2: Meeting-to-minutes pipeline. Upload an audio recording, transcribe it,
+and auto-file a structured summary into the team knowledge base with speaker
+attribution. Risk: transcription quality on domain jargon; privacy review
+needed before launch.
+
+Idea 3: Reading queue curator. A weekly digest that ranks saved bookmarks by
+topic relevance to current projects and prunes stale entries. Cheap to build,
+mostly a ranking problem we already have infrastructure for.
+
+Idea 4: Cross-language search. A Chinese query returns evidence from English
+documents with the matching passage highlighted and translated inline. The
+multilingual embedding model already supports this; the UI work is the main
+cost.
+
+Idea 5: Evidence freshness badge. Every evidence card shows how old the
+underlying document is, so stale decisions are visible at a glance. Almost
+trivial to implement from existing metadata; high trust payoff.
+
+Parking lot: semantic spreadsheet formulas (too far from the retrieval core),
+voice-first mobile client (no team capacity this quarter).

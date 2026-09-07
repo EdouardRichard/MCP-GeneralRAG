@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team Bookmark Archive</title>
+</head>
+<body>
+<h1>Team Bookmark Archive: Retrieval and Infrastructure</h1>
+<p>Shared bookmarks collected by the retrieval platform team. Newest entries
+first within each section. Last pruned: 2026-08-30.</p>
+
+<h2>Vector Databases</h2>
+<p>Qdrant filtering guide — the definitive reference on payload filters and
+hybrid (dense + sparse) queries. Our production deployment follows this guide
+for the named-vector layout.</p>
+<p>PostgreSQL pgvector versus dedicated vector stores — a fair benchmark write-up;
+the conclusion matches our experience: pgvector is fine below about 5M vectors,
+dedicated stores win at scale with filtered search.</p>
+
+<h2>Embeddings and Reranking</h2>
+<p>Sentence-Transformers documentation on multilingual models — background on
+how bge-m3 handles cross-lingual retrieval and the s2-tuning recipe.</p>
+<p>Cohere rerank API cookbook — practical patterns for two-stage retrieval
+(retrieve-then-rerank) including latency budgets per stage.</p>
+
+<h2>Evaluation</h2>
+<p>BEIR benchmark repository — heterogeneous retrieval tasks; useful sanity
+check before trusting any single-domain eval number.</p>
+<p>Ragas framework docs — reference-free RAG evaluation metrics (faithfulness,
+answer relevance). We borrowed the idea of grounding checks from it.</p>
+
+<h2>Engineering Blogs</h2>
+<p>Cloudflare engineering blog on cache residency — not retrieval, but the
+tiered-cache idea inspired our evidence freshness badge design.</p>
+</body>
+</html>

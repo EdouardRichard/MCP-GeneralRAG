@@ -1,0 +1,9 @@
+title,author,category,status,rating,started_at,finished_at,notes
+Designing Data-Intensive Applications,Martin Kleppmann,engineering,finished,5,2026-07-01,2026-08-15,Chapter 11 streams maps directly to our ingestion pipeline
+Introduction to Information Retrieval,Manning et al.,engineering,reading,4,2026-08-20,,Classic IR theory; skimmed chapters 1-6 so far
+Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks,Lewis et al.,paper,finished,4,2026-08-02,2026-08-03,Foundational RAG paper; the non-parametric memory framing still holds
+The Pragmatic Programmer,Hunt and Thomas,engineering,finished,5,2026-05-10,2026-06-01,Reread for career anniversary; DRY chapter aged well
+Thinking in Systems,Donella Meadows,systems,finished,5,2026-06-05,2026-06-20,Leverage points chapter reshaped how I think about retrieval quality tuning
+Deep Learning for Search,Bing Liu,engineering,abandoned,2,2026-06-25,2026-07-02,Too dated; transformer-era content is thin
+Building Secure and Reliable Systems,Google,engineering,reading,4,2026-08-25,,Security chapter informs the upload isolation design
+Site Reliability Engineering,Google,engineering,finished,4,2026-04-01,2026-04-28,The error-budget idea applies to eval regression tolerance
