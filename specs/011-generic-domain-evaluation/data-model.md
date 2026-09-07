@@ -49,6 +49,7 @@
 
 - 格式扩展（[markdown]→[markdown,word,pdf]）为声明式配置变更，与受益闸口结果解耦、始终落地（承载 Word/PDF 语料必需，FR-003）。
 - graph_relations 与 has_graph 仅在受益闸口达标时启用（Q1=A 双分支，FR-011/SC-007）；两分支的 default_capabilities 与空词表/词表自洽（010 T060 先例）。
+- **011 再验证结果（T015/T016，2026-09-07）**：交叉引用受益闸口未达标（MRR −9.09% / nDCG −6.55%，Recall 非降但硬指标全过），vocabulary_disposition = kept_empty_r11 —— 采纳**未达标分支**：legal 维持空图词表现状（graph_relations={}、has_graph=false、retrieval_modes=["dense","hybrid"]），cross_reference 仍可由自定义档案显式启用。该结论记录于 eval/legal_benefit_result.json 与 eval/legal_domain_baseline_report.json 的 cross_reference_benefit 块。
 
 ---
 

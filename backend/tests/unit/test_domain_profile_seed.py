@@ -72,9 +72,11 @@ def test_legal_chunk_type_extensions_stays_none():
 
 
 def test_legal_has_empty_vocab_r11_remedy():
-    """The 010 preliminary cross-reference benefit gate did not pass (SC-002),
-    so the builtin legal profile ships with an empty vocabulary (R11 declarative
-    remedy); cross_reference remains deliverable via a custom profile."""
+    """The cross-reference benefit gate did not pass (010 SC-002: MRR -11.1% /
+    nDCG -6.3%; 011 re-verification FR-011: MRR -9.09% / nDCG -6.55%), so the
+    builtin legal profile keeps an empty graph vocabulary (R11 declarative
+    remedy / Q1=A 未达标分支); cross_reference remains deliverable via a
+    custom profile declaring the references/referenced_by vocabulary."""
     assert BUILTIN_DOMAIN_PROFILES["legal"]["graph_relations"] == {}
 
 
