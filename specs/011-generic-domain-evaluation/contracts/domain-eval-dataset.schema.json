@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/011/domain-eval-dataset.schema.json",
+  "title": "Domain Eval Dataset Entry Schema (011)",
+  "description": "011 两域固定评测集（generic_domain_eval_dataset.json / legal_domain_eval_dataset.json）的条目契约。domain_scope 寻址 + expected_heading 结构锚点（跨环境稳定，不依赖运行时 ID）；独立文件、不追加进既有评测集（零破坏）。",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1
+      },
+      "domain_scope": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "知识域引用（slug 优先 / 数字 scope ID），runner 经既有解析逻辑转 scope 集合"
+      },
+      "expected_heading": {
+        "type": "string",
+        "minLength": 1,
+        "description": "结构锚点：标题路径末段/定位前缀（如 'sheet:Sheet1'、'# 段落标题'、'page:N §1.2'）"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "txt",
+          "html",
+          "csv",
+          "word",
+          "pdf"
+        ]
+      },
+      "language": {
+        "type": "string",
+        "enum": [
+          "zh",
+          "en"
+        ]
+      },
+      "is_structural_benefit": {
+        "type": "boolean",
+        "default": false,
+        "description": "仅法律域交叉引用受益子集条目为 true（沿用 010 标记）"
+      },
+      "_meta": {
+        "type": "object",
+        "properties": {
+          "review_status": {
+            "type": "string",
+            "enum": [
+              "reviewed"
+            ]
+          },
+          "review_notes": {
+            "type": "string"
+          },
+          "grounded_source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_status"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "query",
+      "domain_scope",
+      "expected_heading",
+      "language"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/011/legal-domain-baseline-report.schema.json",
+  "title": "Legal Domain Baseline Report Schema (011)",
+  "description": "法律合规域基线报告契约（非约束性对照锚点）。dense/hybrid 双路径指标 + P50/P95 延迟 + 逐查询明细 + 硬指标实测 + 可重复性检查；额外含交叉引用受益对照块（Q1=A：010 FR-030 双分支闸口）。无 enters_default_path 字段。",
+  "type": "object",
+  "properties": {
+    "report_type": {
+      "type": "string",
+      "const": "legal_domain_baseline"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "config": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/configBlock"
+    },
+    "dense_metrics": {
+      "type": "object",
+      "properties": {
+        "recall_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "mrr": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "ndcg_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "latency_ms": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/latencyBlock"
+        }
+      },
+      "required": [
+        "recall_at_k",
+        "mrr",
+        "ndcg_at_k",
+        "latency_ms"
+      ],
+      "additionalProperties": false
+    },
+    "hybrid_metrics": {
+      "type": "object",
+      "properties": {
+        "recall_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "mrr": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "ndcg_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "latency_ms": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/latencyBlock"
+        }
+      },
+      "required": [
+        "recall_at_k",
+        "mrr",
+        "ndcg_at_k",
+        "latency_ms"
+      ],
+      "additionalProperties": false
+    },
+    "deltas": {
+      "type": "object",
+      "properties": {
+        "mrr_mean_delta": {
+          "type": "number"
+        },
+        "ndcg_mean_delta": {
+          "type": "number"
+        },
+        "recall_mean_delta": {
+          "type": "number"
+        },
+        "latency_p50_delta_ms": {
+          "type": "number"
+        },
+        "latency_p95_delta_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mrr_mean_delta",
+        "ndcg_mean_delta",
+        "recall_mean_delta"
+      ],
+      "additionalProperties": false
+    },
+    "hard_constraints": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/hardConstraintsBlock"
+    },
+    "per_query_comparison": {
+      "type": "array",
+      "items": {
+        "$ref": "./domain-baseline-common.schema.json#/$defs/domainQueryEntry"
+      }
+    },
+    "reproducibility": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/reproducibilityBlock"
+    },
+    "cross_reference_benefit": {
+      "type": "object",
+      "description": "交叉引用受益对照（Q1=A：同会话混合基线臂 vs 图增强臂，010 FR-030 双分支闸口）",
+      "properties": {
+        "baseline_metrics": {
+          "type": "object",
+          "properties": {
+            "recall_at_k": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            },
+            "mrr": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            },
+            "ndcg_at_k": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            }
+          },
+          "required": [
+            "recall_at_k",
+            "mrr",
+            "ndcg_at_k"
+          ],
+          "additionalProperties": false
+        },
+        "graph_metrics": {
+          "type": "object",
+          "properties": {
+            "recall_at_k": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            },
+            "mrr": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            },
+            "ndcg_at_k": {
+              "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+            }
+          },
+          "required": [
+            "recall_at_k",
+            "mrr",
+            "ndcg_at_k"
+          ],
+          "additionalProperties": false
+        },
+        "mrr_improvement_pct": {
+          "type": "number"
+        },
+        "ndcg_improvement_pct": {
+          "type": "number"
+        },
+        "recall_non_decreasing": {
+          "type": "boolean"
+        },
+        "three_gate_pass": {
+          "type": "boolean",
+          "description": "≥3% + Recall 非降 + 硬指标全过"
+        },
+        "vocabulary_disposition": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "kept_empty_r11",
+            "no_measurable_benefit"
+          ],
+          "description": "legal 档案 graph_relations 处置结果：enabled=启用 references/referenced_by；kept_empty_r11=未达标维持 R11；no_measurable_benefit=零可测图边"
+        }
+      },
+      "required": [
+        "baseline_metrics",
+        "graph_metrics",
+        "mrr_improvement_pct",
+        "ndcg_improvement_pct",
+        "recall_non_decreasing",
+        "three_gate_pass",
+        "vocabulary_disposition"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "report_type",
+    "generated_at",
+    "config",
+    "dense_metrics",
+    "hybrid_metrics",
+    "deltas",
+    "hard_constraints",
+    "per_query_comparison",
+    "reproducibility",
+    "cross_reference_benefit"
+  ],
+  "additionalProperties": false
+}

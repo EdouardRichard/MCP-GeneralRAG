@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/011/generic-domain-baseline-report.schema.json",
+  "title": "Generic Domain Baseline Report Schema (011)",
+  "description": "个人/团队通用知识库域基线报告契约（非约束性对照锚点）。dense/hybrid 双路径 Recall@K/MRR/nDCG + P50/P95 延迟 + 逐查询明细 + 硬指标实测 + 可重复性检查。无 enters_default_path 字段（宪法 X：建立锚点而非宣称改进）。",
+  "type": "object",
+  "properties": {
+    "report_type": {
+      "type": "string",
+      "const": "generic_domain_baseline"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "config": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/configBlock"
+    },
+    "dense_metrics": {
+      "type": "object",
+      "properties": {
+        "recall_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "mrr": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "ndcg_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "latency_ms": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/latencyBlock"
+        }
+      },
+      "required": [
+        "recall_at_k",
+        "mrr",
+        "ndcg_at_k",
+        "latency_ms"
+      ],
+      "additionalProperties": false
+    },
+    "hybrid_metrics": {
+      "type": "object",
+      "properties": {
+        "recall_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "mrr": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "ndcg_at_k": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/metricBlock"
+        },
+        "latency_ms": {
+          "$ref": "./domain-baseline-common.schema.json#/$defs/latencyBlock"
+        }
+      },
+      "required": [
+        "recall_at_k",
+        "mrr",
+        "ndcg_at_k",
+        "latency_ms"
+      ],
+      "additionalProperties": false
+    },
+    "deltas": {
+      "type": "object",
+      "properties": {
+        "mrr_mean_delta": {
+          "type": "number"
+        },
+        "ndcg_mean_delta": {
+          "type": "number"
+        },
+        "recall_mean_delta": {
+          "type": "number"
+        },
+        "latency_p50_delta_ms": {
+          "type": "number"
+        },
+        "latency_p95_delta_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mrr_mean_delta",
+        "ndcg_mean_delta",
+        "recall_mean_delta"
+      ],
+      "additionalProperties": false
+    },
+    "hard_constraints": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/hardConstraintsBlock"
+    },
+    "per_query_comparison": {
+      "type": "array",
+      "items": {
+        "$ref": "./domain-baseline-common.schema.json#/$defs/domainQueryEntry"
+      }
+    },
+    "reproducibility": {
+      "$ref": "./domain-baseline-common.schema.json#/$defs/reproducibilityBlock"
+    }
+  },
+  "required": [
+    "report_type",
+    "generated_at",
+    "config",
+    "dense_metrics",
+    "hybrid_metrics",
+    "deltas",
+    "hard_constraints",
+    "per_query_comparison",
+    "reproducibility"
+  ],
+  "additionalProperties": false
+}

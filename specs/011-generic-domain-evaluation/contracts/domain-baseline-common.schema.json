@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/011/domain-baseline-common.schema.json",
+  "title": "Domain Baseline Report — Shared Definitions (011)",
+  "description": "域基线报告共享 $defs：指标块、延迟块、硬指标块、逐查询条目、可重复性块。由 generic/legal 两份域基线报告 schema 引用；字段语义沿用 002 eval-comparison-report.schema.json。",
+  "$defs": {
+    "metricBlock": {
+      "type": "object",
+      "properties": {
+        "mean": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mean",
+        "min",
+        "max"
+      ],
+      "additionalProperties": false
+    },
+    "latencyBlock": {
+      "type": "object",
+      "properties": {
+        "p50": {
+          "type": "number"
+        },
+        "p95": {
+          "type": "number"
+        },
+        "mean": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "p50",
+        "p95",
+        "mean"
+      ],
+      "additionalProperties": false
+    },
+    "hardConstraintsBlock": {
+      "type": "object",
+      "description": "硬性验收指标（宪法 v1.3.0 硬约束，跨域语义）",
+      "properties": {
+        "cross_domain_leakage_events": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_validity_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_locatability_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "all_passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cross_domain_leakage_events",
+        "schema_validity_rate",
+        "source_locatability_rate",
+        "all_passed"
+      ],
+      "additionalProperties": false
+    },
+    "domainQueryEntry": {
+      "type": "object",
+      "description": "逐查询条目：domain_scope 寻址 + expected_heading 结构锚点 + 双路径排名/分数",
+      "properties": {
+        "query_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "query": {
+          "type": "string"
+        },
+        "domain_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "expected_heading": {
+          "type": "string"
+        },
+        "format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dense_rank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "hybrid_rank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "dense_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hybrid_dense_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hybrid_sparse_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hybrid_fused_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hybrid_rerank_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rank_improved": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "query_index",
+        "query",
+        "domain_scope",
+        "expected_heading",
+        "dense_rank",
+        "hybrid_rank",
+        "rank_improved"
+      ],
+      "additionalProperties": false
+    },
+    "reproducibilityBlock": {
+      "type": "object",
+      "properties": {
+        "non_latency_reproducible": {
+          "type": "boolean"
+        },
+        "tolerance": {
+          "type": "number"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "metric": {
+                "type": "string"
+              },
+              "run_1": {
+                "type": "number"
+              },
+              "run_2": {
+                "type": "number"
+              },
+              "relative_delta": {
+                "type": "number"
+              },
+              "tolerance": {
+                "type": "number"
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "env_sensitive": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "metric",
+              "run_1",
+              "run_2",
+              "relative_delta",
+              "tolerance",
+              "passed"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "non_latency_reproducible",
+        "tolerance",
+        "checks"
+      ],
+      "additionalProperties": false
+    },
+    "configBlock": {
+      "type": "object",
+      "properties": {
+        "domain_key": {
+          "type": "string"
+        },
+        "embedding_model": {
+          "type": "string"
+        },
+        "reranker_model": {
+          "type": "string"
+        },
+        "dataset_path": {
+          "type": "string"
+        },
+        "num_queries": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retrieval_modes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "domain_key",
+        "dataset_path",
+        "num_queries"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
