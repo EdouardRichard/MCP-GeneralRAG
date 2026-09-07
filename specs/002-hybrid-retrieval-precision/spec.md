@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-27
 
-**Status**: Specified
+**Status**: Delivered
 
 **Input**: User description: "Qdrant BM25/Sparse + RRF 融合 + bge-reranker，与 001 Dense 对照。范围依据：蓝图 §23.4.2 / §9 / §8.1 / §18.2。"
 

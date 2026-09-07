@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-06
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "图关系注册表：GraphExtractor 插件接口正式抽象（extract(source, chunks, scope) -> list[edge] 收编现 duck-typing 契约，注册表按 format + domain_key 发现提取器）；java_call_graph 与 ddl_fk 迁移至插件接口（行为不变，004 数据集回归）；relation_type CHECK 放宽（graph/models.py:45-49 枚举改宽模式 + 应用层按域档案 graph_relations 词表校验，other_hard 逃生口退役）；文档交叉引用提取器作为非 SE 验证提取器（Markdown 内部链接 [x](#anchor)/相对链接、法规条文"依据第 X 条/参见 X.Y"引用 → references/referenced_by 硬边，产 parse_evidence，服务 legal 域档案）；图路径对 public/generic 域可用（007 已拆 Project 依赖，010 验证端到端）；graph_ready 门控语义不变（硬边 > 0 方可声明，无图档案自然不可声明）；软关系推断框架与格式无关确认回归。范围依据：2.0 蓝图 §3.8/§5-010/ADR-8，1.0 蓝图 §10/§8.2。硬性约束：显式知识域引用；跨域串库为零（图边以 knowledge_scope_id 为唯一隔离键）；Schema 合法率与来源可定位率 100%；硬/软关系区分不变（宪法 III），提取器必须产 parse_evidence。对照评测：004 图增强评测集（37 条，graph_enhanced_comparison_report.json）无回归；新增交叉引用受益子集 ≥6 条（法律域语料，含中文条文引用），结构性受益 ≥3%（沿用 004 SC-001 闸口）证明插件抽象与非 SE 图能力成立。不重复 004 已交付的 Java/DDL 硬关系与软关系推断、007 已交付的图三元组去 Project 依赖。输入材料：001–009 代码、eval/graph_enhanced_comparison_report.json、docs/通用RAG演进蓝图.md。"
 

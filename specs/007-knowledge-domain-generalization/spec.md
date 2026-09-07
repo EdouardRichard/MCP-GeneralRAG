@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-05
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "知识域泛化：双轴知识域模型（scope_type 结构轴沿用 project/public × 新增 domain_key 语义轴）、域档案 DomainProfile 注册表（domain_profiles 表：supported_formats/chunk_type_extensions/graph_relations/prompt_overrides/default_capabilities，内置 se-project 与 generic 两档案，se-project 行为与 1.0 完全一致）、MCP 兼容扩展（search_knowledge 与 get_evidence 新增可选 domain_scope 参数，与 project_scope 并集去重进统一解析器，二者至少一个非空，旧客户端逐字节不变；新增只读工具 list_knowledge_domains 只返回域元数据绝不返回知识内容）、scope slug 全局按名寻址（含 type:name 限定引用）、修复三处 public/project 残留（get_evidence 无法展开 public 证据的断链 evidence_service.py:328-372；agentic 证据硬编码 knowledge_scope_type=\"project\" retrieval_pipeline.py:451,468；图三元组强制 Project 行 retrieval_service.py:1114-1122）、错误码双轨制（仅 project_scope 沿用旧码，涉及 domain_scope 发 MISSING_KNOWLEDGE_SCOPE/AMBIGUOUS_DOMAIN_REF 新码）。范围依据：2.0 蓝图 §1/§3.1/§3.2/§3.6/§5-007/§7/ADR-1/ADR-2/ADR-3/ADR-7，1.0 蓝图 §4/§16。硬性约束：检索必须显式知识域引用（project_scope 或 domain_scope）；跨知识域串库为零；MCP Schema 合法率与来源可定位率 100%；list_knowledge_domains 不得返回任何知识内容。对照评测：无检索质量对照（架构泛化，沿用 006 工程硬化特例范式）；既有评测全集（001/002 基线、003 格式集、004 图集、005 agentic、006 冒烟）无回归；新 domain_scope/slug/list_knowledge_domains 功能验收。不重复 001–006 已实现能力（project/public scope 创建、上传、检索均已有）。输入材料：001–006 代码与契约、docs/通用RAG演进蓝图.md。前置：宪法 v1.3.0 修订已批准。"
 

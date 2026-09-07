@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-03
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "单写多读、Provider 配置、追踪与指标。范围依据：蓝图 §23.4.6 / §19–21。检索必须显式 project_scope，跨项目串库为零，MCP Schema 合法率与来源可定位率 100%。与 001 确定性基线的对照评测要求：无（工程硬化，非检索质量）。不重复 001 已实现能力，明确范围内/范围外。输入材料：001~005 代码、部署环境。"
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-06
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "通用摄入通道：FormatHandler 注册表收敛四处 if/elif 分发（api/knowledge_sources.py:305-351 _detect_format、services/ingestion_service.py:582-631 _parse_content、parsers/text_extractor.py:16 BINARY_FORMATS、ingestion_service.py:833-842 图提取器分发）为单一注册表（条目声明 format 名/扩展名集/tier native|converter/binary 声明/解析器工厂或转换器规格/可选图提取器挂钩/定位前缀，错误消息由注册表生成）；新增转换层：可插拔转换器接口 + markitdown 适配器（微软 markitdown，MIT），任意通用格式转 Markdown IR 后经凭据脱敏再由 MarkdownParser 切片（通用 chunk_type：heading/paragraph/list/table），原生 8 解析器冻结不动、存量格式零迁移；首批格式 9 种：html/txt/csv/json/yaml/xml/xlsx/pptx/eml（txt 为极轻量原生处理器空行分段，其余走转换层）；DB CHECK 放宽：knowledge_sources.format 与 chunks.chunk_type 与 retrieval_runs.format（String(8)→String(32)）改为宽模式约束 + 应用层注册表校验，chunk_type 两级词表（L1 通用闭合集 section/heading/paragraph/list/table + L2 命名空间扩展 ^域:类型$，存量 18 值遗留合法）；证据定位前缀规范（sheet:/path:/msg: 新增，存量 page:/标题路径/符号路径沿用）；前端 accept 与文案及 types 泛化。范围依据：2.0 蓝图 §1.2/§3.3/§3.4/§3.5/§5-008/ADR-4/ADR-5/ADR-6，1.0 蓝图 §7/§8。硬性约束：显式知识域引用；跨域串库为零；Schema 合法率与来源可定位率 100%（转换层格式的定位为转换后表示的标题路径粒度，须在契约中显式声明）；凭据脱敏顺序不变（转文本之后切片之前）；宪法 V 数据与控制分离对转换产物同样生效。对照评测：003 格式扩展范式沿用——每新格式 ≥2 条评测查询（≥1 自然语言 + ≥1 结构定位，如 sheet:SheetName/path:/json/key）加入固定评测集；003 既有格式集无回归；转换层契约测试固化 markitdown 行为（版本锁定）。不重复 003 已交付的 8 格式原生解析。输入材料：001–007 代码、docs/通用RAG演进蓝图.md、markitdown 官方文档。"
 

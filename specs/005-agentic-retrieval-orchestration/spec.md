@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-02
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "三 Agent + LangGraph + 证据账本 + 补充检索。范围依据：蓝图 §23.4.5 / §11–13。检索必须显式 project_scope，跨项目串库为零，MCP Schema 合法率与来源可定位率 100%。与 001 确定性基线对照评测。不重复 001 已实现能力，明确范围内/范围外。输入材料：混合检索代码、Java 调用图/DDL 外键语料。"
 

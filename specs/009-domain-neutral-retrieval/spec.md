@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-06
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "检索编排域中立化：query_planner 基础系统提示词重写为域中立（信号选择规则以标识符/定义/关系抽象表述，SE 举例与关系词表全部移入 se-project 域档案 prompt_overrides，运行时按请求 scope 域档案注入；se-project 档案下规划行为与 1.0 一致，用 005 数据集回归验证）；relation_directions 枚举动态化（由域档案 graph_relations 词表生成，query_planner.py:25-26,44-48,97-102 的硬编码 4 值词表移入 se-project 档案，无图档案返回空词表）；task_context 契约泛化（current_file/current_symbol/work_phase 保留为编码域约定字段兼容存量客户端，新增可选自由字符串 activity 供任意域描述当前工作，schema 描述整体域中立化）；SourcePosition 契约描述更新（common.schema.json:34-37 以定位前缀规范表替换 Java 符号单例描述，get_evidence parent_context 措辞域中立化）；gaps 与错误文案去 project 措辞（retrieval_service.py:947-949 等）；evidence_analyst/context_orchestrator/injection_detector 确认已中立并回归。范围依据：2.0 蓝图 §3.7/§3.5/§5-009，1.0 蓝图 §11/§15。硬性约束：显式知识域引用；跨域串库为零；Schema 合法率与来源可定位率 100%；提示注入防护边界不变（域档案注入内容属可信配置、与证据内容结构隔离，宪法 V/1.0 §15）。对照评测：005 agentic 数据集（44 条）与确定性评测集（37 条）无回归（se-project 档案提示词等价性闸口）；无新增检索质量对照义务（编排泛化沿用 006 工程特例范式）。不重复 007 已交付的域档案基础设施与 008 已交付的摄入通道。输入材料：001–008 代码、005 agentic_comparison_report.json、docs/通用RAG演进蓝图.md。"
 

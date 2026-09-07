@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-28
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "Word/PDF/OpenAPI/DDL/Go/Python 按批扩展切片。范围依据：蓝图 §23.4 第 3 项 / §7 / §2.1。硬性约束：检索必须显式 project_scope；跨项目串库必须为零；MCP Schema 合法率与来源可定位率必须 100%。与 001 确定性基线对照评测。不重复 001 与 002 已实现能力。"
 

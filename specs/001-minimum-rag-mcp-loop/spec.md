@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-26
 
-**Status**: Implemented
+**Status**: Delivered
 
 **Input**: User description: "建立首个端到端闭环，让单用户通过 Web 管理项目与公共知识，上传 Markdown 和 Java 材料，并让 ChatGPT App（原 Codex）、DeepSeek Harness 与 Claude Code 通过只读 MCP 获得可追溯的项目证据。"
 

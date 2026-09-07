@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-28
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "PostgreSQL 图关系 + 硬关系 + 软关系 + 1~3 跳扩展。范围依据：蓝图 §23.4.4 / §10 / §8.2。输入材料：混合检索代码、Java 调用图 / DDL 外键语料。"
 
