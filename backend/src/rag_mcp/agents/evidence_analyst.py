@@ -5,7 +5,7 @@ Produces structured judgments with fixed enums:
   - conflict_type: {none, version_conflict, source_conflict, domain_conflict} (FR-032)
   - uncovered_sub_problem_ids: sub-problems not covered (FR-013)
   - needs_supplementary: Agent judgment INPUT (not exclusive jump, Constitution VI)
-  - Project/public conflicts surfaced, not fabricated (FR-016, Constitution III)
+  - Domain/public conflicts surfaced, not fabricated (FR-016, Constitution III)
   - schema_valid=true when output passes validation (FR-003)
 """
 

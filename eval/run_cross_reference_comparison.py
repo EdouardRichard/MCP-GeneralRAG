@@ -40,12 +40,14 @@ from rag_mcp.models.knowledge_version import KnowledgeVersion
 from rag_mcp.utils.snowflake import generate_id
 from run_eval import (  # noqa: E402
     _EvalEmbeddingProvider,
+    check_reproducibility,
     compute_metrics,
     run_single_eval,
 )
 from run_graph_comparison import (  # noqa: E402
-    search_graph_enhanced,
     _derive_index_version,
+    measure_hard_constraints,
+    run_graph_eval,
 )
 
 logger = logging.getLogger(__name__)
@@ -263,29 +265,34 @@ async def run_cross_reference_comparison(dataset_path: str, output_path: str) ->
         mode="hybrid", sparse_encoder=sparse_encoder,
     )
 
-    graph_per_query = []
-    async with session_factory() as session:
-        for i, entry in enumerate(dataset):
-            result = await search_graph_enhanced(
-                query=entry["query"],
-                project_scope_ids=[scope_id],
-                qdrant_store=qdrant_store,
-                embedding_provider=embedding_provider,
-                collection_name=hybrid_collection,
-                session=session,
-                graph_triples=graph_triples,
-                top_k=5,
-                sparse_encoder=sparse_encoder,
-            )
-            graph_per_query.append({
-                "query_index": i,
-                "query": entry["query"],
-                "expected_evidence_ids": entry["expected_evidence_ids"],
-                "retrieved_evidence_ids": result["evidence_ids"],
-                "scores": result["scores"],
-                "latency_ms": result["latency_ms"],
-                "status": result["status"],
-            })
+    graph_per_query, graph_metrics, leakage_events = await run_graph_eval(
+        dataset, qdrant_store, embedding_provider, hybrid_collection,
+        session_factory, graph_triples, 5, sparse_encoder,
+    )
+
+    # SC-011 reproducibility: run the graph path a second time and compare
+    # non-latency metrics within 1% relative tolerance (FR-031/SC-011).
+    _, graph_metrics_2, _ = await run_graph_eval(
+        dataset, qdrant_store, embedding_provider, hybrid_collection,
+        session_factory, graph_triples, 5, sparse_encoder,
+    )
+    repro_report = check_reproducibility(graph_metrics, graph_metrics_2)
+    reproducibility = {
+        "non_latency_reproducible": repro_report["reproducible"],
+        "tolerance": repro_report["tolerance"],
+        "checks": repro_report["checks"],
+    }
+
+    # FR-030 hard-constraint gate (cross-domain leakage=0 / schema=100% /
+    # source-locatability=100%); required before enters_default_path.
+    hard_constraints = await measure_hard_constraints(
+        dataset, graph_per_query, leakage_events, session_factory,
+    )
+    hard_constraints["all_passed"] = (
+        hard_constraints["cross_project_leakage_events"] == 0
+        and hard_constraints["schema_validity_rate"] >= 1.0
+        and hard_constraints["source_locatability_rate"] >= 1.0
+    )
 
     baseline = compute_metrics(baseline_per_query, 5)
     graph = compute_metrics(graph_per_query, 5)
@@ -295,8 +302,56 @@ async def run_cross_reference_comparison(dataset_path: str, output_path: str) ->
     recall_non_decreasing = graph["recall_at_k"]["mean"] >= baseline["recall_at_k"]["mean"]
 
     enters_default_path = (
-        mrr_improvement >= 3.0 and ndcg_improvement >= 3.0 and recall_non_decreasing
+        mrr_improvement >= 3.0
+        and ndcg_improvement >= 3.0
+        and recall_non_decreasing
+        and hard_constraints["all_passed"]
     )
+
+    # FR-031: per-query baseline/graph rank + graph edge-path summary so rank
+    # changes are explainable (relation_type / hop / structure weight).
+    per_query = []
+    for i, entry in enumerate(dataset):
+        expected_set = set(entry.get("expected_evidence_ids") or [])
+        baseline_retrieved = baseline_per_query[i]["retrieved_evidence_ids"]
+        graph_retrieved = graph_per_query[i]["retrieved_evidence_ids"]
+        baseline_rank = next(
+            (r for r, rid in enumerate(baseline_retrieved, start=1)
+             if rid in expected_set), None,
+        )
+        graph_rank = next(
+            (r for r, rid in enumerate(graph_retrieved, start=1)
+             if rid in expected_set), None,
+        )
+        expected_first = (entry.get("expected_evidence_ids") or [None])[0]
+        g_meta = (
+            graph_per_query[i].get("graph_meta", {}).get(str(expected_first))
+            if expected_first else None
+        )
+        edge_path_summary = []
+        if g_meta:
+            for step in (g_meta.get("edge_path") or [])[:3]:
+                edge_path_summary.append({
+                    "hop": step.get("hop"),
+                    "edge_id": str(step.get("edge_id")),
+                    "relation_type": step.get("relation_type"),
+                    "direction": step.get("direction"),
+                    "is_hard": step.get("is_hard"),
+                })
+        per_query.append({
+            "query_index": i,
+            "query": entry["query"],
+            "expected_evidence_ids": entry["expected_evidence_ids"],
+            "retrieved_evidence_ids": graph_retrieved,
+            "scores": graph_per_query[i]["scores"],
+            "latency_ms": graph_per_query[i]["latency_ms"],
+            "status": graph_per_query[i]["status"],
+            "baseline_rank": baseline_rank,
+            "graph_rank": graph_rank,
+            "graph_recall_structure_weight": (g_meta or {}).get("structure_weight"),
+            "graph_recall_hop_count": (g_meta or {}).get("hop_count"),
+            "graph_edge_path_summary": edge_path_summary,
+        })
 
     report = {
         "report_type": "cross_reference_comparison",
@@ -315,8 +370,10 @@ async def run_cross_reference_comparison(dataset_path: str, output_path: str) ->
         "mrr_improvement_pct": round(mrr_improvement, 4),
         "ndcg_improvement_pct": round(ndcg_improvement, 4),
         "recall_non_decreasing": recall_non_decreasing,
+        "hard_constraints": hard_constraints,
+        "reproducibility": reproducibility,
         "enters_default_path": enters_default_path,
-        "per_query": graph_per_query,
+        "per_query": per_query,
     }
 
     out = Path(output_path)

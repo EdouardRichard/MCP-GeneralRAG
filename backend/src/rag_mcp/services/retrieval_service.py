@@ -1060,13 +1060,15 @@ class RetrievalService:
             version_id = int(payload.get("version_id", 0))
             source_version = version_number_map.get(version_id, 0)
 
-            # Determine scope type from the knowledge_scopes row;
-            # default to 'project' only when the row is unavailable.
+            # Determine scope type from the knowledge_scopes row; an
+            # unavailable row falls back to the empty string (domain-neutral
+            # fallback, 010 T058) — never a hardcoded 'project' default
+            # (FR-019 / Constitution XI).
             try:
                 scope_sid = int(payload.get("knowledge_scope_id", 0))
             except (ValueError, TypeError):
                 scope_sid = 0
-            scope_type = scope_type_map.get(scope_sid, "project")
+            scope_type = scope_type_map.get(scope_sid, "")
 
             content_excerpt = ""
             if chunk:

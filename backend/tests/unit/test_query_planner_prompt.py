@@ -48,7 +48,7 @@ class TestDomainNeutralBaseTemplateAudit:
 
     def test_base_template_has_no_se_examples(self):
         text = self._template().lower()
-        for term in ("method call", "foreign-key", "class", "table", "column", "constraint"):
+        for term in ("method call", "method", "foreign-key", "class", "table", "column", "constraint", "index", "view", "symbols", "fields", "declared", "configuration"):
             assert term not in text, f"SE example leaked into base template: {term!r}"
 
     def test_base_template_has_no_relation_vocab(self):
@@ -125,4 +125,47 @@ class TestPromptResolution:
         planner.execute({"query": "q"})
         assert planner._system_prompt == SE_PLANNER_PROMPT
         assert planner._relation_vocab == SE_VOCAB
+class TestSeProjectDatasetStructuralEquivalence:
+    """T015 structural layer at dataset scope (SC-001(2)/R5(2)).
+
+    Every entry of the agentic comparison corpus (base eval_dataset.json +
+    the 005 agentic batch, i.e. the combined set run by
+    run_agentic_comparison.py) resolves through the se-project domain profile
+    to the verbatim 1.0 planner prompt + 4-value relation vocabulary,
+    byte-identical to the 1.0 config-less default — so the structured planner
+    output (signals/relation_directions) is equivalent for the whole dataset,
+    not just the 3-item offline proxy.
+    """
+
+    def _combined_dataset(self):
+        import json
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[3]
+        with open(repo / "eval" / "eval_dataset.json", encoding="utf-8") as f:
+            base = json.load(f)
+        with open(repo / "eval" / "agentic_eval_dataset.json", encoding="utf-8") as f:
+            agentic = json.load(f)
+        return [*base, *agentic]
+
+    def test_combined_dataset_is_non_empty(self):
+        assert len(self._combined_dataset()) > 0
+
+    def test_all_items_byte_equivalent_to_1_0_default(self):
+        from rag_mcp.config.domain_profiles import SE_PLANNER_PROMPT
+
+        cfg = {
+            "distinct_domain_keys": ["se-project"],
+            "relation_vocab": SE_VOCAB,
+            "prompt_override": SE_PLANNER_PROMPT,
+        }
+        for entry in self._combined_dataset():
+            query = entry.get("query", "")
+            se = _make_planner()
+            se_out = se.execute({"query": query, "domain_planner_config": dict(cfg)})
+            legacy = _make_planner()
+            legacy_out = legacy.execute({"query": query})
+            assert se._system_prompt == legacy._system_prompt == SE_PLANNER_PROMPT
+            assert se._relation_vocab == legacy._relation_vocab == SE_VOCAB
+            assert se_out == legacy_out, f"structural drift for {query!r}"
 

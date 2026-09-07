@@ -96,7 +96,13 @@ class TestReportOperationalMetrics:
         assert report["agentic_metrics"]["total_cost"] > 0
 
     def test_dataset_size_unchanged(self, report):
-        assert report["dataset_size"] == 44
+        # dataset_size = eval_dataset.json + agentic_eval_dataset.json query
+        # counts at regeneration time. 005 pinned 44 (37 eval + 7 agentic);
+        # 008 grew eval_dataset.json to 56 queries, so the 009 T025
+        # regeneration of this committed report records 56 + 7 = 63. The pin
+        # tracks the committed report state (the same way the other tests in
+        # this file pin the gates that were verified at regeneration).
+        assert report["dataset_size"] == 63
         assert report["beneficiary_subset_size"] == 14
 
     def test_enters_default_path_true(self, report):

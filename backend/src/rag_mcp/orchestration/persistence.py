@@ -126,7 +126,7 @@ class AgenticPersistence:
                 "source_version": int(cand.get("source_version", 1)),
                 "source_position": str(cand.get("source_position", "")),
                 "knowledge_scope_id": int(cand.get("knowledge_scope_id", 0)),
-                "knowledge_scope_type": cand.get("knowledge_scope_type") or "project",
+                "knowledge_scope_type": cand.get("knowledge_scope_type") or "",
                 "project_id": int(cand.get("project_id", 0)),
                 "index_version": int(cand.get("index_version", 1)),
                 "referenced_by_agent": referenced_by_agent,

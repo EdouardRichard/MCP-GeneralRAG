@@ -200,3 +200,26 @@ Task: "T027 更新 backend/tests/contract/_graph_schema_helper.py 与 test_graph
 - 全部 [P] 标注以"互异文件 + 无未完成依赖"为前提；同文件任务串行。
 - 宪法硬约束（泄漏=0/Schema 100%/定位 100%/显式 scope）散布于 T041/T043/T044/T047 验收，实现期任务不豁免。
 - 每任务或逻辑组完成后提交；阶段末 Checkpoint 验证后再进下一阶段。
+
+---
+
+## Phase 7: Convergence
+
+**Goal**: 关闭 converge 评估发现的三类残留缺口——图路径 Project 假设残留、受益子集闸口报告不完整、词表校验 chokepoint 仅靠约定（无结构性兜底）。按严重度排序（HIGH 先行）。
+
+- [X] T053 [US4] 扩展 `backend/tests/integration/test_public_legal_graph_path.py`：补足 US4 AC1/AC3 检索侧断言——public+legal 域（无 Project 行）以 domain_scope 寻址发起 graph_enhanced 图增强检索成功、返回证据 `knowledge_scope_type="public"` 且可定位、并发另一图域检索跨域泄漏事件数=0（当前仅覆盖入库产边与 graph_ready 声明，检索侧未验证）per US4/AC1+AC3、SC-008、SC-003 (partial)
+- [X] T054 [US3] 补全 `eval/run_cross_reference_comparison.py` 与 `eval/cross_reference_comparison_report.json` 的受益闸口报告：加入硬约束闸口（跨域泄漏=0 / Schema 合法率=100% / 来源可定位率=100%，复用 `run_graph_comparison.measure_hard_constraints`）、SC-011 双跑可重复性段（复用 `check_reproducibility`）、FR-031 逐查询 baseline_rank/graph_rank 与图扩展路径摘要（relation_type/跳数/结构权重）；`enters_default_path` 判定并入硬约束全过 per FR-030、FR-031、SC-011 (partial)
+- [X] T055 [US1] 删除 `backend/src/rag_mcp/services/ingestion_service.py` 死方法 `_resolve_project_id` 及其"图边需 (knowledge_scope_id, project_id, index_version) 三元组、无 Project 跳过图提取"残留假设；同步修正 `_extract_graph_relations` 等图路径 docstring 中过时的 "isolation triple (scope, project, index_version)" 为 (knowledge_scope_id, index_version) per FR-019、宪法 XI、T050 (contradicts)
+- [X] T056 [US5] 消除编排/序列化路径的 Project 假设：`state_machine._step_receive_validate` 改为接受 project_scope 或 domain_scope 至少一个非空（domain_scope-only 不得误拒），并将 `entry._serialize_mcp_response` 与 `state_machine._supplement_parent_context` 的 `knowledge_scope_type` 默认值由 `"project"` 改为空串/真实值回退 per FR-024、宪法 XI (contradicts)
+- [X] T057 [US2] 固化词表校验"唯一写入路径"不变量并加守护：在 `graph/models.py` GraphEdge 文档明确 graph_edge 写入仅经 `PostgresGraphStore.write_edges`（词表校验权威，ORM validates 与 0074 宽模式 CHECK 仅做 pattern+保留字兜底），新增契约/单元测试断言越界词表值仅能经 write_edges 拒绝、生产代码无绕过 write_edges 的 graph_edge 写入 per FR-009、SC-006 (partial)
+
+---
+
+## Phase 8: Convergence
+
+**Goal**: 关闭二次 converge 评估发现的四类残留缺口——检索证据路径 `knowledge_scope_type` 回退仍硬编码 "project"（T056 仅覆盖 entry/state_machine，遗漏 retrieval_service）、词表校验唯一写入路径缺自动化防绕过守护、legal 内置档案 default_capabilities 与空词表（R11 补救）不自洽、图路径 Project 假设 docstring 残留。按严重度排序（MEDIUM 先行）。
+
+- [X] T058 [US4] 消除 `backend/src/rag_mcp/services/retrieval_service.py:1069` 的 Project 假设：`_build_evidence_items` 中 `scope_type = scope_type_map.get(scope_sid, "project")` 的 `knowledge_scope_type` 回退默认值由 `"project"` 改为 `""`（真实值/空串回退），与 entry.py/state_machine.py/retrieval_pipeline.py 已采用的领域中立回退口径一致；补断言 scope 行缺失时证据 knowledge_scope_type 不落 "project" per FR-019、FR-024、宪法 XI、T056 (partial)
+- [X] T059 [US2] 补齐词表校验"唯一写入路径"防绕过守护：新增契约/单元测试以源级扫描断言生产代码无绕过 `PostgresGraphStore.write_edges` 的 graph_edge 写入（`INSERT INTO graph_edge` / ORM `GraphEdge(...)` + session.add 仅存在于 write_edges 与测试夹具；沿 `test_graph_expansion_vocab.test_no_bidirectional_default_constant` 的源级守卫范式），使 FR-009/SC-006 单 chokepoint 不变量对未来绕过可回归拦截 per T057 (partial)
+- [X] T060 [US3] 修复 legal 内置档案 `default_capabilities` 与空词表（R11 补救）的自洽性：`backend/src/rag_mcp/config/domain_profiles.py` legal 条目 `graph_relations={}` 但 `default_capabilities.has_graph=True` 且 `retrieval_modes` 含 `graph_enhanced`/`agentic`，与 FR-030"图路径不进入 legal 默认检索"矛盾；改为 `has_graph: False` + `retrieval_modes: ["dense","hybrid"]`（与 generic 空词表口径一致）或使能力声明从 graph_relations 派生 per FR-030、SC-002、T040 (contradicts)
+- [X] T061 [US1] 修正图路径 Project 假设残留 docstring：`backend/src/rag_mcp/api/knowledge_sources.py:217` "Graph rows are keyed by (knowledge_scope_id, project_id, index_version)" 改为 "(knowledge_scope_id, index_version)"；`backend/src/rag_mcp/orchestration/state_machine.py:4` "receive_validate ... (project_scope required)" 改为 "project_scope or domain_scope" per FR-019、FR-023、FR-024、宪法 XI (partial)

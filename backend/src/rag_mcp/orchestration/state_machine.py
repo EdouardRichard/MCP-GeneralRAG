@@ -1,7 +1,8 @@
 """LangGraph-style deterministic state machine skeleton (T013, FR-004/FR-005/FR-006).
 
 Nine-step main state flow with bounded supplementary retrieval loop:
-  1. receive_validate   - Receive and validate request (project_scope required)
+  1. receive_validate   - Receive and validate request (explicit
+                          project_scope or domain_scope required, FR-024)
   2. resolve_scope      - Resolve knowledge scope
   3. query_planning      - Query planning (decompose sub_problems, select signals)
   4. parallel_retrieval   - Parallel retrieval (Dense/Sparse/graph)
@@ -796,7 +797,7 @@ class AgenticStateMachine:
                 "source_version": parent.get("source_version", 1),
                 "source_position": parent.get("position_path", ""),
                 "knowledge_scope_id": parent.get("knowledge_scope_id", 0),
-                "knowledge_scope_type": parent.get("knowledge_scope_type", "project"),
+                "knowledge_scope_type": parent.get("knowledge_scope_type", ""),
                 "project_id": parent.get("project_id", 0),
                 "index_version": parent.get("index_version", 1),
                 "content_excerpt": parent.get("content_excerpt", ""),
@@ -919,13 +920,15 @@ class AgenticStateMachine:
         return view
 
     def _step_receive_validate(self, context: dict[str, Any]) -> None:
-        """Step 1: Receive and validate request (project_scope required, FR-021)."""
+        """Step 1: Receive and validate request (explicit scope required, FR-024)."""
         self._record_step("receive_validate")
-        if not self._project_scope:
-            raise ValueError("project_scope is required (FR-021, Constitution I)")
+        if not self._project_scope and not self._knowledge_scope_ids:
+            raise ValueError(
+                "explicit project_scope or domain_scope is required (FR-024, Constitution I)"
+            )
 
     def _step_resolve_scope(self, context: dict[str, Any]) -> None:
-        """Step 2: Resolve knowledge scope from project_scope."""
+        """Step 2: Resolve knowledge scope from project_scope/domain_scope."""
         self._record_step("resolve_scope")
 
     def _harden_sub_problems(

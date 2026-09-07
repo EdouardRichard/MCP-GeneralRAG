@@ -1,7 +1,7 @@
 {
   "report_type": "quickstart_acceptance",
   "feature": "001-minimum-rag-mcp-loop",
-  "generated_at": "2026-09-06T19:40:37.959221+00:00",
+  "generated_at": "2026-09-07T05:49:54.315074+00:00",
   "scenarios": [
     {
       "id": "VS-001",

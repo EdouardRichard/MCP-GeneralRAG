@@ -59,11 +59,16 @@ def test_legal_has_empty_vocab_r11_remedy():
     assert BUILTIN_DOMAIN_PROFILES["legal"]["graph_relations"] == {}
 
 
-def test_legal_is_builtin_with_graph_capability():
+def test_legal_is_builtin_without_graph_capability():
+    """R11 declarative remedy: empty vocabulary means NO graph capability
+    declaration (has_graph False, no graph_enhanced mode, generic-style
+    dense/hybrid modes) — the graph path does not enter the legal default
+    retrieval (FR-030/SC-002, 010 T060)."""
     legal = BUILTIN_DOMAIN_PROFILES["legal"]
     assert legal["is_builtin"] is True
-    assert legal["default_capabilities"]["has_graph"] is True
-    assert "graph_enhanced" in legal["default_capabilities"]["retrieval_modes"]
+    assert legal["default_capabilities"]["has_graph"] is False
+    assert "graph_enhanced" not in legal["default_capabilities"]["retrieval_modes"]
+    assert legal["default_capabilities"]["retrieval_modes"] == ["dense", "hybrid"]
 
 
 def test_slugify_lexical():

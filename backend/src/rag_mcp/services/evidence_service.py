@@ -259,7 +259,7 @@ class EvidenceService:
         knowledge_scope_id, knowledge_scope_type, status, parent_context) is
         ever changed or removed (FR-011, Constitution VII).
 
-        - A GraphEdge (hard relation) is annotated as *verifiable* evidence
+        - A GraphEdge hard relation is annotated as *verifiable* evidence
           (``type=hard``, ``is_hard=true``) carrying its deterministic
           ``parse_evidence`` (AST/DDL provenance) so the consumer can audit
           how the edge was extracted.
@@ -447,4 +447,4 @@ class EvidenceService:
             )
         )
         scope_type = result.scalar_one_or_none()
-        return scope_type or "project"
+        return scope_type or ""

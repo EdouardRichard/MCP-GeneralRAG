@@ -186,3 +186,12 @@
 - 等价性/回归为硬验收，不设质量阈值、不作质量声明（对照评测：无——编排泛化）。
 - 契约/隔离/目标宿主测试已覆盖（Phase 3 契约测试、Phase 4 T027 隔离、T029 目标宿主）。
 - 提交粒度：每任务或逻辑组一次提交；Phase 末尾 checkpoint 独立验证。
+---
+
+## Phase 5: Convergence
+
+- [X] T031 中性化 DOMAIN_NEUTRAL_BASE_TEMPLATE 的 SE 残留举例词——将 "declared properties" / "configuration values" / "'what/which fields does X have'" 中的 "fields" 等 SE 风格词改为抽象/域中立表述（仅抽象概念「标识符/定义/关系」），并扩宽 T002 域中立审计词表（补 fields/configuration/properties/declared 等）于 backend/src/rag_mcp/config/domain_profiles.py 与 backend/tests/unit/test_query_planner_prompt.py per FR-001/US1/AC1/SC-003 (partial)
+- [X] T032 将 005 agentic 回归闸口终态指标容差边界由绝对 0.01（ma < mb - 0.01）对齐为 1% 相对容差（ma < mb * 0.99），并明确边界语义（one-sided 非回归 vs two-sided 一致）于 eval/run_agentic_comparison.py per SC-001(3)/R5(3) (partial)
+- [X] T033 落地结构输出层逐条 diff——记录 1.0 基线 signals/relation_directions 输出并与 009 输出逐条 diff（当前仅 offline proxy 3 条合成 sub_problems，见 backend/tests/unit/test_query_planner_schema.py TestSeProjectStructuralEquivalence），于 eval/run_agentic_comparison.py 或专用 runner per SC-001(2)/R5(2) (partial)
+- [X] T034 域中立化 evidence_analyst 文档字符串 "Project/public conflicts" → "Domain/public conflicts"（对齐宪法 II "Domain Facts Take Priority" 更名，无 SE 假设）于 backend/src/rag_mcp/agents/evidence_analyst.py per FR-017/Constitution II (partial)
+

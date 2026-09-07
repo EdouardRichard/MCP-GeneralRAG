@@ -149,8 +149,8 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
         "graph_relations": {},
         "prompt_overrides": None,
         "default_capabilities": {
-            "retrieval_modes": ["dense", "hybrid", "graph_enhanced", "agentic"],
-            "has_graph": True,
+            "retrieval_modes": ["dense", "hybrid"],
+            "has_graph": False,
         },
         "is_builtin": True,
     },

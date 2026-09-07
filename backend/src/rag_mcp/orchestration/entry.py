@@ -344,7 +344,7 @@ def _serialize_mcp_response(
             "source_version": source_version,
             "source_position": c.get("source_position") or "",
             "knowledge_scope_id": str(c.get("knowledge_scope_id", "")),
-            "knowledge_scope_type": c.get("knowledge_scope_type") or "project",
+            "knowledge_scope_type": c.get("knowledge_scope_type") or "",
             "relevance_score": clamp01(c.get("score", 0.0)),
         })
 

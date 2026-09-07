@@ -40,7 +40,17 @@ _ALL_DIRECTIONS = frozenset({"out", "in"})
 
 
 class GraphEdge(Base):
-    """Hard relation edge (deterministic AST/DDL extraction, is_hard=true)."""
+    """Hard relation edge (deterministic AST/DDL/cross-reference, is_hard=true).
+
+    Vocabulary enforcement layering (010, FR-009 / research R5): this model's
+    ``@validates("relation_type")`` enforces only the wide pattern plus the
+    reserved-word blacklist ({other_hard, inferred}). Domain-vocabulary
+    membership (relation_type ∈ the requesting domain's graph_relations keys)
+    is enforced at the SINGLE write chokepoint
+    ``PostgresGraphStore.write_edges(allowed_relation_types=...)`` — every
+    production graph_edge write flows through it; a direct ORM write outside
+    that path is not vocabulary-validated (the model has no domain context).
+    """
 
     __tablename__ = "graph_edge"
     __table_args__ = (
@@ -86,6 +96,12 @@ class GraphEdge(Base):
 
     @validates("relation_type")
     def _validate_relation_type(self, _key: str, value: str) -> str:
+        """Model-level backstop only: wide pattern + reserved-word blacklist.
+
+        Domain-vocabulary membership is NOT checked here (the model has no
+        domain context); it is enforced at PostgresGraphStore.write_edges
+        (010, research R5 / data-model §2.2).
+        """
         if value == "inferred":
             raise ValueError(
                 "graph_edge (hard relation) cannot use relation_type='inferred' "

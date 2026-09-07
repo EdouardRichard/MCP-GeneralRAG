@@ -62,10 +62,10 @@ ALTER TABLE graph_edge ADD CONSTRAINT chk_graph_edge_relation_type
 | `graph_relations` | `{"references": ["out","in"], "referenced_by": ["out","in"]}` | FR-013 成对词表（Q2） |
 | `chunk_type_extensions` | `null` | markdown 切片沿用 section 词表 |
 | `prompt_overrides` | `null` | 走 009 域中立基础模板 + 词表槽位注入（R11） |
-| `default_capabilities` | `{"retrieval_modes": ["dense","hybrid","graph_enhanced","agentic"], "has_graph": true}` | 与 se-project 同构 |
+| `default_capabilities` | 受益闸口通过：`{"retrieval_modes": ["dense","hybrid","graph_enhanced","agentic"], "has_graph": true}`（与 se-project 同构）；闸口未达（010 交付形态，T060）：`{"retrieval_modes": ["dense","hybrid"], "has_graph": false}` | R11 声明式补救：能力声明与空词表自洽 |
 | `is_builtin` | `true` | 007 只读保护 + 启动同步自动生效 |
 
-种子落 `config/domain_profiles.py::BUILTIN_DOMAIN_PROFILES`（第三条目，se-project/generic 原样不动）；`DomainProfileService.sync_builtin_profiles` 负责插行与漂移修复（升级部署零迁移）。**受益闸口失败时的交付形态**：`graph_relations = {}`（空词表 → cross_reference 不触发 → 图路径不进 legal 默认检索；提取器与注册表照常交付，自定义档案可显式启用，research R11 声明式补救）。`default_capabilities.has_graph` 维持 true：图路径可用性由 graph_ready 门控自然收敛（空词表 → 0 硬边 → 不可声明），无需新增开关。
+种子落 `config/domain_profiles.py::BUILTIN_DOMAIN_PROFILES`（第三条目，se-project/generic 原样不动）；`DomainProfileService.sync_builtin_profiles` 负责插行与漂移修复（升级部署零迁移）。**受益闸口失败时的交付形态**（010 交付形态，T060 修订）：`graph_relations = {}`（空词表 → cross_reference 不触发 → 图路径不进 legal 默认检索；提取器与注册表照常交付，自定义档案可显式启用，research R11 声明式补救）。`default_capabilities.has_graph = false` 且 `retrieval_modes = ["dense","hybrid"]`：能力声明与空词表自洽（与 generic 空词表口径一致，T060）；图路径可用性另由 graph_ready 门控自然收敛（空词表 → 0 硬边 → 不可声明），无需新增开关。
 
 ---
 

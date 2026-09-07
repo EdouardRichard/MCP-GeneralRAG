@@ -101,3 +101,53 @@ async def test_public_generic_cannot_declare_graph_ready(db_session, builtin_pro
     # edges -> graph_ready declaration must be refused (FR-020/SC-009).
     with pytest.raises(ValueError):
         await svc.ingest(source_id, graph_ready=True)
+
+
+@pytest.mark.asyncio
+async def test_public_legal_graph_expansion_and_isolation(db_session, builtin_profiles):
+    """US4 AC1/AC3: graph-enhanced traversal works for a Project-less public
+    scope and never leaks across scopes (knowledge_scope_id is the sole graph
+    isolation key; no Project row is required, FR-019/FR-023/SC-003/SC-008)."""
+    from rag_mcp.graph.expansion import GraphExpansionEngine
+    from rag_mcp.graph.store.base import GraphScope
+    from rag_mcp.services.ingestion_service import IngestionService
+
+    domain_key = await setup_legal_eval_domain(db_session)
+    await db_session.commit()
+
+    # Scope A: public + legal (references/referenced_by), no Project row.
+    sid_a = await _public_scope(db_session, domain_key)
+    src_a = generate_id()
+    await upload_source_file(db_session, sid_a, src_a, "law_a.md", _LEGAL_MD, "markdown")
+    await db_session.commit()
+    await IngestionService(db_session, FakeEmbeddingProvider(), MockQdrantStore())\
+        .ingest(src_a, graph_ready=True)
+
+    # Scope B: an isolation peer public + legal scope with the same corpus.
+    sid_b = await _public_scope(db_session, domain_key)
+    src_b = generate_id()
+    await upload_source_file(db_session, sid_b, src_b, "law_b.md", _LEGAL_MD, "markdown")
+    await db_session.commit()
+    await IngestionService(db_session, FakeEmbeddingProvider(), MockQdrantStore())\
+        .ingest(src_b, graph_ready=True)
+
+    rows_a = (await db_session.execute(text(
+        "SELECT chunk_id, position_path FROM chunks WHERE knowledge_scope_id = :k"
+    ), {"k": sid_a})).fetchall()
+    first_a = next(cid for cid, pos in rows_a if pos and "第一条" in pos)
+    second_a = next(cid for cid, pos in rows_a if pos and "第二条" in pos)
+    chunk_ids_b = {
+        cid for (cid,) in (await db_session.execute(text(
+            "SELECT chunk_id FROM chunks WHERE knowledge_scope_id = :k"
+        ), {"k": sid_b})).fetchall()
+    }
+
+    engine = GraphExpansionEngine(db_session)
+    results = await engine.expand([first_a], GraphScope(sid_a, 1), hop=2, budget=20)
+    reached = {r.chunk_id for r in results}
+
+    # AC1: cross-reference traversal reaches the referenced clause for a
+    # public scope with no Project row.
+    assert second_a in reached, "cross-reference traversal must reach the referenced clause"
+    # AC3: graph expansion must not surface any chunk from the peer scope.
+    assert reached.isdisjoint(chunk_ids_b), "graph expansion must not leak across scopes"

@@ -214,8 +214,9 @@ async def _purge_scope_derived_data(
 async def _purge_source_graph_relations(session, source_id: int) -> None:
     """Purge graph derived data owned by a deleted source's versions (004).
 
-    Graph rows are keyed by (knowledge_scope_id, project_id, index_version)
-    where index_version equals the owning version_number. Deleting a source
+    Graph rows are keyed by (knowledge_scope_id, index_version) —
+    knowledge_scope_id is the sole graph isolation key (007 FR-018, 010
+    FR-023) — where index_version equals the owning version_number. Deleting a source
     removes the graph rows of its versions; other versions/scopes keep theirs
     (FR-010/FR-016). Expansion-path rows are removed first because they
     reference chunks.

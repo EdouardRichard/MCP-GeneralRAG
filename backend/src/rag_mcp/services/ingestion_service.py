@@ -903,22 +903,6 @@ class IngestionService:
     # 004: graph relation extraction at ingest (FR-001/FR-003)
     # ------------------------------------------------------------------
 
-    async def _resolve_project_id(self, scope_id: int) -> int | None:
-        """Resolve the owning project_id of a knowledge scope, if any.
-
-        Graph edges require the full isolation triple
-        (knowledge_scope_id, project_id, index_version). Scopes without a
-        project (e.g. reserved public scopes) skip graph extraction.
-        """
-        from rag_mcp.models.project import Project
-
-        result = await self._session.execute(
-            select(Project.project_id).where(
-                Project.knowledge_scope_id == scope_id
-            ).limit(1)
-        )
-        return result.scalar_one_or_none()
-
     async def _extract_graph_relations(
         self,
         source: KnowledgeSource,
@@ -981,7 +965,7 @@ class IngestionService:
                     extractor_chunks = chunk_dicts
                 edges = extractor.extract(redacted_text, extractor_chunks, scope)
                 # Stamp the ingested version number onto every edge so the
-                # isolation triple (scope, project, index_version) matches the
+                # isolation key (knowledge_scope_id, index_version) matches the
                 # published version it belongs to.
                 for edge in edges:
                     edge["version"] = version_number
