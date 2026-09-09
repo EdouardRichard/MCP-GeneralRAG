@@ -37,3 +37,6 @@ eval/_*.log
 # Agentic eval LLM response cache (record-replay fixture, T070)
 eval/.agentic_llm_cache/
 docs/1.0-iteration-roadmap.md
+
+# 项目本地模型（多 GB，不入库）
+.models/

@@ -1,34 +1,248 @@
-# docsToCode
+# docsToCode — 通用多知识域 RAG MCP 检索系统
 
-面向 ChatGPT App（原 Codex）、DeepSeek Harness 与 Claude Code 的多知识域 RAG MCP 检索系统。
+把你的**项目文档、源代码、接口定义、数据库 DDL、法规合同**变成 AI 可检索、可溯源的知识库。外部 AI Agent（DeepSeek Harness / ChatGPT App / Claude Code）通过 **MCP 协议**调用本系统，在写需求、做设计、写代码、生成测试时拿到**带来源定位的真实证据**——不幻觉、不跨项目串库、引用可核对。
 
-## 已交付系统（001–011，2.0 收官）
+> 本系统只做 RAG 的 **R（检索）**：它不生成任何产物，只负责"在正确的知识域里找到可信的证据"，生成交给你的 AI 客户端。
 
-后端（Python 3.12 / FastAPI / LangGraph / PostgreSQL / Qdrant）：
+## 系统能干什么
 
-- **MCP 检索四路径**：Dense（bge-m3）/ Hybrid（BM25+jieba 稀疏 + RRF 融合 + bge-reranker-v2-m3 重排）/ Graph Enhanced（硬关系扩展 + 结构权重）/ Agentic（九步状态机编排）
-- **多知识域**：双轴模型（project/public 结构轴 × se-project/generic/personal/legal 语义轴），domain_scope 三形态寻址（ID/slug/type:name）+ list_knowledge_domains 发现
-- **转换层摄入**：FormatHandler 注册表统一分发，markdown/java/openapi/ddl/go/python/word/pdf 原生解析 + txt/html/csv/json/yaml/xml/xlsx/pptx/eml 九格式转换层；凭据脱敏；结构感知切片与定位前缀（标题路径/page:N/sheet:/path:/msg:）
-- **图关系**：GraphExtractor 插件注册表（Java 调用图、DDL 外键、交叉引用），确定性硬关系 + 受益闸口
-- **运行时**：writer/reader 双实例形态、实例注册、超时档案、目标宿主兼容（DeepSeek Harness 必过参考客户端）
+- **多知识域隔离**：项目域 / 公共域 × 软件工程 / 通用文档 / 个人知识库 / 法律合规，每域独立向量库与元数据，跨域检索必须显式声明，串库率实测为 0
+- **17 种格式一键入库**：Markdown、Java、Python、Go、OpenAPI、DDL、Word、PDF（原生结构解析，符号/章节/页级定位）+ txt/html/csv/json/yaml/xml/xlsx/pptx/eml（markitdown 转换层）
+- **四条检索路径**：语义（Dense）→ 混合（BM25+RRF+Rerank）→ 图增强（调用图/外键/交叉引用扩展）→ Agentic（LLM 拆题+证据评估编排）
+- **三个只读 MCP 工具**：`search_knowledge`（检索）、`get_evidence`（展开全文+父级上下文）、`list_knowledge_domains`（发现知识域）
+- **每条证据可溯源**：`source_position` 精确定位（`com.foo.Bar#method` / `page:5 §3.2` / `# 章节路径` / `sheet:Sheet1`），版本号随证据返回
+- **安全设计**：入库前凭据脱敏（密钥值永不进检索）、提示注入结构免疫、loopback 默认部署
+- **Web 管理端**：项目/知识源/域档案管理，SSE 实时入库状态，中英文切换
 
-前端（React 18 + TypeScript + antd 5）：Web 管理端（项目/知识源/域档案管理），中英文切换。
+```mermaid
+flowchart LR
+    U["你"] -->|"上传文档/代码"| W["Web 管理端 :8000"]
+    W --> SYS["入库管线<br/>脱敏→切片→向量化→图关系→发布"]
+    AI["AI Agent<br/>(DeepSeek Harness 等)"] -->|"MCP 检索"| MCP["MCP 检索面 :8080"]
+    SYS --> DB[("PostgreSQL + Qdrant")]
+    MCP --> DB
+    MCP -->|"带定位的证据"| AI
+```
 
-评测体系（eval/）：固定评测集（001–006 各口径 + 011 两域数据集）、基线与对照报告、六组全集回归口径、硬指标三件套实测（跨域串库=0 / Schema 100% / 定位 100%）、可重复性检查（非延迟指标 1% 容差）。重建与重跑方法见 [eval/README.md](./eval/README.md)。
+更多设计细节见 [docs/技术架构说明书.md](./docs/技术架构说明书.md)；系统能力与交付史见 [docs/1.0-iteration-roadmap.md](./docs/1.0-iteration-roadmap.md)。
 
-## 治理与规格
+---
 
-- GitHub Spec Kit v1.0.1 脚手架（/speckit-* 工作流：clarify → plan → checklist → tasks → analyze → implement → converge）
-- 项目 Constitution（v1.3.0：十一条核心原则 + 五条硬约束，含 Domain Neutrality）
-- 2.0 演进蓝图（通用 RAG 演进蓝图.md，批准即冻结为架构基线）与定稿核销记录（docs/2.0-finalization.md）
-- 全部 Feature 规格（specs/001–011）：spec / plan / research / data-model / quickstart / tasks / contracts
+## 前置准备
 
-## 当前边界
+### 环境要求
 
-- MCP 检索面只读（get_evidence / search_knowledge / list_knowledge_domains 均为只读工具）。
-- 单管理员、loopback 部署（认证多用户、Neo4j、OCR 等按蓝图 §9 触发条件演进）。
-- 检索质量优化按对照基线立项（后续 Feature 进 plan 前须相对基线声明目标）。
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| Python | ≥ 3.12 | 后端 |
+| Docker / Docker Compose | 任意近期版本 | 起 PostgreSQL 与 Qdrant |
+| Node.js + pnpm | Node 18+ / pnpm 8+ | 仅前端开发需要（用托管构建版则不需要） |
+| 磁盘 | ≥ 5 GB | 两个模型约 2.5 GB + 数据 |
+| 内存 | 建议 16 GB | CPU 模式跑 bge-m3 + reranker |
 
-系统总蓝图位于：
+### 第一步：启动数据库
 
-`docs/superpowers/specs/2026-08-26-ai-engineering-rag-mcp-design.md`
+```bash
+docker compose up -d
+```
+
+将启动 **PostgreSQL 16**（localhost:5432，库 `rag_mcp`，用户/密码 postgres/postgres）与 **Qdrant**（localhost:6333）。健康检查通过后进行下一步。
+
+### 第二步：安装后端依赖
+
+```bash
+cd backend
+pip install -e ".[ml]"        # ml 附带 sentence-transformers（Embedding/Reranker 必需）
+```
+
+### 第三步：下载模型到指定目录
+
+模型统一放在仓库根目录的 `.models/huggingface/`。设置 `HF_HOME` 指向它，再执行预下载：
+
+```bash
+# 仓库根目录下执行（Windows PowerShell）
+$env:HF_HOME = "$(Resolve-Path .)/.models/huggingface"
+
+# Linux / macOS
+export HF_HOME="$(pwd)/.models/huggingface"
+```
+
+```bash
+# 预下载两个模型（bge-m3 约 2GB；bge-reranker-v2-m3 约 560MB）
+python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('BAAI/bge-m3'); CrossEncoder('BAAI/bge-reranker-v2-m3')"
+```
+
+> - 国内网络可加镜像：`$env:HF_ENDPOINT = "https://hf-mirror.com"`（或 `export HF_ENDPOINT=...`）
+> - 不预下载也可以：首次启动会自动下载，但 MCP 进程启动预热需等待较长时间
+> - **`HF_HOME` 需要在启动后端服务的同一终端中生效**（或写入系统环境变量）
+
+### 第四步：数据库初始化（迁移）
+
+```bash
+cd backend
+alembic upgrade head          # 创建全部 18 张表（001→0074 共 20 个迁移）
+```
+
+> 可选：`cp .env.example .env` 按需修改连接信息；默认值与 docker-compose 一致，本机部署无需修改。
+
+### 第五步：前端（可选）
+
+```bash
+cd frontend
+pnpm install
+pnpm build                    # 构建产物由管理面 :8000 自动托管（推荐）
+# 开发模式（热更新，:5173，自动代理 /api → :8000）：
+# pnpm dev
+```
+
+---
+
+## 如何使用此系统
+
+### 启动服务（两个进程，顺序启动）
+
+```bash
+# 终端 1 —— 管理面（writer，REST :8000，含入库/迁移/清理/Web 托管）
+cd backend
+python -m rag_mcp.server
+
+# 终端 2 —— MCP 检索面（只读，:8080；启动时加载模型约 30–60 秒）
+cd backend
+python _run_mcp.py
+```
+
+> - 两个终端都需 `HF_HOME` 生效（模型预热）
+> - 想扩展只读检索吞吐：`python _run_mcp.py --mode reader` 可再起多个 reader 实例（共享同一 PG/Qdrant）
+> - 误启第二个管理面会因写者租约被拒绝启动——这是设计行为，防止双写
+
+### 使用流程
+
+```mermaid
+flowchart LR
+    A["① 创建项目<br/>Web :8000"] --> B["② 上传文件<br/>拖拽 17 种格式"]
+    B --> C["③ 等待状态<br/>uploaded→processing→published"]
+    C --> D["④ AI 客户端经 MCP 检索<br/>domain_scope 用项目 slug"]
+    D --> E["⑤ get_evidence<br/>展开核对后引用"]
+```
+
+1. **创建项目**：浏览器打开 `http://127.0.0.1:8000`（构建托管版）或 `http://localhost:5173`（开发版），创建项目（可填别名/仓库路径，创建后自动分配 **slug**，MCP 检索就用它）
+2. **上传知识源**：进入项目详情，拖拽上传文件（单文件 ≤20MB），入库自动触发
+3. **观察状态**：列表实时刷新（SSE）；`published` 即可检索；`failed` 显示原因，可点重试
+4. **配置 AI 客户端**（下一节）→ 开始检索
+
+### REST API 直用（不经 MCP 的用法）
+
+```bash
+# 创建项目
+curl -X POST http://127.0.0.1:8000/api/projects -H "Content-Type: application/json" \
+  -d '{"name": "my-project", "alias": "my-project"}'
+
+# 上传文件（返回 source_id，后台异步入库）
+curl -X POST "http://127.0.0.1:8000/api/knowledge-sources?scope_id=<知识域ID>" \
+  -F "file=@UserService.java"
+
+# 查看入库状态与失败原因
+curl "http://127.0.0.1:8000/api/knowledge-sources?scope_id=<知识域ID>"
+
+# 域档案管理（自定义领域：声明格式集/图词表/planner 提示词）
+curl http://127.0.0.1:8000/api/projects/domain-profiles
+
+# 运行指标（请求量/四态分布/P50P95/provider 用量）
+curl http://127.0.0.1:8000/runtime/metrics
+```
+
+### 四条检索路径的开关（默认够用，进阶可选）
+
+| 路径 | 启用方式 | 适用 |
+|---|---|---|
+| Dense / Hybrid | 无需配置（数据声明能力后自动 Hybrid） | 默认 |
+| 图增强 | `.env` 中 `GRAPH_ENHANCED_RETRIEVAL_ENABLED=true`，且知识源重处理时勾选 graph_ready | "谁调用了 X / 哪些表引用 X" 类关系问题 |
+| Agentic | `.env` 中 `AGENTIC_RETRIEVAL_ENABLED=true`（需配置 LLM_BASE_URL 等远程 LLM） | 复杂多跳问题（LLM 拆题+证据评估） |
+
+---
+
+## 搭配 DeepSeek Harness 使用（推荐提示词格式）
+
+### MCP 配置
+
+在 Harness 的 MCP 配置（`mcpServers`）中加入：
+
+```json
+{
+  "mcpServers": {
+    "rag-mcp": {
+      "url": "http://127.0.0.1:8080/mcp"
+    }
+  }
+}
+```
+
+连接后 AI 即可看到三个工具。**建议把下面这段提示词放进系统提示 / 项目指令（如 CLAUDE.md、AGENTS.md 或会话开场），教 AI 正确使用知识库：**
+
+### 推荐系统提示词（直接复制）
+
+```markdown
+# 项目知识库使用规范（rag-mcp）
+
+你可以通过 MCP 服务器 rag-mcp 访问项目知识库，请严格遵守：
+
+1. 【先发现】会话开始涉及项目知识时，先调用 list_knowledge_domains
+   查看可用知识域，记下目标域的 slug。
+2. 【必须带作用域】调用 search_knowledge 时必须传 domain_scope（填 slug
+   或数字 ID），禁止无作用域检索；跨库问题可传多个域。
+3. 【先检索后回答】凡涉及项目事实——API、表结构、类与方法、配置、
+   业务规则、文档条款——必须先检索证据再回答，禁止凭训练记忆猜测。
+4. 【展开核对】对将要写进产物的关键证据（代码引用、字段清单、条款），
+   先用 get_evidence 展开全文核对，摘录与全文冲突时以全文为准。
+5. 【注明来源】引用证据时注明其 source_position（如
+   com.foo.UserService#validateToken 或 page:5 §3.2），便于人工核对。
+6. 【诚实对待缺口】completion_status 为 partial / no_evidence 时，如实
+   说明证据缺口（gaps 字段），明确标注"未在知识库中找到依据"的部分，
+   不要编造。
+7. 【区分事实与推断】证据若带 relation 且 is_hard=false，是系统推断的
+   软关系，引用时须注明"推断"。
+```
+
+### 推荐用户提示词模板
+
+```
+在知识域「{slug}」中检索：{你的问题}
+```
+
+场景示例：
+
+```
+在知识域「my-project」中检索：Order 表有哪些字段？各字段类型和约束是什么？
+
+在知识域「order-service」中检索：谁调用了 validateToken 方法？给出调用方与调用位置。
+
+跨「order-service」和「pay-service」两个知识域检索：两边的鉴权方案有什么差异？
+```
+
+### 不使用 Harness 的其他用法
+
+- **任何 MCP 客户端**（ChatGPT App / Claude Code / Cursor 等）：按各自的 Streamable HTTP MCP 配置方式接入 `http://127.0.0.1:8080/mcp` 即可，工具契约完全一致
+- **脚本直调**：MCP 端点兼容标准 JSON-RPC（initialize → tools/call），可用任何 MCP SDK 调用
+- **评测/批处理**：`eval/` 目录内置固定评测集与对照运行器（`run_eval.py` / `run_comparison.py` 等），可对任意知识域复现检索质量指标，方法见 [eval/README.md](./eval/README.md)
+
+---
+
+## 常见问题
+
+| 现象 | 原因与处理 |
+|---|---|
+| MCP 启动卡在"Loading embedding model" | 首次加载模型正常（30–60s）；确认 `HF_HOME` 生效、模型已预下载 |
+| 误启第二个管理面被拒 | 单写者租约保护（预期行为）；日志会给出当前持有者 |
+| reader 启动报 schema 版本不一致 | 先启动 writer 管理面执行迁移（`alembic upgrade head`），再起 reader |
+| 上传后状态一直 failed | 详情列有失败原因：常见为格式不支持（看注册表支持列表）、空文件、PDF 无文本层（扫描件需先 OCR） |
+| 检索返回 no_evidence | 确认知识源已 published、domain_scope 传了正确 slug（先用 list_knowledge_domains 核对） |
+| 检索返回 partial | 某条子路径降级（见 gaps/failed_paths）；证据仍可用，注意缺口 |
+| 凭据会不会被检索出去 | 不会：入库前 api-key/password/token/secret 的值已替换为 `<api-key>` 等占位符，字段名保留 |
+
+## 项目结构与治理（速览）
+
+- `backend/` Python 后端（FastAPI + FastMCP + LangGraph）｜ `frontend/` React 管理端 ｜ `eval/` 评测集与报告 ｜ `specs/` 001–011 Feature 规格 ｜ `docs/` 架构说明书与路线图
+- **已交付（001–011，2.0 收官）**：四条检索路径（Dense / Hybrid+RRF+Rerank / Graph Enhanced / Agentic 九步状态机）、双轴多知识域、FormatHandler 注册表 + markitdown 转换层、GraphExtractor 插件注册表、writer/reader 单写多读运行态、固定评测集 + 三重闸口（硬指标实测：跨域串库=0 / Schema 合法率 100% / 来源可定位率 100%）
+- 开发流程：GitHub Spec Kit 工作流（specify → clarify → plan → tasks → implement → converge），项目 Constitution v1.3.0（11 条原则 + 5 条硬约束，含 Domain Neutrality）凌驾全部工件；2.0 演进蓝图与定稿核销见 [通用RAG演进蓝图.md](./通用RAG演进蓝图.md)、[docs/2.0-finalization.md](./docs/2.0-finalization.md)
+- 当前边界：MCP 检索面只读；单管理员 loopback 部署（认证多用户、Neo4j、OCR 等按蓝图 §9 触发条件演进）
+- 技术架构完整细节：**[docs/技术架构说明书.md](./docs/技术架构说明书.md)**
