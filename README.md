@@ -1,4 +1,4 @@
-# docsToCode — 通用多知识域 RAG MCP 检索系统
+# 通用多知识域 RAG MCP 检索系统
 
 把你的**文档与代码资产**变成 AI 可检索、可溯源的知识库——支持 **17 种文档格式**（Markdown、Word、PDF、Excel、PPT、邮件、Java / Python / Go 源码、SQL DDL、OpenAPI、JSON / YAML 等），全部可解析、切片、向量化入库（详见下文[支持的文档格式](#支持的文档格式哪些文档可以切片向量化)）。外部 AI Agent（DeepSeek Harness / ChatGPT App / Claude Code）通过 **MCP 协议**调用本系统，拿到**带来源定位的真实证据**——不幻觉、不跨项目串库、引用可核对。
 
