@@ -1,13 +1,13 @@
 # docsToCode — 通用多知识域 RAG MCP 检索系统
 
-把你的**项目文档、源代码、接口定义、数据库 DDL、法规合同**变成 AI 可检索、可溯源的知识库。外部 AI Agent（DeepSeek Harness / ChatGPT App / Claude Code）通过 **MCP 协议**调用本系统，在写需求、做设计、写代码、生成测试时拿到**带来源定位的真实证据**——不幻觉、不跨项目串库、引用可核对。
+把你的**文档与代码资产**变成 AI 可检索、可溯源的知识库——支持 **17 种文档格式**（Markdown、Word、PDF、Excel、PPT、邮件、Java / Python / Go 源码、SQL DDL、OpenAPI、JSON / YAML 等），全部可解析、切片、向量化入库（详见下文[支持的文档格式](#支持的文档格式哪些文档可以切片向量化)）。外部 AI Agent（DeepSeek Harness / ChatGPT App / Claude Code）通过 **MCP 协议**调用本系统，拿到**带来源定位的真实证据**——不幻觉、不跨项目串库、引用可核对。
 
 > 本系统只做 RAG 的 **R（检索）**：它不生成任何产物，只负责"在正确的知识域里找到可信的证据"，生成交给你的 AI 客户端。
 
 ## 系统能干什么
 
 - **多知识域隔离**：项目域 / 公共域 × 软件工程 / 通用文档 / 个人知识库 / 法律合规，每域独立向量库与元数据，跨域检索必须显式声明，串库率实测为 0
-- **17 种格式一键入库**：Markdown、Java、Python、Go、OpenAPI、DDL、Word、PDF（原生结构解析，符号/章节/页级定位）+ txt/html/csv/json/yaml/xml/xlsx/pptx/eml（markitdown 转换层）
+- **17 种格式一键入库，全部可切片向量化**：文档类（Markdown / Word / PDF / Excel / PPT / 邮件 / HTML / CSV / JSON / YAML / XML / txt）+ 代码与接口类（Java / Python / Go / OpenAPI / SQL DDL），解析与切片方式见[支持的文档格式](#支持的文档格式哪些文档可以切片向量化)
 - **四条检索路径**：语义（Dense）→ 混合（BM25+RRF+Rerank）→ 图增强（调用图/外键/交叉引用扩展）→ Agentic（LLM 拆题+证据评估编排）
 - **三个只读 MCP 工具**：`search_knowledge`（检索）、`get_evidence`（展开全文+父级上下文）、`list_knowledge_domains`（发现知识域）
 - **每条证据可溯源**：`source_position` 精确定位（`com.foo.Bar#method` / `page:5 §3.2` / `# 章节路径` / `sheet:Sheet1`），版本号随证据返回
@@ -24,7 +24,40 @@ flowchart LR
     MCP -->|"带定位的证据"| AI
 ```
 
-更多设计细节见 [docs/技术架构说明书.md](./docs/技术架构说明书.md)；系统能力与交付史见 [docs/1.0-iteration-roadmap.md](./docs/1.0-iteration-roadmap.md)。
+## 支持的文档格式：哪些文档可以切片向量化
+
+系统支持 **17 种格式**，全部走同一条入库管线：**脱敏 → 切片 → 向量化（bge-m3）→ 图关系 → 发布**。每个切片生成向量入库 Qdrant，并携带 `source_position` 来源定位；转换层切片以 512–1024 token 为目标，超长块在句子 / 换行边界二次切分。两种解析层的区别如下。
+
+### 原生结构解析（8 种）——按文档自身结构切片，定位粒度最细
+
+| 格式 | 扩展名 | 切片方式 | 来源定位 |
+|---|---|---|---|
+| Markdown | .md / .markdown | 按标题层级分章节，段落 / 列表 / 表格独立成块 | `# 章节路径` |
+| Java | .java | 按类 / 方法符号 | `com.foo.Bar#method` |
+| Python | .py | 按类 / 函数 / 方法符号 | 点分隔全限定符号路径 |
+| Go | .go | 按函数 / 类型符号 | 符号路径 |
+| OpenAPI | .yaml / .json（按内容自动识别） | 按 path / 端点定义 | 结构路径 |
+| 数据库 DDL | .sql | 按建表语句 / 列定义 | 结构路径（表 / 列） |
+| Word | .docx | 按标题结构分章节 | `# 章节路径` |
+| PDF | .pdf | 按页 + 标题分节（需文本层） | `page:5 §3.2` |
+
+### markitdown 转换层（9 种）——先转 Markdown，再按结构切片
+
+| 格式 | 扩展名 | 切片方式 | 来源定位 |
+|---|---|---|---|
+| 纯文本 | .txt | 按段落分块 | `# <文件名>`（文档级） |
+| CSV | .csv | 50 行窗口表格块 | `sheet:<文件名>` |
+| HTML | .html / .htm | 按标题 / 段落 / 表格 | `# 章节路径` |
+| JSON | .json | 按键路径递归切块 | `path:/a/b` |
+| YAML | .yaml / .yml | 按键路径递归切块 | `path:/a/b` |
+| XML | .xml | 按元素路径递归切块 | `path:/root/item` |
+| Excel | .xlsx | 每个工作表一块 | `sheet:Sheet1` |
+| PPT | .pptx | 按幻灯片标题切块 | `# 幻灯片标题` |
+| 邮件 | .eml | 头部字段（From / To / Subject / Date）+ 正文 | `msg:<主题>` |
+
+> - 上表内的格式都能切片向量化；注册表之外的格式在入库时被直接拒绝（状态 `failed` 并给出原因），不会污染检索库
+> - PDF 扫描件没有文本层，需先 OCR 才能入库；单文件大小上限 20MB
+> - Java / SQL DDL / Markdown 还会额外抽取图关系（调用图 / 外键 / 交叉引用），供图增强检索路径使用
 
 ---
 
@@ -234,15 +267,8 @@ curl http://127.0.0.1:8000/runtime/metrics
 | MCP 启动卡在"Loading embedding model" | 首次加载模型正常（30–60s）；确认 `HF_HOME` 生效、模型已预下载 |
 | 误启第二个管理面被拒 | 单写者租约保护（预期行为）；日志会给出当前持有者 |
 | reader 启动报 schema 版本不一致 | 先启动 writer 管理面执行迁移（`alembic upgrade head`），再起 reader |
-| 上传后状态一直 failed | 详情列有失败原因：常见为格式不支持（看注册表支持列表）、空文件、PDF 无文本层（扫描件需先 OCR） |
+| 上传后状态一直 failed | 详情列有失败原因：常见为格式不支持（见「支持的文档格式」一节）、空文件、PDF 无文本层（扫描件需先 OCR） |
 | 检索返回 no_evidence | 确认知识源已 published、domain_scope 传了正确 slug（先用 list_knowledge_domains 核对） |
 | 检索返回 partial | 某条子路径降级（见 gaps/failed_paths）；证据仍可用，注意缺口 |
 | 凭据会不会被检索出去 | 不会：入库前 api-key/password/token/secret 的值已替换为 `<api-key>` 等占位符，字段名保留 |
 
-## 项目结构与治理（速览）
-
-- `backend/` Python 后端（FastAPI + FastMCP + LangGraph）｜ `frontend/` React 管理端 ｜ `eval/` 评测集与报告 ｜ `specs/` 001–011 Feature 规格 ｜ `docs/` 架构说明书与路线图
-- **已交付（001–011，2.0 收官）**：四条检索路径（Dense / Hybrid+RRF+Rerank / Graph Enhanced / Agentic 九步状态机）、双轴多知识域、FormatHandler 注册表 + markitdown 转换层、GraphExtractor 插件注册表、writer/reader 单写多读运行态、固定评测集 + 三重闸口（硬指标实测：跨域串库=0 / Schema 合法率 100% / 来源可定位率 100%）
-- 开发流程：GitHub Spec Kit 工作流（specify → clarify → plan → tasks → implement → converge），项目 Constitution v1.3.0（11 条原则 + 5 条硬约束，含 Domain Neutrality）凌驾全部工件；2.0 演进蓝图与定稿核销见 [通用RAG演进蓝图.md](./通用RAG演进蓝图.md)、[docs/2.0-finalization.md](./docs/2.0-finalization.md)
-- 当前边界：MCP 检索面只读；单管理员 loopback 部署（认证多用户、Neo4j、OCR 等按蓝图 §9 触发条件演进）
-- 技术架构完整细节：**[docs/技术架构说明书.md](./docs/技术架构说明书.md)**
