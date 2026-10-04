@@ -52,6 +52,7 @@ def create_mcp_server(
     qdrant_store: QdrantStore | None = None,
     embedding_provider: EmbeddingProvider | None = None,
     reranker: RerankerProvider | None = None,
+    mode: str = "writer",
 ) -> FastMCP:
     """Create and configure the MCP server with all RAG tools.
 
@@ -116,6 +117,16 @@ def create_mcp_server(
         mcp_server=mcp_server,
         session_factory=session_factory,
     )
+
+    # Memory tools are mode-gated: reader instances never receive the write tool.
+    from rag_mcp.mcp.memory_tools import tool_names
+    if mode == "writer":
+        from rag_mcp.mcp.record_memory import record_memory
+        mcp_server.tool(name="record_memory")(record_memory)
+    from rag_mcp.mcp.recall_memory import recall_memory
+    from rag_mcp.mcp.start_work import start_work
+    mcp_server.tool(name="recall_memory")(recall_memory)
+    mcp_server.tool(name="start_work")(start_work)
 
     logger.info(
         "MCP server created with tools: search_knowledge, get_evidence, list_knowledge_domains "
