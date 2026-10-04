@@ -187,7 +187,7 @@
 - [X] T084 [P] [US8] 在 `backend/tests/integration/test_012_regression_suite.py` 接入 001–011 全集运行器、历史报告零覆盖和非延迟容差断言（FR-039–FR-040、SC-012）。
 - [X] T085 [P] [US6] 在 `frontend/src/api/memories.ts`、`frontend/src/pages/MemoriesPage.tsx`、`frontend/src/App.tsx` 完成最小记忆浏览页，展示 scope/kind/provenance/status/valid interval/evidence/injection/projection 状态，不暴露凭据或 MCP rollback（FR-035）。
 - [X] T086 [US6] 运行 `frontend/package.json` 的 `pnpm build`，并在 `backend/tests/integration/test_012_frontend_memory_page.py` 验证路由/API 空态、错误态和字段脱敏（FR-039–FR-040）。
-- [ ] T087 [US8] 执行 `specs/012-memory-foundation-write-read-loop/quickstart.md` 全流程，保存迁移、unit、contract、integration、E2E、双实例、前端构建和报告路径证据（FR-037–FR-040）。
+- [X] T087 [US8] 执行 `specs/012-memory-foundation-write-read-loop/quickstart.md` 全流程，保存迁移、unit、contract、integration、E2E、双实例、前端构建和报告路径证据（FR-037–FR-040）。
 - [ ] T088 [US8] 运行完整 `backend/pyproject.toml` pytest、001–011 评测和 012 报告生成，按固定报告 schema 保存双实例、四路径证据、request_id、失败路径和包/投影 fingerprint；确认无回归、四路径串库=0、显式多域仅返回并集、provenance/hard anchor/hard 逐条 attribution re-verification/soft 五元 metadata/distilled source-chain=100%、quarantined 默认泄漏=0，并逐项收口 SC-001–SC-017。SC 映射为：SC-001→T078/T087/T088；SC-002→T026/T031/T080/T088；SC-003→T032/T036/T043/T080/T088；SC-004→T033/T036/T080/T088；SC-005→T063/T065/T086/T088；SC-006→T047/T049/T056/T088；SC-007→T016/T078/T082/T088；SC-008→T015/T068/T076/T080/T082；SC-009→T025/T059/T071/T078/T088；SC-010→T045/T069/T073/T080/T088；SC-011→T003/T035/T088；SC-012→T060/T083/T084/T088；SC-013→T068/T069/T077/T088；SC-014→T047/T054/T088；SC-015→T045/T056/T088；SC-016→T070/T074/T077/T088；SC-017→T041/T044/T088。更新 `eval/README.md` 登记命令但不覆盖历史报告（SC-001–SC-017）。
 
 ## 依赖与执行顺序
