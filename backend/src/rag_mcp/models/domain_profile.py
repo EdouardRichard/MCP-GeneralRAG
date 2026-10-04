@@ -40,6 +40,7 @@ class DomainProfile(Base):
     default_capabilities: Mapped[dict] = mapped_column(
         JSONB, nullable=False, comment="default capability declaration",
     )
+    memory_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), comment="builtin (read-only) flag",
     )

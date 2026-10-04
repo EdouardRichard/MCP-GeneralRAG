@@ -10,7 +10,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 class Base(DeclarativeBase):
     """Shared declarative base for all ORM models."""
-
     pass
 
 
@@ -23,6 +22,13 @@ from rag_mcp.models.chunk import Chunk  # noqa: E402, F401
 from rag_mcp.models.processing_run import ProcessingRun  # noqa: E402, F401
 from rag_mcp.models.retrieval_run import RetrievalRun  # noqa: E402, F401
 from rag_mcp.models.domain_profile import DomainProfile  # noqa: E402, F401
+from rag_mcp.models.memory_event import MemoryEvent  # noqa: E402, F401
+from rag_mcp.models.memory_projection import MemoryEntry  # noqa: E402, F401
+from rag_mcp.models.scope_binding import ScopeBinding  # noqa: E402, F401
+from rag_mcp.models.session import MemorySession  # noqa: E402, F401
+from rag_mcp.models.memory_salience import MemorySalience  # noqa: E402, F401
+from rag_mcp.models.memory_recall_run import MemoryRecallRun  # noqa: E402, F401
+from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta  # noqa: E402, F401
 from rag_mcp.models.runtime import (  # noqa: E402, F401
     InstanceRegistry,
     WriterLease,
@@ -46,6 +52,7 @@ __all__ = [
     "ProcessingRun",
     "RetrievalRun",
     "DomainProfile",
+    "MemoryEvent", "MemoryEntry", "ScopeBinding", "MemorySession", "MemorySalience", "MemoryRecallRun", "MemoryProjectionMeta",
     "InstanceRegistry",
     "WriterLease",
     "RuntimeMaintenanceLog",
