@@ -270,6 +270,7 @@ def build_mcp_server(
         embedding_provider=provider,
         qdrant_store=qdrant,
         reranker=reranker,
+        mode=mode,
     )
     return server
 
