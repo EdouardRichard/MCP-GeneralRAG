@@ -443,3 +443,10 @@ class QdrantStore:
         ]
 
         return dense_results, sparse_results
+def memory_filter_payload(*, scope_ids, kind=None, session_id=None, status=None):
+    payload = {"scope_ids": list(scope_ids)}
+    if kind is not None:
+        payload["kind"] = kind
+    if session_id is not None:
+        payload["session_id"] = session_id
+    return payload

@@ -175,3 +175,10 @@ def dbsf_fuse(
         "DBSF fusion is reserved as a configurable alternative (research.md §1.2). "
         "Use rrf_fuse for 002 first round."
     )
+def weighted_memory_rrf(paths, weights=None, k=60):
+    weights = weights or {name: 1.0 for name in paths}
+    scores = {}
+    for name, ids in paths.items():
+        for rank, memory_id in enumerate(ids, 1):
+            scores[memory_id] = scores.get(memory_id, 0.0) + weights.get(name, 1.0) / (k + rank)
+    return [{"memory_id": mid, "score": score} for mid, score in sorted(scores.items(), key=lambda item: (-item[1], str(item[0])))]

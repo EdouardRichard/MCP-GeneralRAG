@@ -9,6 +9,26 @@ from rag_mcp.services.memory_reducer import reduce_events
 from rag_mcp.services.memory_validators import validate_memory, sanitize_memory
 
 
+def recall_memories(rows, *, mode, scope_ids, memory_id=None, limit=40):
+    if not scope_ids:
+        raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+    selected = [row for row in rows if row.get("knowledge_scope_id") in scope_ids]
+    if mode == "by_id":
+        selected = [row for row in selected if row.get("memory_id") == memory_id]
+    return selected[:max(40, limit)]
+
+
+def format_memory_recall(rows, *, failed_paths=None):
+    failed_paths = failed_paths or []
+    memories = []
+    for row in rows:
+        item = dict(row)
+        text = item.get("content_text", "")
+        item["content_excerpt"] = text[:300]
+        memories.append(item)
+    return {"memories": memories, "degraded": bool(failed_paths), "failed_paths": failed_paths, "counts": {"returned": len(memories)}}
+
+
 class MemoryService:
     def __init__(self, session, projection_store=None):
         self.session = session
