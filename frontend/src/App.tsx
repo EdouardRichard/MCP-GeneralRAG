@@ -5,6 +5,7 @@ import enUS from 'antd/locale/en_US';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import DomainProfilesPage from './pages/DomainProfilesPage';
+import MemoriesPage from './pages/MemoriesPage';
 import { LocaleProvider, useLocale } from './i18n';
 import type { Locale } from './i18n';
 
@@ -46,6 +47,7 @@ function AppShell() {
             <Route path="/" element={<ProjectsPage />} />
             <Route path="/projects/:id" element={<ProjectDetailPage />} />
             <Route path="/domain-profiles" element={<DomainProfilesPage />} />
+            <Route path="/memories" element={<MemoriesPage />} />
           </Routes>
         </Content>
       </Layout>

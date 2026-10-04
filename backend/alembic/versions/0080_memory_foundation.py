@@ -4,13 +4,14 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0080_memory_foundation"
-down_revision = "0074_widen_graph_edge_relation_type"
+down_revision = "0074"
 branch_labels = None
 depends_on = None
 
 
 def upgrade():
     jsonb = postgresql.JSONB(astext_type=sa.Text())
+    op.add_column("domain_profiles", sa.Column("memory_policy", jsonb, nullable=True))
     op.create_table("memory_events",
         sa.Column("event_id", sa.BigInteger(), primary_key=True),
         sa.Column("event_type", sa.String(32), nullable=False),
@@ -33,6 +34,7 @@ def upgrade():
 
 
 def downgrade():
+    op.drop_column("domain_profiles", "memory_policy")
     for name in ("memory_projection_meta", "memory_recall_runs", "memory_salience", "sessions", "scope_bindings", "memory_entries"):
         op.drop_table(name)
     op.drop_index("ix_memory_events_scope_event", table_name="memory_events")
