@@ -6,6 +6,7 @@ from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import MemoryProjectionStore
 from rag_mcp.services.memory_reducer import reduce_events
+from rag_mcp.services.memory_validators import validate_memory, sanitize_memory
 
 
 class MemoryService:
@@ -30,3 +31,9 @@ class MemoryService:
         self.projections.upsert_from_reducer(event.memory_id if hasattr(event, "memory_id") else event.aggregate_id, state)
         return {"status": "complete", "event_id": event.event_id}
 
+    async def record(self, payload):
+        validate_memory(payload)
+        sanitized = sanitize_memory(payload["content"])
+        event_payload = {"content_text": sanitized.content, "kind": payload["kind"], "provenance": payload["provenance"], "evidence_refs": payload.get("evidence_refs", []), "injection_flags": sanitized.injection_flags}
+        result = await self.apply_event({"event_id": len(self.events) + 1, "event_type": "assert", "aggregate_id": len(self.events) + 1, "knowledge_scope_id": payload["scope_id"], "payload": event_payload})
+        return {"memory_id": result["event_id"], "status": sanitized.status, "provenance_validation": "valid", "injection_flags": sanitized.injection_flags}
