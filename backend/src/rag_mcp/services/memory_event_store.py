@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from sqlalchemy import select
 
 from rag_mcp.models.memory_event import MemoryEvent
@@ -46,8 +48,8 @@ class MemoryEventStore:
         statement = select(MemoryEvent).where(MemoryEvent.knowledge_scope_id == scope_id).order_by(MemoryEvent.event_id)
         if through_event_id is not None:
             statement = statement.where(MemoryEvent.event_id <= through_event_id)
-        rows = (await self.session.execute(statement)).scalars().all()
-        return [{column.name: (getattr(row, column.name).isoformat()
+        rows = (await self.session.execute(statement.execution_options(populate_existing=True))).scalars().all()
+        return deepcopy([{column.name: (getattr(row, column.name).isoformat()
                 if hasattr(getattr(row, column.name), "isoformat") else getattr(row, column.name))
-                 for column in MemoryEvent.__table__.columns} for row in rows]
+                 for column in MemoryEvent.__table__.columns} for row in rows])
 

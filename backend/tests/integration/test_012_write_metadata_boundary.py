@@ -40,3 +40,31 @@ async def test_each_adapter_rejects_scope_relabel_before_io(db_session, tmp_path
     with pytest.raises(ValueError, match="MEMORY_EVIDENCE_SCOPE_MISMATCH"):
         await getattr(store, f"_materialize_{path}")(state, 82, 1)
     assert not list(tmp_path.rglob("*.md"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["relation", "dense", "links", "summary", "files", "salience"])
+async def test_sealed_reducer_cannot_forge_same_scope_state_without_log_authority(db_session, path):
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    memory = await service.record(payload)
+    from rag_mcp.services.memory_event_store import MemoryEventStore
+    events = await MemoryEventStore(db_session).replay(sid)
+    events[0]["payload"]["content_text"] = "Unlogged forged vector fact"
+    forged = reduce_events(events)
+    with pytest.raises(ValueError, match="authority|replay"):
+        await getattr(service.projections, f"_materialize_{path}")(forged, sid, memory["memory_id"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["relation", "dense", "links", "summary", "files", "salience"])
+async def test_adapter_rejects_stale_log_revision(db_session, path):
+    from rag_mcp.services.memory_event_store import MemoryEventStore
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    first = await service.record(payload)
+    old = reduce_events(await MemoryEventStore(db_session).replay(sid))
+    payload["content"] += " A later fact."
+    await service.record(payload)
+    with pytest.raises(ValueError, match="authority|replay"):
+        await getattr(service.projections, f"_materialize_{path}")(old, sid, first["memory_id"])

@@ -60,6 +60,13 @@ class MemoryProjectionStore:
 
     async def _authorize(self, state, scope_id, event_id):
         self._check_scope(state, scope_id)
+        from rag_mcp.services.memory_event_store import MemoryEventStore
+        from rag_mcp.services.memory_reducer import reduce_events
+
+        await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
+        history = await MemoryEventStore(self.session).replay(scope_id)
+        if not history or history[-1]["event_id"] != event_id or projection_fingerprint(state) != projection_fingerprint(reduce_events(history)):
+            raise ValueError("projection authority must match current immutable log replay")
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
     async def _upsert(self, model, values, key):
@@ -80,7 +87,7 @@ class MemoryProjectionStore:
             await self._upsert(MemoryEntry, values, "memory_id")
 
     async def _materialize_dense(self, state, scope_id, event_id):
-        self._check_scope(state, scope_id)
+        await self._authorize(state, scope_id, event_id)
         model = get_settings().embedding_model.replace("/", "_").replace("-", "_")
         collection = f"memories_dense_{model}_012_v1_s{scope_id}_e{event_id}"
         if not await asyncio.to_thread(self.qdrant.collection_exists, collection):
@@ -111,7 +118,7 @@ class MemoryProjectionStore:
         (directory / "INDEX.md").write_text("\n".join(sorted(state["files"])), encoding="utf-8")
 
     async def _materialize_files(self, state, scope_id, event_id):
-        self._check_scope(state, scope_id)
+        await self._authorize(state, scope_id, event_id)
         directory = (self.root / str(scope_id) / str(event_id)).resolve()
         if not directory.is_relative_to(self.root):
             raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
