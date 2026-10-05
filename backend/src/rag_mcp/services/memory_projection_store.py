@@ -5,8 +5,8 @@ class MemoryProjectionStore:
         self._states = {}
 
     def upsert_from_reducer(self, memory_id, reducer_state):
-        if not isinstance(reducer_state, dict) or "entries" not in reducer_state:
-            raise TypeError("projection writes require reducer output")
+        from rag_mcp.services.memory_reducer import require_reducer_state
+        require_reducer_state(reducer_state)
         self._states[memory_id] = {"status": "complete", "state": reducer_state}
         return self._states[memory_id]
 

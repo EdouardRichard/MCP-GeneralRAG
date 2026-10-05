@@ -7,13 +7,16 @@ def test_online_and_replay_reducers_are_equivalent():
          "knowledge_scope_id": 7, "payload": {"content_text": "a", "kind": "episodic", "provenance": "hard"}},
         {"event_id": 2, "event_type": "access", "aggregate_id": 10,
          "knowledge_scope_id": 7, "payload": {}},
-        {"event_id": 3, "event_type": "revise", "aggregate_id": 10,
-         "knowledge_scope_id": 7, "payload": {"content_text": "b", "valid_from": "2026-01-01T00:00:00+00:00"}},
+        {"event_id": 3, "event_type": "revise", "aggregate_id": 20,
+         "knowledge_scope_id": 7, "payload": {"content_text": "b", "provenance": "hard",
+             "supersedes_memory_id": 10, "valid_from": "2026-01-01T00:00:00+00:00"}},
     ]
     online = reduce_events(events)
     replay = reduce_events(tuple(events))
     assert projection_fingerprint(online) == projection_fingerprint(replay)
-    assert online["entries"][10]["content_text"] == "b"
+    assert online["entries"][10]["content_text"] == "a"
+    assert online["entries"][10]["status"] == "superseded"
+    assert online["entries"][20]["content_text"] == "b"
     assert online["salience"][10]["access_count"] == 1
 
 

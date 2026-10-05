@@ -2,29 +2,135 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import dataclass
+
+
+_REDUCER_SEAL = object()
+PROJECTION_NAMES = ("entries", "dense", "links", "summary", "files", "salience")
+
+
+@dataclass(frozen=True)
+class ReducerState(Mapping):
+    """Immutable reducer output. Copies returned to callers cannot alter it."""
+    _serialized: str
+    _seal: object
+
+    def __getitem__(self, key):
+        value = json.loads(self._serialized)[key]
+        if key in {"entries", "dense", "salience"}:
+            return {int(identifier): row for identifier, row in value.items()}
+        return value
+
+    def __iter__(self):
+        return iter(json.loads(self._serialized))
+
+    def __len__(self):
+        return len(json.loads(self._serialized))
+
+    def export(self):
+        return {name: self[name] for name in self}
+
+
+def require_reducer_state(state):
+    if not isinstance(state, ReducerState) or state._seal is not _REDUCER_SEAL:
+        raise TypeError("projection writes require sealed reducer output")
+    return state
+
+
+def _scoped_target(entries, memory_id, scope):
+    target = entries.get(memory_id)
+    if target is None:
+        raise ValueError("MEMORY_SUPERSEDE_TARGET_INVALID")
+    if target["knowledge_scope_id"] != scope:
+        raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
+    return target
 
 
 def reduce_events(events):
+    history = sorted(deepcopy(list(events)), key=lambda item: item["event_id"])
+    if len({event["event_id"] for event in history}) != len(history):
+        raise ValueError("duplicate authority event")
     entries = {}
     salience = {}
-    for event in sorted(events, key=lambda item: item["event_id"]):
+    bindings = {}
+    for index, event in enumerate(history):
         eid = event["aggregate_id"]
+        scope = event["knowledge_scope_id"]
+        if not isinstance(scope, int) or isinstance(scope, bool) or scope <= 0:
+            raise ValueError("MISSING_KNOWLEDGE_SCOPE")
         payload = dict(event.get("payload") or {})
-        if event["event_type"] == "assert":
-            entries[eid] = {**payload, "memory_id": eid, "knowledge_scope_id": event["knowledge_scope_id"], "status": "active"}
-            salience.setdefault(eid, {"salience": 0.0, "access_count": 0})
-        elif event["event_type"] == "revise" and eid in entries:
-            entries[eid].update(payload)
-            entries[eid]["status"] = "active"
-        elif event["event_type"] in {"retract", "rollback"} and eid in entries:
-            entries[eid]["status"] = "retired"
-        elif event["event_type"] == "access":
-            state = salience.setdefault(eid, {"salience": 0.0, "access_count": 0})
+        kind = event["event_type"]
+        timestamp = event.get("occurred_at")
+        if hasattr(timestamp, "isoformat"):
+            timestamp = timestamp.isoformat()
+        if kind in {"assert", "revise", "consolidate"}:
+            if eid in entries:
+                raise ValueError("memory identity is immutable; revision requires supersede")
+            if kind == "revise":
+                target = _scoped_target(entries, payload.get("supersedes_memory_id"), scope)
+                if target["status"] != "active" or (target.get("provenance") == "hard" and payload.get("provenance") != "hard"):
+                    raise ValueError("MEMORY_SUPERSEDE_TARGET_INVALID")
+                target.update(status="superseded", superseded_by=eid,
+                              valid_to=payload.get("valid_from") or timestamp, invalidated_at=timestamp)
+            status = payload.get("status", "active")
+            if status not in {"active", "quarantined"}:
+                raise ValueError("invalid assert status")
+            entries[eid] = {**payload, "memory_id": eid, "knowledge_scope_id": scope,
+                            "status": status, "valid_from": payload.get("valid_from") or timestamp,
+                            "valid_to": None, "observed_at": timestamp,
+                            "source_event_id": event["event_id"]}
+            salience[eid] = {"memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
+                             "access_count": 0, "decay_rate": payload.get("decay_rate", .05),
+                             "last_access_at": None, "evidence_refs": payload.get("evidence_refs", []),
+                             "provenance": payload.get("provenance"), "inference_meta": payload.get("inference_meta")}
+        elif kind == "retract":
+            target = _scoped_target(entries, eid, scope)
+            target.update(status="retired", valid_to=timestamp, invalidated_at=timestamp)
+        elif kind == "access":
+            _scoped_target(entries, eid, scope)
+            state = salience[eid]
             state["access_count"] += 1
             state["salience"] += 1.0
-    return {"entries": entries, "salience": salience}
+            state["last_access_at"] = timestamp
+        elif kind == "rollback":
+            point = payload.get("event_point")
+            if not isinstance(point, int) or point >= event["event_id"] or not payload.get("reason"):
+                raise ValueError("MEMORY_ROLLBACK_FORBIDDEN")
+            if not any(item["event_id"] == point and item["knowledge_scope_id"] == scope for item in history[:index]):
+                raise ValueError("MEMORY_ROLLBACK_FORBIDDEN")
+            restored = reduce_events(item for item in history[:index] if item["event_id"] <= point)
+            unaffected = {mid: row for mid, row in entries.items() if row["knowledge_scope_id"] != scope}
+            unaffected.update({mid: row for mid, row in restored["entries"].items() if row["knowledge_scope_id"] == scope})
+            entries = unaffected
+            # Preserve all access events, including post-point use. New identities
+            # removed by rollback retain salience audit but cannot supply facts.
+        elif kind == "grant":
+            if "binding_id" in payload:
+                bindings[payload["binding_id"]] = {**payload, "knowledge_scope_id": scope}
+        else:
+            raise ValueError("invalid authority event type")
+    dense, links, summary, files = {}, {}, {}, {}
+    for mid, row in entries.items():
+        if row["status"] in {"retired", "quarantined"}:
+            continue
+        dense[mid] = deepcopy(row)
+        for ref in row.get("evidence_refs", []):
+            links[f"{mid}/evidence/{ref}"] = {**row, "from_id": mid, "to_id": ref, "relation": "evidence"}
+        if row.get("supersedes_memory_id"):
+            links[f"{mid}/supersedes"] = {**row, "from_id": mid, "to_id": row["supersedes_memory_id"], "relation": "supersedes"}
+        branch = f"{row['knowledge_scope_id']}/{row.get('kind', 'episodic')}"
+        summary.setdefault(branch, []).append(deepcopy(row))
+        path = f"012-v1/{branch}/{mid}.md"
+        files[path] = {**row, "path": path, "body": f"# Memory {mid}\n\n" + json.dumps(row, sort_keys=True, ensure_ascii=False, default=str)}
+    state = {"entries": entries, "dense": dense, "links": links, "summary": summary,
+             "files": files, "salience": salience, "bindings": bindings}
+    return ReducerState(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str), _REDUCER_SEAL)
 
 
 def projection_fingerprint(state):
+    if isinstance(state, ReducerState):
+        state = state.export()
     normalized = json.dumps(state, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(normalized.encode()).hexdigest()
