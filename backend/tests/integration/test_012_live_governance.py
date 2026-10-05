@@ -65,6 +65,8 @@ async def test_retire_purge_and_binding_are_derived_management_events(db_session
     binding = await govern("binding", scope_id=sid, actor="management", reason="directory association",
                            binding_kind="workdir_prefix", binding_value=str(tmp_path))
     assert (await db_session.get(MemoryEvent, binding["event_id"])).event_type == "grant"
+    manifest = await service.projections.current(sid)
+    assert manifest.fingerprint == binding["after_fingerprint"], "binding audit diverged from the actual reducer state"
     assert await MemoryScopeResolver(db_session).resolve(f"path:{tmp_path}") == sid
     later = await service.record({**payload, "content": "Procedure written after a scope binding."})
     assert (await service.recall(scope_ref=[f"path:{tmp_path}"]))["memories"][0]["memory_id"] == later["memory_id"]

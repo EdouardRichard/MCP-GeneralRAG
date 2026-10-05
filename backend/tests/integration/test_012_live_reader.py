@@ -47,7 +47,7 @@ async def test_pg_modes_history_scope_and_delivered_are_real(db_session, monkeyp
     result = await service.recall(scope_ref=[str(sid)], memory_ids=[second["memory_id"], first["memory_id"]], include_superseded=True)
     assert [row["memory_id"] for row in result["memories"]] == [second["memory_id"], first["memory_id"]]
     assert result["counts"]["mode"] == "by_id"
-    historic = await service.recall(scope_ref=[str(sid)], as_of=as_of)
+    historic = await service.recall(scope_ref=[str(sid)], as_of=as_of, include_superseded=True)
     assert [row["memory_id"] for row in historic["memories"]] == [first["memory_id"]]
     current = await service.recall(scope_ref=[str(sid)], agent_id="reader-agent")
     assert [row["memory_id"] for row in current["memories"]] == [second["memory_id"]]

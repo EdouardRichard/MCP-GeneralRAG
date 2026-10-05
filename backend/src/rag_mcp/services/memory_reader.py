@@ -38,6 +38,14 @@ def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def text_characters(value):
+    if isinstance(value, dict):
+        return sum(text_characters(item) for item in value.values())
+    if isinstance(value, list):
+        return sum(text_characters(item) for item in value)
+    return len(value) if isinstance(value, str) else 0
+
+
 def public_entry(row, *, match=None):
     content = row["content_text"]
     keys = ("memory_id", "knowledge_scope_id", "kind", "provenance", "title", "confidence", "evidence_refs",
@@ -84,13 +92,14 @@ class MemoryReader:
                 query_filter=Filter(must=conditions), limit=max(40, limit * 4), with_payload=False)
             return [(int(point.id), float(point.score)) for point in result.points]
         results = await asyncio.gather(*(search(manifest) for manifest in manifests), return_exceptions=True)
-        scores, failures = {}, []
-        for result in results:
+        scores, failures, failed_scopes = {}, [], []
+        for manifest, result in zip(manifests, results, strict=True):
             if isinstance(result, BaseException):
                 failures.append("dense_unavailable")
+                failed_scopes.append(manifest.knowledge_scope_id)
             else:
                 scores.update(result)
-        return scores, sorted(set(failures))
+        return scores, sorted(set(failures)), failed_scopes
 
     async def recall(self, *, scope_ref, query=None, memory_ids=None, kind=None, session_id=None,
                      agent_id=None, time_window=None, as_of=None, include_superseded=False,
@@ -128,6 +137,9 @@ class MemoryReader:
                     if row["status"] == "quarantined":
                         inactive += 1
                         continue
+                    if row["status"] == "superseded" and not include_superseded:
+                        inactive += 1
+                        continue
                     if point is not None:
                         valid = (timestamp(row["valid_from"]) is None or timestamp(row["valid_from"]) <= point) and (timestamp(row.get("valid_to")) is None or point < timestamp(row["valid_to"]))
                     else:
@@ -156,13 +168,13 @@ class MemoryReader:
                     candidate_count = len(set(memory_ids))
                 elif query:
                     try:
-                        scores, dense_failures = await asyncio.wait_for(self._dense(manifests, query, limit, kind, session_id),
+                        scores, dense_failures, failed_scopes = await asyncio.wait_for(self._dense(manifests, query, limit, kind, session_id),
                             timeout=max(.001, 2.5 - (monotonic() - started)))
                     except (TimeoutError, OSError):
-                        scores, dense_failures = {}, ["dense_unavailable"]
+                        scores, dense_failures, failed_scopes = {}, ["dense_unavailable"], scope_ids
                     failed_paths = sorted(set(failed_paths + dense_failures))
-                    if not dense_failures:
-                        eligible = {mid: row for mid, row in eligible.items() if mid in scores}
+                    eligible = {mid: row for mid, row in eligible.items()
+                                if mid in scores or row["knowledge_scope_id"] in failed_scopes}
                     candidate_count = len(scores)
                     dense = sorted((mid for mid in scores if mid in eligible), key=lambda mid: (-scores[mid], mid))
                     recency = [mid for mid in ordered if mid in eligible]
@@ -197,7 +209,7 @@ class MemoryReader:
                 memories, characters, trimmed = [], 0, 0
                 for mid in ordered[:limit]:
                     item = public_entry(eligible[mid], match=matches.get(mid))
-                    length = len(item["content_excerpt"]) + len(item.get("title") or "")
+                    length = text_characters(item)
                     if characters + length > 6000:
                         trimmed += 1
                         continue
@@ -242,21 +254,31 @@ class MemoryReader:
                          (agent_id is None or row.get("agent_id") == agent_id)]
             total = {"standard": 2000, "compact": 800, "minimal": 300}[budget]
             description = (profile.description or "")[:max(0, total - len(READ_GUIDANCE)) // 4]
-            remaining = total - len(READ_GUIDANCE) - len(description)
-            digest, working_set, used = [], [], len(READ_GUIDANCE) + len(description)
+            scope_data = {"knowledge_scope_id": sid, "slug": scope.slug}
+            brief = {"domain_key": scope.domain_key, "description": description,
+                     "policy_fingerprint": hashlib.sha256(canonical(profile.memory_policy or {}).encode()).hexdigest()}
+            base_size = len(READ_GUIDANCE) + text_characters(scope_data) + text_characters(brief)
+            if base_size > total:
+                brief["description"] = ""
+                scope_data = {"knowledge_scope_id": sid}
+                base_size = len(READ_GUIDANCE) + text_characters(scope_data) + text_characters(brief)
+            remaining = total - base_size
+            digest, working_set, used = [], [], base_size
             for candidates, target in ((digest_rows, digest), (work_rows, working_set)):
                 for row in candidates:
                     if remaining <= 0:
                         break
-                    excerpt = row["content_text"][:min(300, remaining)]
-                    target.append({"memory_id": row["memory_id"], "kind": row["kind"], "provenance": row["provenance"],
-                        "content_excerpt": excerpt, "truncated": len(excerpt) < len(row["content_text"]),
-                        "evidence_refs": row.get("evidence_refs", []), "inference_meta": row.get("inference_meta")})
-                    remaining -= len(excerpt)
-                    used += len(excerpt)
-            body = {"scope": {"knowledge_scope_id": sid, "slug": scope.slug},
-                "domain_brief": {"domain_key": scope.domain_key, "description": description,
-                                 "policy_fingerprint": hashlib.sha256(canonical(profile.memory_policy or {}).encode()).hexdigest()},
+                    item = {"memory_id": row["memory_id"], "kind": row["kind"], "provenance": row["provenance"],
+                            "evidence_refs": row.get("evidence_refs", []), "inference_meta": row.get("inference_meta")}
+                    metadata_size = text_characters(item)
+                    if metadata_size >= remaining:
+                        continue
+                    excerpt = row["content_text"][:min(300, remaining - metadata_size)]
+                    target.append({**item, "content_excerpt": excerpt, "truncated": len(excerpt) < len(row["content_text"])})
+                    remaining -= metadata_size + len(excerpt)
+                    used += metadata_size + len(excerpt)
+            body = {"scope": scope_data,
+                "domain_brief": brief,
                 "digest": {"memories": digest}, "working_set": {"memories": working_set}, "read_guidance": READ_GUIDANCE,
                 "counts": {"returned": len(digest) + len(working_set), "characters": used,
                            "failed_paths": failed_paths,

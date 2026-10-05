@@ -122,7 +122,9 @@ def reduce_events(events):
             # removed by rollback retain salience audit but cannot supply facts.
         elif kind == "grant":
             if "binding_id" in payload:
-                bindings[payload["binding_id"]] = {**payload, "knowledge_scope_id": scope}
+                bindings[payload["binding_id"]] = {
+                    **{key: payload[key] for key in ("binding_id", "binding_kind", "binding_value", "priority", "status")},
+                    "knowledge_scope_id": scope}
         else:
             raise ValueError("invalid authority event type")
     dense, links, summary, files = {}, {}, {}, {}
