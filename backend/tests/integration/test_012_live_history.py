@@ -11,6 +11,37 @@ from rag_mcp.utils.snowflake import generate_id
 
 
 @pytest.mark.asyncio
+async def test_batch_append_sets_reducer_role_once_and_rolls_back_invalid_batch(db_session, monkeypatch):
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    memory = await service.record(payload)
+    original = db_session.execute
+    role_changes = []
+    async def observed(statement, *args, **kwargs):
+        if str(statement) == "SET LOCAL ROLE rag_memory_reducer":
+            role_changes.append(statement)
+        return await original(statement, *args, **kwargs)
+    monkeypatch.setattr(db_session, "execute", observed)
+    def event(kind="access"):
+        identifier = generate_id()
+        return MemoryEvent(event_id=identifier, aggregate_id=memory["memory_id"], knowledge_scope_id=sid,
+            event_type=kind, payload={}, actor="management", request_id=str(identifier),
+            occurred_at=datetime.now(timezone.utc), authority={}, scope_meta={}, mutability={},
+            provenance_meta={}, recoverability={}, actionability="audit")
+    batch = [event() for _ in range(10)]
+    store = MemoryEventStore(db_session)
+    await store.append_many(batch)
+    await db_session.commit()
+    assert len(role_changes) == 1, "one database role roundtrip per event stalls large history tests"
+    assert len(await store.replay(sid)) == 11
+    with pytest.raises(ValueError, match="MEMORY_KIND_INVALID"):
+        await store.append_many([event(), event("assert")])
+    assert len(await store.replay(sid)) == 11
+    await db_session.rollback()
+    await service.rebuild(sid, actor="management")
+
+
+@pytest.mark.asyncio
 async def test_snapshot_10000_cadence_archive_and_corrupt_recovery_use_real_log(db_session):
     import rag_mcp.runtime.projection_rebuild as module
     history_type = getattr(module, "MemoryHistory", None)

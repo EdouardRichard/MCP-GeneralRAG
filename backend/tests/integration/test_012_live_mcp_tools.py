@@ -15,7 +15,7 @@ from rag_mcp.utils.snowflake import generate_id
 
 
 @pytest.mark.asyncio
-async def test_actual_mcp_calls_persist_and_serialize_one_fact_source(db_session):
+async def test_actual_mcp_calls_persist_and_serialize_one_fact_source(db_session, memory_writer_owner):
     sid = generate_id()
     db_session.add(KnowledgeScope(scope_id=sid, name="MCP acceptance", slug=f"mcp-{sid}", scope_type="project", domain_key="generic"))
     await db_session.commit()
@@ -46,3 +46,17 @@ async def test_actual_mcp_calls_persist_and_serialize_one_fact_source(db_session
     assert rejected.structuredContent["error"]["code"] == "MEMORY_EVIDENCE_ANCHOR_REQUIRED"
     assert json.loads(rejected.content[0].text) == rejected.structuredContent
     assert await db_session.scalar(select(func.count()).select_from(MemoryEvent)) == before
+
+
+@pytest.mark.asyncio
+async def test_writer_tool_refuses_without_management_ownership(db_session):
+    from tests.integration.test_012_live_reader import scope_and_payload
+    sid, payload = await scope_and_payload(db_session)
+    @asynccontextmanager
+    async def sessions():
+        yield db_session
+    server = create_mcp_server(session_factory=sessions, embedding_provider=LocalCPUEmbeddingProvider(), mode="writer")
+    arguments = {key: value for key, value in payload.items() if key != "scope_id"}
+    result = await server.call_tool("record_memory", {**arguments, "scope_ref": str(sid)})
+    assert result.isError and result.structuredContent["error"]["code"] == "MEMORY_WRITE_UNAVAILABLE"
+    assert await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == sid)) == 0

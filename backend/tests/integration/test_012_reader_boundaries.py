@@ -77,3 +77,21 @@ async def test_work_package_refreshes_after_domain_policy_change(db_session):
     finally:
         profile.memory_policy = original
         await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_custom_domain_work_budgets_are_consumed(db_session):
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from uuid import uuid4
+    sid, payload = await scope_and_payload(db_session)
+    key = "budget-" + uuid4().hex
+    db_session.add(DomainProfile(domain_key=key, name=key, supported_formats=["markdown"], graph_relations={},
+        default_capabilities={}, memory_policy={"start_work_budgets": {"full": 600, "compact": 400, "minimal": 250}}))
+    (await db_session.get(KnowledgeScope, sid)).domain_key = key
+    await db_session.commit()
+    service = MemoryService(db_session)
+    for index in range(3):
+        await service.record({**payload, "content": str(index) + "Scoped procedure. " * 50})
+    for budget, maximum in (("standard", 600), ("compact", 400), ("minimal", 250)):
+        result = await service.start_work(scope_ref=str(sid), budget=budget)
+        assert visible_characters({key: result[key] for key in ("scope", "domain_brief", "digest", "working_set", "read_guidance")}) <= maximum

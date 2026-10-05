@@ -34,6 +34,13 @@ async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
+async def memory_writer_owner(engine):
+    from tests.integration.memory_acceptance import writer_owner
+    async with writer_owner(engine) as owner:
+        yield owner
+
+
+@pytest_asyncio.fixture
 async def test_client(engine):
     """Create an async test client with DB session dependency override."""
     from httpx import ASGITransport, AsyncClient
