@@ -10,6 +10,7 @@ the report shape.
 from __future__ import annotations
 
 import json
+from tempfile import TemporaryDirectory
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -110,18 +111,14 @@ class TestQuickstart001Report:
         assert report["summary"]["passed"] == 13
         assert report["summary"]["failed"] == 0
         assert report["summary"]["management_api_checks"] == "23/23"
-        _REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_REPORT_PATH, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "quickstart_report.json"
+            output.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+            assert json.loads(output.read_text(encoding="utf-8")) == report
 
     def test_report_roundtrip(self):
         """The committed report is loadable and structurally intact."""
-        # ensure it exists even if the write test runs after this one
-        report = _build_report()
-        if not _REPORT_PATH.exists():
-            _REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(_REPORT_PATH, "w", encoding="utf-8") as f:
-                json.dump(report, f, indent=2, ensure_ascii=False)
+        assert _REPORT_PATH.is_file(), "historical acceptance report is missing"
         with open(_REPORT_PATH, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         assert loaded["report_type"] == "quickstart_acceptance"

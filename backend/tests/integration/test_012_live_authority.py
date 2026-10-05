@@ -25,8 +25,8 @@ async def test_database_rejects_event_mutation(db_session, verb):
     await db_session.flush()
     statement = ("UPDATE memory_events SET payload='{}'::jsonb WHERE event_id=:id"
                  if verb == "UPDATE" else "DELETE FROM memory_events WHERE event_id=:id")
-    async with db_session.begin_nested():
-        with pytest.raises(DBAPIError, match="append.only|immutable"):
+    with pytest.raises(DBAPIError, match="append.only|immutable"):
+        async with db_session.begin_nested():
             await db_session.execute(text(statement), {"id": identifier})
 
 
