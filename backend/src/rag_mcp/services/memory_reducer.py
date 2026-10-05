@@ -80,10 +80,12 @@ def reduce_events(events):
             entries[eid] = {**payload, "memory_id": eid, "knowledge_scope_id": scope,
                             "status": status, "valid_from": payload.get("valid_from") or timestamp,
                             "valid_to": None, "observed_at": timestamp,
+                            "superseded_by": None, "invalidated_at": None,
                             "source_event_id": event["event_id"]}
             salience[eid] = {"memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
                              "access_count": 0, "decay_rate": payload.get("decay_rate", .05),
                              "last_access_at": None, "evidence_refs": payload.get("evidence_refs", []),
+                             "reinforced_at": None,
                              "provenance": payload.get("provenance"), "inference_meta": payload.get("inference_meta")}
         elif kind == "retract":
             target = _scoped_target(entries, eid, scope)
@@ -92,8 +94,12 @@ def reduce_events(events):
             _scoped_target(entries, eid, scope)
             state = salience[eid]
             state["access_count"] += 1
-            state["salience"] += 1.0
+            from rag_mcp.services.salience_service import SalienceService
+            from datetime import datetime
+            age = (datetime.fromisoformat(timestamp) - datetime.fromisoformat(state["last_access_at"])).total_seconds() / 86400 if state["last_access_at"] else 0
+            state["salience"] = SalienceService(beta=state["decay_rate"]).update(state["salience"], access_count=1, age_days=age)
             state["last_access_at"] = timestamp
+            state["reinforced_at"] = timestamp
         elif kind == "rollback":
             point = payload.get("event_point")
             if not isinstance(point, int) or point >= event["event_id"] or not payload.get("reason"):
@@ -102,8 +108,16 @@ def reduce_events(events):
                 raise ValueError("MEMORY_ROLLBACK_FORBIDDEN")
             restored = reduce_events(item for item in history[:index] if item["event_id"] <= point)
             unaffected = {mid: row for mid, row in entries.items() if row["knowledge_scope_id"] != scope}
+            restored_ids = set(restored["entries"])
+            for mid, row in entries.items():
+                if row["knowledge_scope_id"] == scope and mid not in restored_ids:
+                    # A later identity becomes a tombstone; its immutable history remains.
+                    unaffected[mid] = {**row, "status": "retired", "valid_to": timestamp, "invalidated_at": timestamp}
             unaffected.update({mid: row for mid, row in restored["entries"].items() if row["knowledge_scope_id"] == scope})
             entries = unaffected
+            restored_bindings = {key: row for key, row in restored["bindings"].items() if row["knowledge_scope_id"] == scope}
+            bindings = {key: ({**row, "status": "disabled"} if row["knowledge_scope_id"] == scope else row) for key, row in bindings.items()}
+            bindings.update(restored_bindings)
             # Preserve all access events, including post-point use. New identities
             # removed by rollback retain salience audit but cannot supply facts.
         elif kind == "grant":

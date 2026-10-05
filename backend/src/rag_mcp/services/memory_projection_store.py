@@ -12,6 +12,7 @@ from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.memory_salience import MemorySalience
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode
+from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.services.memory_reducer import projection_fingerprint, require_reducer_state
 
 
@@ -122,9 +123,18 @@ class MemoryProjectionStore:
         await self._authorize(state, scope_id, event_id)
         for row in state["salience"].values():
             values = {key: value for key, value in row.items() if key in MemorySalience.__table__.columns}
-            if values.get("last_access_at"):
-                values["last_access_at"] = datetime.fromisoformat(values["last_access_at"])
+            for key in ("last_access_at", "reinforced_at"):
+                if values.get(key):
+                    values[key] = datetime.fromisoformat(values[key])
             await self._upsert(MemorySalience, values, "memory_id")
+
+    async def _materialize_bindings(self, state, scope_id, event_id):
+        if not state["bindings"]:
+            return
+        await self._authorize(state, scope_id, event_id)
+        for row in state["bindings"].values():
+            values = {key: value for key, value in row.items() if key in ScopeBinding.__table__.columns}
+            await self._upsert(ScopeBinding, values, "binding_id")
 
     async def materialize(self, state, scope_id, event_id):
         collection = None
@@ -136,6 +146,7 @@ class MemoryProjectionStore:
             except Exception as error:
                 raise ProjectionFailure(path) from error
         await self._authorize(state, scope_id, event_id)
+        await self._materialize_bindings(state, scope_id, event_id)
         for name, key in VIEW_KEYS.items():
             await self._upsert(MemoryProjectionMeta, {
                 "projection_id": f"{scope_id}:{event_id}:{name}", "projection_type": name,
@@ -206,6 +217,7 @@ class MemoryProjectionStore:
             if expected_row:
                 actual["salience"][row.memory_id] = {**expected_row, "salience": row.salience,
                     "access_count": row.access_count, "decay_rate": row.decay_rate,
+                    "reinforced_at": row.reinforced_at.isoformat() if row.reinforced_at else None,
                     "last_access_at": row.last_access_at.isoformat() if row.last_access_at else None}
         report = {}
         for name, key in VIEW_KEYS.items():

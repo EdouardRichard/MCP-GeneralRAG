@@ -61,6 +61,10 @@ class MemoryService:
         from rag_mcp.services.memory_reader import MemoryReader
         return await MemoryReader(self.session, self.projections).start_work(**parameters)
 
+    async def govern(self, action, **parameters):
+        from rag_mcp.services.memory_governance import MemoryGovernance
+        return await MemoryGovernance(self).execute(action, **parameters)
+
     async def apply_event(self, event_data):
         # Raw caller events are not an authorized memory-write surface.
         raise PermissionError("MEMORY_WRITE_UNAVAILABLE: use validated memory commands")
