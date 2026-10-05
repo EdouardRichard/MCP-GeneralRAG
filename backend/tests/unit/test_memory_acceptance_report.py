@@ -101,3 +101,33 @@ def test_legacy_regression_criterion_uses_completed_suites_without_memory_traces
                                  regression=[regression], diagnostics=None)
     assert next(row for row in report["success_criteria"] if row["id"] == "SC-012")["status"] != "passed"
 
+
+def test_write_observation_measures_metadata_without_retaining_user_values():
+    spec = importlib.util.spec_from_file_location("memory_pytest_evidence", ROOT / "eval/memory_pytest_evidence.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    parameters = {"scope_id": 7, "provenance": "soft", "content": "private content",
+                  "inference_meta": {"source": "private source", "confidence": .8, "model_version": "local",
+                                     "time": "2026-10-05T00:00:00Z", "supporting_evidence": []}}
+    result = {"request_id": "real-id", "status": "active",
+              "provenance_validation": {"provenance": "soft", "validated": True, "attributions": []}}
+    observation = module.observe_result("record", parameters, result, elapsed=.1)
+    assert observation["paths"]["write_checks"] == {"provenance": True, "soft_metadata": True}
+    assert "private source" not in json.dumps(observation)
+    assert "private content" not in json.dumps(observation)
+
+
+def test_acceptance_write_rates_require_observations_and_count_each_failure():
+    module = report_module()
+    measurements = [
+        {"scenario": "record", "scope_ids": [7], "request_ids": ["a"], "status": "active",
+         "failed_paths": [], "fingerprints": {}, "paths": {"write_checks": {"provenance": True, "hard_attribution": True}}},
+        {"scenario": "record", "scope_ids": [7], "request_ids": ["b"], "status": "active",
+         "failed_paths": [], "fingerprints": {}, "paths": {"write_checks": {"provenance": True, "hard_attribution": False}}},
+    ]
+    rates = module.write_rates(measurements)
+    assert rates["paths"]["hard_attribution"] == {"passed": 1, "total": 2, "rate": .5}
+    assert rates["paths"]["soft_metadata"] == {"passed": 0, "total": 0, "rate": None}
+    assert rates["status"] == "failed"
+    assert rates["request_ids"] == ["a", "b"]
+
