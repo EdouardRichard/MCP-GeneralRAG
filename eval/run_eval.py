@@ -110,17 +110,11 @@ async def _fetch_chunk_meta(chunk_ids: list[int]) -> dict[int, dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Stub embedding provider for eval (uses random vectors as placeholder)
+# Real embedding provider for evaluation
 # ---------------------------------------------------------------------------
 
 class _EvalEmbeddingProvider(EmbeddingProvider):
-    """Minimal embedding provider for evaluation.
-
-    In production this would load the real model.  For initial baseline
-    evaluation we attempt to import and use LocalCPUEmbeddingProvider if
-    available; otherwise fall back to a deterministic hash-based stub so
-    the script remains runnable without GPU/model dependencies.
-    """
+    """Evaluation uses the same model weights as production, failing closed."""
 
     def __init__(self, model_name: str | None = None) -> None:
         self._model_name = model_name or get_settings().embedding_model
@@ -133,33 +127,13 @@ class _EvalEmbeddingProvider(EmbeddingProvider):
         logger.info("Loaded real embedding provider: %s (dim=%d)", self._model_name, self._dimension)
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        if self._real_provider:
-            return await self._real_provider.embed_texts(texts)
-        return [self._hash_vector(t) for t in texts]
+        return await self._real_provider.embed_texts(texts)
 
     async def embed_query(self, text: str) -> list[float]:
-        if self._real_provider:
-            return await self._real_provider.embed_query(text)
-        return self._hash_vector(text)
+        return await self._real_provider.embed_query(text)
 
     def get_dimension(self) -> int:
-        if self._real_provider:
-            return self._real_provider.get_dimension()
-        return self._dimension
-
-    def _hash_vector(self, text: str) -> list[float]:
-        """Deterministic pseudo-vector from text hash. Not semantically meaningful."""
-        import hashlib
-        digest = hashlib.sha256(text.encode()).digest()
-        # Expand 32 bytes to dimension floats
-        vec: list[float] = []
-        for i in range(self._dimension):
-            byte_idx = i % len(digest)
-            val = (digest[byte_idx] + i * 7) % 256
-            vec.append(val / 255.0)
-        # Normalize
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+        return self._real_provider.get_dimension()
 
 
 # ---------------------------------------------------------------------------

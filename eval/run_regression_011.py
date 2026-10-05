@@ -163,6 +163,32 @@ GROUPS: list[dict] = [
 ]
 
 
+def configure_output_directory(directory: Path) -> list[dict]:
+    """Copy the historical calibers while directing every artifact to a new run."""
+    directory = directory.resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    if any(directory.iterdir()):
+        raise FileExistsError(f"regression output directory must be empty: {directory}")
+    groups = []
+    for original in GROUPS:
+        group = dict(original)
+        group["output"] = str(directory / Path(original["output"]).name.replace("011_", "012_", 1))
+        if "cmd" in original:
+            def redirected(*args, original=original):
+                command = original["cmd"](*args)
+                for flag in ("--output", "--format-report"):
+                    if flag in command:
+                        index = command.index(flag) + 1
+                        command[index] = str(directory / Path(command[index]).name.replace("011_", "012_", 1))
+                return command
+            group["cmd"] = redirected
+        if "prepare" in original:
+            n = 11 if original["id"] == "001_dense_11" else 37
+            group["prepare"] = lambda n=n: _write_truncated_dataset(n, directory / f"dataset_{n}.json")
+        groups.append(group)
+    return groups
+
+
 async def run_smoke_group(output_path: str) -> int:
     """Group 6: instance-form smoke via direct function import (the legacy
     runner writes to a fixed path — direct call keeps history intact)."""
@@ -223,7 +249,7 @@ def _compare(group: dict) -> dict:
     old_metrics = group["extract"](old_report)
 
     checks = []
-    all_no_regression = True
+    all_no_regression = bool(old_metrics) and set(new_metrics) == set(old_metrics)
     for name in sorted(set(new_metrics) & set(old_metrics)):
         a, b = old_metrics[name], new_metrics[name]
         if a == 0 and b == 0:
@@ -263,8 +289,9 @@ def _compare(group: dict) -> dict:
     }
 
 
-async def run_regression(group_ids: list[str] | None = None) -> int:
-    selected = [g for g in GROUPS if not group_ids or g["id"] in group_ids]
+async def run_regression(group_ids: list[str] | None = None, output_dir: Path | None = None) -> int:
+    groups = configure_output_directory(output_dir) if output_dir else GROUPS
+    selected = [g for g in groups if not group_ids or g["id"] in group_ids]
     results = []
     for group in selected:
         logger.info("=== group %s ===", group["id"])
@@ -276,7 +303,7 @@ async def run_regression(group_ids: list[str] | None = None) -> int:
                 rc = await run_smoke_group(group["output"])
             else:
                 cmd = group["cmd"](ds_arg) if "prepare" in group else group["cmd"]()
-                log_path = _EVAL / f"_011_regression_{group['id']}.log"
+                log_path = (output_dir or _EVAL) / f"regression_{group['id']}.log"
                 rc = await _run_subprocess(cmd, log_path)
             if rc != 0:
                 logger.error("group %s runner exited %s", group["id"], rc)
@@ -295,7 +322,7 @@ async def run_regression(group_ids: list[str] | None = None) -> int:
         "groups": results,
         "all_passed": all(r.get("all_passed") for r in results) and len(results) == len(GROUPS),
     }
-    out = _EVAL / "011_regression_summary.json"
+    out = output_dir / "012_regression_summary.json" if output_dir else _EVAL / "011_regression_summary.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
@@ -310,6 +337,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description="011 full regression (001-006 calibers).")
     p.add_argument("--group", action="append", default=None,
                    help="run a single group id (repeatable); default all six")
+    p.add_argument("--output-dir", type=Path, help="fresh directory for a 012 rerun; existing artifacts are refused")
     return p.parse_args(argv)
 
 
@@ -317,7 +345,7 @@ async def main(argv=None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    return await run_regression(args.group)
+    return await run_regression(args.group, args.output_dir)
 
 
 if __name__ == "__main__":
