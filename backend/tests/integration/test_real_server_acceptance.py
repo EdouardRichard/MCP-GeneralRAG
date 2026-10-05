@@ -91,8 +91,8 @@ def _ensure_eval_vectors() -> None:
 
 
 @pytest.fixture(scope="module")
-def real_mcp_server():
-    """Start the real MCP server with the agentic switch enabled."""
+def real_mcp_server(request):
+    """Start the real MCP server, enabling agentic retrieval by default."""
     _ensure_eval_vectors()
     if _port_open(MCP_HOST, MCP_PORT):
         pytest.fail(
@@ -100,7 +100,7 @@ def real_mcp_server():
             "running the real-server acceptance suite"
         )
     env = dict(os.environ)
-    env["AGENTIC_RETRIEVAL_ENABLED"] = "true"
+    env["AGENTIC_RETRIEVAL_ENABLED"] = "true" if getattr(request, "param", True) else "false"
     # Documented upper bound: reduce LLM timeouts -> fewer deterministic
     # degradations in the acceptance run (SC-011/SC-012).
     env["AGENTIC_NODE_TIMEOUT_MS"] = "10000"
