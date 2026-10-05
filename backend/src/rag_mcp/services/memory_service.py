@@ -47,7 +47,19 @@ class MemoryService:
         self.session = session
         self.projections = projection_store or MemoryProjectionStore(session,
             embedding_provider=embedding_provider or LocalCPUEmbeddingProvider(),
-            qdrant_store=qdrant_store or QdrantStore(), projection_root=projection_root)
+            qdrant_store=qdrant_store, projection_root=projection_root)
+
+    def _ensure_vector_store(self):
+        if self.projections.qdrant is None:
+            self.projections.qdrant = QdrantStore()
+
+    async def recall(self, **parameters):
+        from rag_mcp.services.memory_reader import MemoryReader
+        return await MemoryReader(self.session, self.projections).recall(**parameters)
+
+    async def start_work(self, **parameters):
+        from rag_mcp.services.memory_reader import MemoryReader
+        return await MemoryReader(self.session, self.projections).start_work(**parameters)
 
     async def apply_event(self, event_data):
         # Raw caller events are not an authorized memory-write surface.
@@ -114,6 +126,7 @@ class MemoryService:
             async with self.session.begin_nested():
                 await MemoryEventStore(self.session).append(event)
                 state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
+                self._ensure_vector_store()
                 await self.projections.materialize(state, scope_id, identifier)
                 integrity = await self.projections.inspect(state, scope_id)
                 if not all(row["matches_replay"] for row in integrity.values()):
@@ -150,6 +163,7 @@ class MemoryService:
                 "injection_flags": sanitized.injection_flags, "request_id": request_id}
 
     async def inspect_projections(self, scope_id):
+        self._ensure_vector_store()
         state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
         return await self.projections.inspect(state, scope_id)
 
@@ -161,6 +175,7 @@ class MemoryService:
         if not history:
             raise ValueError("MEMORY_WRITE_UNAVAILABLE")
         state = reduce_events(history)
+        self._ensure_vector_store()
         try:
             async with self.session.begin_nested():
                 await self.projections.materialize(state, scope_id, history[-1]["event_id"])

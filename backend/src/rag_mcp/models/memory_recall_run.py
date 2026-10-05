@@ -14,6 +14,7 @@ class MemoryRecallRun(Base):
     channel: Mapped[str | None] = mapped_column(String(32))
     session_id: Mapped[str | None] = mapped_column(String(64))
     returned_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    returned_ids: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     package_fingerprint: Mapped[str | None] = mapped_column(String(64))
     degraded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     failed_paths: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
