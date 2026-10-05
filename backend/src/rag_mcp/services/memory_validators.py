@@ -1,48 +1,143 @@
+"""Validation at the memory boundary; caller claims never establish authority."""
 from __future__ import annotations
 
+import hashlib
+import math
 import re
 from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import select
+
+from rag_mcp.agents.injection_detector import InjectionDetector
+from rag_mcp.models.chunk import Chunk
+from rag_mcp.models.knowledge_source import KnowledgeSource
+from rag_mcp.models.knowledge_version import KnowledgeVersion
+from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.parsers.credential_redactor import redact_credentials
 
 
+@dataclass(frozen=True)
 class SanitizedMemory:
-    def __init__(self, content, injection_flags, status):
-        self.content, self.injection_flags, self.status = content, injection_flags, status
+    content: str
+    injection_flags: dict
+    status: str
+
+
+def _confidence(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+        raise ValueError("MEMORY_PROVENANCE_INVALID")
 
 
 def validate_memory(payload):
     if payload.get("kind") not in {"episodic", "semantic", "procedural"}:
         raise ValueError("MEMORY_KIND_INVALID")
-    if not payload.get("scope_id"):
+    scope = payload.get("scope_id")
+    if isinstance(scope, bool) or not isinstance(scope, int) or scope <= 0:
         raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip() or len(content) > 4000:
+        raise ValueError("MEMORY_PROVENANCE_INVALID")
+    if payload.get("confidence") is not None:
+        _confidence(payload["confidence"])
     provenance = payload.get("provenance")
     if provenance == "hard":
-        refs = payload.get("evidence_refs") or []
-        if not refs:
-            raise ValueError("MEMORY_PROVENANCE_INVALID")
-        for ref in refs:
-            if isinstance(ref, str) or not ref.get("published") or ref.get("scope_id") != payload["scope_id"] or not all(ref.get(k) is not None for k in ("source_id", "version", "position")):
-                raise ValueError("MEMORY_EVIDENCE_INVALID")
+        refs = payload.get("evidence_refs")
+        if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or not ref.isdecimal() for ref in refs):
+            raise ValueError("MEMORY_EVIDENCE_ANCHOR_REQUIRED")
     elif provenance in {"soft", "distilled"}:
+        meta = payload.get("inference_meta")
         required = {"source", "confidence", "model_version", "time", "supporting_evidence"}
-        if not required.issubset((payload.get("inference_meta") or {}).keys()):
+        if not isinstance(meta, dict) or not required <= meta.keys():
             raise ValueError("MEMORY_INFERENCE_META_INCOMPLETE")
-        if provenance == "distilled" and not payload.get("source_memory_ids"):
-            raise ValueError("MEMORY_SOURCE_CHAIN_INVALID")
+        if any(not isinstance(meta[key], str) or not meta[key].strip() for key in ("source", "model_version", "time")):
+            raise ValueError("MEMORY_INFERENCE_META_INCOMPLETE")
+        _confidence(meta["confidence"])
+        if not isinstance(meta["supporting_evidence"], list) or any(not isinstance(ref, str) or not ref for ref in meta["supporting_evidence"]):
+            raise ValueError("MEMORY_INFERENCE_META_INCOMPLETE")
+        try:
+            timestamp = datetime.fromisoformat(meta["time"].replace("Z", "+00:00"))
+            if timestamp.tzinfo is None:
+                raise ValueError("timezone required")
+        except ValueError:
+            raise ValueError("MEMORY_INFERENCE_META_INCOMPLETE") from None
+        if provenance == "distilled" and not meta["supporting_evidence"]:
+            raise ValueError("MEMORY_PROVENANCE_INVALID")
     else:
         raise ValueError("MEMORY_PROVENANCE_INVALID")
     return payload
 
 
+class MemoryProvenanceValidator:
+    def __init__(self, session):
+        self.session = session
+
+    async def validate(self, payload):
+        validate_memory(payload)
+        attributions = []
+        if payload["provenance"] == "hard":
+            for reference in payload["evidence_refs"]:
+                row = (await self.session.execute(
+                    select(Chunk, KnowledgeVersion, KnowledgeSource)
+                    .join(KnowledgeVersion, Chunk.version_id == KnowledgeVersion.version_id)
+                    .join(KnowledgeSource, Chunk.source_id == KnowledgeSource.source_id)
+                    .where(Chunk.chunk_id == int(reference))
+                    .with_for_update(read=True)
+                )).first()
+                if not row:
+                    raise ValueError("MEMORY_EVIDENCE_ANCHOR_REQUIRED")
+                chunk, version, source = row
+                if any(scope != payload["scope_id"] for scope in (
+                    chunk.knowledge_scope_id, version.knowledge_scope_id, source.knowledge_scope_id
+                )):
+                    raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
+                if version.status != "published" or source.status != "published" or not chunk.content_text.strip() or not chunk.position_path or version.version_number < 1:
+                    raise ValueError("MEMORY_EVIDENCE_ANCHOR_REQUIRED")
+                attributions.append({"evidence_id": reference, "source_id": source.source_id,
+                    "version_id": version.version_id, "version": version.version_number,
+                    "position": chunk.position_path,
+                    "content_hash": hashlib.sha256(chunk.content_text.encode()).hexdigest()})
+        elif payload["provenance"] == "distilled":
+            for reference in payload["inference_meta"]["supporting_evidence"]:
+                identifier = reference.removeprefix("memory:")
+                if not identifier.isdecimal():
+                    raise ValueError("MEMORY_PROVENANCE_INVALID")
+                source = await self.session.get(MemoryEntry, int(identifier))
+                if source is None or source.knowledge_scope_id != payload["scope_id"]:
+                    raise ValueError("MEMORY_PROVENANCE_INVALID")
+                attributions.append({"memory_id": source.memory_id, "provenance": source.provenance,
+                                     "evidence_refs": source.evidence_refs, "inference_meta": source.inference_meta})
+        return {"provenance": payload["provenance"], "validated": True, "attributions": attributions}
+
+
+_SHORT_CREDENTIAL = re.compile(
+    r'''(?i)(\b(password|passwd|pwd|token|api[_-]?key|client_secret|secret)\s*[:=]\s*)(["']?)([^\s"'<>]+)(["']?)'''
+)
+
+
 def sanitize_memory(content):
-    redacted = re.sub(r"(?i)(password|token|api[_-]?key)\s*=\s*[^\s]+", r"\1=[REDACTED]", content)
-    flags = ["prompt_injection"] if re.search(r"(?i)ignore previous instructions|system prompt", content) else []
-    return SanitizedMemory(redacted, flags, "quarantined" if flags else "active")
+    def replace(match):
+        field = match[2].lower()
+        kind = "password" if field in {"password", "passwd", "pwd"} else "api-key" if field in {"api_key", "api-key"} else "secret" if "secret" in field else "token"
+        return f"{match[1]}{match[3]}<{kind}>{match[5]}"
+    redacted = _SHORT_CREDENTIAL.sub(replace, redact_credentials(content))
+    try:
+        report = InjectionDetector().detect(redacted, strict=True)
+        if report.risk_level not in {"none", "low", "high"}:
+            raise ValueError("invalid detector result")
+    except Exception:
+        raise ValueError("MEMORY_WRITE_UNAVAILABLE") from None
+    flags = {"suspicious": report.suspicious, "risk_level": report.risk_level,
+             "matched_patterns": report.matched_patterns}
+    return SanitizedMemory(redacted, flags, "quarantined" if report.risk_level == "high" else "active")
 
 
 def validate_supersede(payload):
     target = payload.get("target") or {}
     if target.get("scope_id") != payload.get("scope_id") or target.get("status") != "active":
-        raise ValueError("MEMORY_SUPERSEDE_INVALID")
+        raise ValueError("MEMORY_SUPERSEDE_TARGET_INVALID")
+    if target.get("provenance") == "hard" and payload.get("provenance") != "hard":
+        raise ValueError("MEMORY_SUPERSEDE_TARGET_INVALID")
 
 
 def check_quota(current, quota):
@@ -51,4 +146,4 @@ def check_quota(current, quota):
 
 
 def derive_ttl(kind, policy):
-    return (policy.get("ttl_days") or {}).get(kind)
+    return policy.get("episodic_ttl_days", 180) if kind == "episodic" else policy.get("semantic_procedural_ttl_days")

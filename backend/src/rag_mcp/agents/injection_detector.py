@@ -94,7 +94,7 @@ _LOW_RISK_PATTERNS: list[tuple[str, re.Pattern]] = [
 class InjectionDetector:
     """Heuristic prompt-injection detector (never raises, FR-020)."""
 
-    def detect(self, text: Any) -> InjectionReport:
+    def detect(self, text: Any, *, strict: bool = False) -> InjectionReport:
         """Scan a text fragment; detection failure returns a safe report."""
         try:
             if not isinstance(text, str) or not text:
@@ -115,6 +115,8 @@ class InjectionDetector:
                 )
             return InjectionReport(suspicious=False, risk_level="none")
         except Exception as exc:  # noqa: BLE001 - detection never blocks
+            if strict:
+                raise
             logger.warning("Injection detection failed: %s", exc)
             return InjectionReport(suspicious=False, risk_level="none")
 
