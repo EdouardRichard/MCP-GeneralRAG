@@ -58,6 +58,19 @@ async def test_builtin_policy_is_seeded_in_the_database(db_session):
 
 
 @pytest.mark.asyncio
+async def test_direct_projection_insert_is_rejected_by_postgres(db_session):
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    scope = await db_session.scalar(select(KnowledgeScope.scope_id).limit(1))
+    with pytest.raises(DBAPIError, match="reducer"):
+        async with db_session.begin_nested():
+            await db_session.execute(text("""
+                INSERT INTO memory_entries(memory_id,knowledge_scope_id,kind,provenance,
+                    content_text,content_hash,evidence_refs,status)
+                VALUES (:id,:scope,'semantic','hard','bypass',:hash,'[]','active')
+            """), {"id": generate_id(), "scope": scope, "hash": "f" * 64})
+
+
+@pytest.mark.asyncio
 async def test_caller_published_flag_is_not_evidence(db_session):
     from rag_mcp.services import memory_validators
     validator_type = getattr(memory_validators, "MemoryProvenanceValidator", None)
