@@ -1,12 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+from sqlalchemy import func, select, text
 
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import MemoryProjectionStore
 from rag_mcp.services.memory_reducer import reduce_events
 from rag_mcp.services.memory_validators import validate_memory, sanitize_memory
+from rag_mcp.services.memory_validators import MemoryProvenanceValidator, check_quota, derive_ttl, validate_supersede
+from rag_mcp.models.domain_profile import DomainProfile
+from rag_mcp.models.knowledge_scope import KnowledgeScope
+from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.models.session import MemorySession
+from rag_mcp.indexing.qdrant_client import QdrantStore
+from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+from rag_mcp.utils.snowflake import generate_id
 
 
 def recall_memories(rows, *, mode, scope_ids, memory_id=None, limit=40):
@@ -30,30 +43,95 @@ def format_memory_recall(rows, *, failed_paths=None):
 
 
 class MemoryService:
-    def __init__(self, session, projection_store=None):
+    def __init__(self, session, projection_store=None, *, embedding_provider=None, qdrant_store=None, projection_root=None):
         self.session = session
-        self.events = []
-        self.projections = projection_store or MemoryProjectionStore()
+        self.projections = projection_store or MemoryProjectionStore(session,
+            embedding_provider=embedding_provider or LocalCPUEmbeddingProvider(),
+            qdrant_store=qdrant_store or QdrantStore(), projection_root=projection_root)
 
     async def apply_event(self, event_data):
-        event = MemoryEvent(
-            event_id=event_data["event_id"], event_type=event_data["event_type"],
-            aggregate_id=event_data["aggregate_id"], knowledge_scope_id=event_data["knowledge_scope_id"],
-            payload=event_data.get("payload", {}), authority=event_data.get("authority", {}),
-            scope_meta=event_data.get("scope_meta", {}), mutability=event_data.get("mutability", {}),
-            provenance_meta=event_data.get("provenance_meta", {}), recoverability=event_data.get("recoverability", {}),
-            actor=event_data.get("actor", "system"), request_id=event_data.get("request_id", "test"),
-            occurred_at=event_data.get("occurred_at", datetime.now(timezone.utc)),
-        )
-        await MemoryEventStore(self.session).append(event)
-        self.events.append(event_data)
-        state = reduce_events(self.events)
-        self.projections.upsert_from_reducer(event.memory_id if hasattr(event, "memory_id") else event.aggregate_id, state)
-        return {"status": "complete", "event_id": event.event_id}
+        # Raw caller events are not an authorized memory-write surface.
+        raise PermissionError("MEMORY_WRITE_UNAVAILABLE: use validated memory commands")
 
     async def record(self, payload):
-        validate_memory(payload)
-        sanitized = sanitize_memory(payload["content"])
-        event_payload = {"content_text": sanitized.content, "kind": payload["kind"], "provenance": payload["provenance"], "evidence_refs": payload.get("evidence_refs", []), "injection_flags": sanitized.injection_flags}
-        result = await self.apply_event({"event_id": len(self.events) + 1, "event_type": "assert", "aggregate_id": len(self.events) + 1, "knowledge_scope_id": payload["scope_id"], "payload": event_payload})
-        return {"memory_id": result["event_id"], "status": sanitized.status, "provenance_validation": "valid", "injection_flags": sanitized.injection_flags}
+        scope_id = payload.get("scope_id")
+        scope = await self.session.get(KnowledgeScope, scope_id) if isinstance(scope_id, int) else None
+        if not scope or scope.status != "active":
+            raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+        sanitized = sanitize_memory(payload.get("content", ""))
+        clean = {**payload, "content": sanitized.content}
+        validation = await MemoryProvenanceValidator(self.session).validate(clean)
+        await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
+        profile = await self.session.get(DomainProfile, scope.domain_key)
+        policy = profile.memory_policy or {}
+        metadata = {key: clean.get(key) for key in (
+            "kind", "provenance", "inference_meta", "confidence", "title", "session_id", "agent_id",
+            "task_context", "supersedes_memory_id")}
+        metadata["evidence_refs"] = sorted(set(clean.get("evidence_refs") or []))
+        metadata["tags"] = sorted(set(clean.get("tags") or []))
+        digest = hashlib.sha256(sanitized.content.encode()).hexdigest()
+        existing = await self.session.scalar(select(MemoryEntry).where(
+            MemoryEntry.knowledge_scope_id == scope_id, MemoryEntry.content_hash == digest
+        ))
+        request_id = str(uuid4())
+        if existing:
+            if existing.write_status != "complete":
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+            if existing.submission_meta != metadata:
+                raise ValueError(f"MEMORY_CONTENT_CONFLICT:{existing.memory_id}")
+            return {"memory_id": existing.memory_id, "status": existing.status,
+                    "provenance_validation": validation, "injection_flags": existing.injection_flags,
+                    "request_id": request_id}
+        history = await MemoryEventStore(self.session).replay(scope_id)
+        current = await self.projections.current(scope_id)
+        if history and (not current or current.source_event_id != history[-1]["event_id"]):
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+        if clean.get("supersedes_memory_id"):
+            target = await self.session.get(MemoryEntry, clean["supersedes_memory_id"])
+            validate_supersede({**clean, "target": {"scope_id": target.knowledge_scope_id,
+                "status": target.status, "provenance": target.provenance} if target else {}})
+        count = await self.session.scalar(select(func.count()).select_from(MemoryEntry).where(
+            MemoryEntry.knowledge_scope_id == scope_id, MemoryEntry.status == "active", MemoryEntry.write_status == "complete"
+        ))
+        check_quota(count, policy.get("per_scope_memory_quota", 5000))
+        now = datetime.now(timezone.utc)
+        ttl = derive_ttl(clean["kind"], policy)
+        identifier = generate_id()
+        event_payload = {**metadata, "content_text": sanitized.content, "content_hash": digest,
+            "submission_meta": metadata, "status": sanitized.status, "injection_flags": sanitized.injection_flags,
+            "provenance_validation": validation, "decay_rate": policy.get("decay_rate", .05),
+            "created_at": now.isoformat(), "updated_at": now.isoformat(),
+            "expires_at": (now + timedelta(days=ttl)).isoformat() if ttl is not None else None}
+        event = MemoryEvent(event_id=identifier, aggregate_id=identifier,
+            event_type="revise" if clean.get("supersedes_memory_id") else "assert",
+            knowledge_scope_id=scope_id, payload=event_payload, actor="memory_tool", request_id=request_id,
+            session_id=clean.get("session_id"), occurred_at=now, valid_from=now,
+            authority={"source": "validated_evidence" if clean["provenance"] == "hard" else "inference"},
+            scope_meta={"knowledge_scope_id": scope_id}, mutability={"correction": "supersede"},
+            provenance_meta=validation, recoverability={"source": "event_log"}, actionability="evidence")
+        try:
+            async with self.session.begin_nested():
+                await MemoryEventStore(self.session).append(event)
+                state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
+                await self.projections.materialize(state, scope_id, identifier)
+                integrity = await self.projections.inspect(state, scope_id)
+                if not all(row["matches_replay"] for row in integrity.values()):
+                    raise ValueError("MEMORY_WRITE_UNAVAILABLE: projection integrity")
+                if clean.get("session_id"):
+                    session = await self.session.get(MemorySession, clean["session_id"])
+                    if session is None:
+                        self.session.add(MemorySession(session_id=clean["session_id"], agent_id=clean.get("agent_id") or "unknown",
+                            primary_scope_id=scope_id, started_at=now, last_active_at=now, status="active", expires_at=now + timedelta(days=7)))
+                    else:
+                        session.last_active_at = now
+                        session.expires_at = now + timedelta(days=7)
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+        return {"memory_id": identifier, "status": sanitized.status, "provenance_validation": validation,
+                "injection_flags": sanitized.injection_flags, "request_id": request_id}
+
+    async def inspect_projections(self, scope_id):
+        state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
+        return await self.projections.inspect(state, scope_id)

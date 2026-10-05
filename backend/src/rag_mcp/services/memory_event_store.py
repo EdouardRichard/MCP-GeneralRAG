@@ -1,3 +1,9 @@
+from sqlalchemy import select
+
+from rag_mcp.models.memory_event import MemoryEvent
+from rag_mcp.services.memory_validators import MemoryProvenanceValidator, sanitize_memory
+
+
 class MemoryEventStore:
     """Append-only event repository. Deliberately exposes no mutation methods."""
 
@@ -5,7 +11,29 @@ class MemoryEventStore:
         self.session = session
 
     async def append(self, event):
+        if event.event_type in {"assert", "revise", "consolidate"}:
+            payload = event.payload
+            validation = await MemoryProvenanceValidator(self.session).validate({
+                **payload, "scope_id": event.knowledge_scope_id, "content": payload.get("content_text")
+            })
+            sanitized = sanitize_memory(payload["content_text"])
+            if sanitized.content != payload["content_text"] or sanitized.status != payload.get("status"):
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+            event.payload = {**payload, "provenance_validation": validation}
+        elif event.event_type in {"grant", "rollback"} and event.actor != "management":
+            raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
         self.session.add(event)
         await self.session.flush()
         return event
+
+    async def replay(self, scope_id, *, through_event_id=None):
+        if not isinstance(scope_id, int) or isinstance(scope_id, bool) or scope_id <= 0:
+            raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+        statement = select(MemoryEvent).where(MemoryEvent.knowledge_scope_id == scope_id).order_by(MemoryEvent.event_id)
+        if through_event_id is not None:
+            statement = statement.where(MemoryEvent.event_id <= through_event_id)
+        rows = (await self.session.execute(statement)).scalars().all()
+        return [{column.name: (getattr(row, column.name).isoformat()
+                if hasattr(getattr(row, column.name), "isoformat") else getattr(row, column.name))
+                 for column in MemoryEvent.__table__.columns} for row in rows]
 
