@@ -9,7 +9,7 @@ from sqlalchemy import func, select, text
 
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
-from rag_mcp.services.memory_projection_store import MemoryProjectionStore
+from rag_mcp.services.memory_projection_store import MemoryProjectionStore, ProjectionFailure
 from rag_mcp.services.memory_reducer import reduce_events
 from rag_mcp.services.memory_validators import validate_memory, sanitize_memory
 from rag_mcp.services.memory_validators import MemoryProvenanceValidator, check_quota, derive_ttl, validate_supersede
@@ -109,6 +109,7 @@ class MemoryService:
             authority={"source": "validated_evidence" if clean["provenance"] == "hard" else "inference"},
             scope_meta={"knowledge_scope_id": scope_id}, mutability={"correction": "supersede"},
             provenance_meta=validation, recoverability={"source": "event_log"}, actionability="evidence")
+        event_fields = {column.name: getattr(event, column.name) for column in MemoryEvent.__table__.columns if column.name != "created_at"}
         try:
             async with self.session.begin_nested():
                 await MemoryEventStore(self.session).append(event)
@@ -116,7 +117,7 @@ class MemoryService:
                 await self.projections.materialize(state, scope_id, identifier)
                 integrity = await self.projections.inspect(state, scope_id)
                 if not all(row["matches_replay"] for row in integrity.values()):
-                    raise ValueError("MEMORY_WRITE_UNAVAILABLE: projection integrity")
+                    raise ProjectionFailure("integrity")
                 if clean.get("session_id"):
                     session = await self.session.get(MemorySession, clean["session_id"])
                     if session is None:
@@ -126,6 +127,22 @@ class MemoryService:
                         session.last_active_at = now
                         session.expires_at = now + timedelta(days=7)
             await self.session.commit()
+        except ProjectionFailure as failure:
+            if failure.path == "relation":
+                await self.session.rollback()
+                raise
+            # The savepoint restored the previous PG view and left our scoped
+            # transaction lock held. Retain the failed command without moving
+            # the completed manifest consumed by readers.
+            try:
+                await MemoryEventStore(self.session).append(MemoryEvent(**event_fields))
+                state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
+                await self.projections.retain_failure(state, scope_id, identifier, failure.path)
+                await self.session.commit()
+            except Exception:
+                await self.session.rollback()
+                raise
+            raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
         except Exception:
             await self.session.rollback()
             raise
@@ -135,3 +152,23 @@ class MemoryService:
     async def inspect_projections(self, scope_id):
         state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
         return await self.projections.inspect(state, scope_id)
+
+    async def rebuild(self, scope_id, *, actor):
+        if actor != "management" or not isinstance(scope_id, int) or isinstance(scope_id, bool):
+            raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+        await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
+        history = await MemoryEventStore(self.session).replay(scope_id)
+        if not history:
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+        state = reduce_events(history)
+        try:
+            async with self.session.begin_nested():
+                await self.projections.materialize(state, scope_id, history[-1]["event_id"])
+                report = await self.projections.inspect(state, scope_id)
+                if not all(row["matches_replay"] for row in report.values()):
+                    raise ProjectionFailure("integrity")
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+        return report

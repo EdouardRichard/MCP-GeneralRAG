@@ -19,6 +19,12 @@ VIEW_KEYS = {"relation": "entries", "dense": "dense", "links": "links",
              "summary": "summary", "file": "files", "salience": "salience"}
 
 
+class ProjectionFailure(ValueError):
+    def __init__(self, path):
+        self.path = path
+        super().__init__(f"MEMORY_WRITE_UNAVAILABLE:{path}")
+
+
 class MemoryProjectionStore:
     """Projection state is writable only from reducer output."""
 
@@ -118,12 +124,14 @@ class MemoryProjectionStore:
             await self._upsert(MemorySalience, values, "memory_id")
 
     async def materialize(self, state, scope_id, event_id):
-        await self._materialize_relation(state, scope_id, event_id)
-        collection = await self._materialize_dense(state, scope_id, event_id)
-        await self._materialize_links(state, scope_id, event_id)
-        await self._materialize_summary(state, scope_id, event_id)
-        await self._materialize_files(state, scope_id, event_id)
-        await self._materialize_salience(state, scope_id, event_id)
+        collection = None
+        for path in ("relation", "dense", "links", "summary", "files", "salience"):
+            try:
+                result = await getattr(self, f"_materialize_{path}")(state, scope_id, event_id)
+                if path == "dense":
+                    collection = result
+            except Exception as error:
+                raise ProjectionFailure(path) from error
         await self._authorize(state, scope_id, event_id)
         for name, key in VIEW_KEYS.items():
             await self._upsert(MemoryProjectionMeta, {
@@ -139,6 +147,15 @@ class MemoryProjectionStore:
             "payload": {"state": state.export(), "collection": collection, "root": str(self.root)},
         }, "projection_id")
         await self.session.flush()
+
+    async def retain_failure(self, state, scope_id, event_id, path):
+        await self._materialize_relation(state, scope_id, event_id, write_status="failed")
+        await self._upsert(MemoryProjectionMeta, {
+            "projection_id": f"pending:{scope_id}:{event_id}", "projection_type": "pending",
+            "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "failed",
+            "fingerprint": projection_fingerprint(state),
+            "payload": {"state": state.export(), "failed_paths": [path]},
+        }, "projection_id")
 
     async def inspect(self, state, scope_id):
         require_reducer_state(state)
