@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-record-memory.input.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope_ref", "kind", "content", "provenance"],
+  "properties": {
+    "scope_ref": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["episodic", "semantic", "procedural"]},
+    "content": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "provenance": {"enum": ["hard", "soft", "distilled"]},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "inference_meta": {"$ref": "memory-entry.schema.json#/$defs/inferenceMeta"},
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "title": {"type": ["string", "null"]},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "session_id": {"type": ["string", "null"], "format": "uuid"},
+    "agent_id": {"type": ["string", "null"]},
+    "task_context": {"type": ["object", "null"]},
+    "supersedes_memory_id": {"type": ["integer", "null"]}
+  }
+}

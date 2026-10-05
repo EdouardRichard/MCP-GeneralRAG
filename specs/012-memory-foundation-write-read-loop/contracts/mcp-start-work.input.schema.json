@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-start-work.input.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope_ref"],
+  "properties": {
+    "scope_ref": {"type": "string", "minLength": 1},
+    "session_id": {"type": ["string", "null"], "format": "uuid"},
+    "task_hint": {"type": ["string", "null"]},
+    "agent_id": {"type": ["string", "null"]},
+    "include": {"enum": ["both"], "default": "both"},
+    "budget": {"enum": ["standard", "compact", "minimal"], "default": "standard"}
+  }
+}

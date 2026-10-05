@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-entry.schema.json",
+  "type": "object",
+  "required": ["memory_id", "knowledge_scope_id", "kind", "provenance", "content_excerpt", "status"],
+  "properties": {
+    "memory_id": {"type": "integer"},
+    "knowledge_scope_id": {"type": "integer"},
+    "kind": {"enum": ["episodic", "semantic", "procedural"]},
+    "provenance": {"enum": ["hard", "soft", "distilled"]},
+    "title": {"type": ["string", "null"]},
+    "content_excerpt": {"type": "string", "maxLength": 300},
+    "truncated": {"type": "boolean"},
+    "content_length": {"type": "integer"},
+    "confidence": {"type": ["number", "null"]},
+    "evidence_refs": {"type": "array"},
+    "valid_from": {"type": ["string", "null"]},
+    "valid_to": {"type": ["string", "null"]},
+    "observed_at": {"type": "string"},
+    "session_id": {"type": ["string", "null"]},
+    "agent_id": {"type": ["string", "null"]},
+    "status": {"enum": ["active", "superseded", "retired", "quarantined"]},
+    "superseded_by": {"type": ["integer", "null"]},
+    "match": {"type": ["object", "null"]}
+  },
+  "$defs": {
+    "inferenceMeta": {
+      "type": "object",
+      "required": ["source", "confidence", "model_version", "time", "supporting_evidence"]
+    }
+  }
+}

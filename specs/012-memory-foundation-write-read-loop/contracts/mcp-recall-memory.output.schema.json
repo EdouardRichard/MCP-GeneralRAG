@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-recall-memory.output.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["completion_status", "memories", "counts", "request_id"],
+  "properties": {
+    "completion_status": {"enum": ["complete", "partial", "no_evidence", "failed"]},
+    "memories": {"type": "array", "items": {"$ref": "memory-entry.schema.json"}},
+    "counts": {"type": "object"},
+    "memory_notice": {"type": ["object", "null"]},
+    "gaps": {"type": ["array", "null"]},
+    "error": {"type": ["object", "null"]},
+    "request_id": {"type": "string"}
+  }
+}

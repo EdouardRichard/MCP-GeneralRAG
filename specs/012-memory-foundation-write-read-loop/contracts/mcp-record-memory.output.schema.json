@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-record-memory.output.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["memory_id", "status", "provenance_validation", "injection_flags", "request_id"],
+  "properties": {
+    "memory_id": {"type": "integer"},
+    "status": {"enum": ["active", "superseded", "retired", "quarantined"]},
+    "provenance_validation": {"type": "object"},
+    "injection_flags": {"type": "object"},
+    "request_id": {"type": "string"}
+  }
+}

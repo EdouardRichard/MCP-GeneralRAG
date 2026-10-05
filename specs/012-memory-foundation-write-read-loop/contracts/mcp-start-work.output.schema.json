@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mcp-start-work.output.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "domain_brief", "digest", "working_set", "read_guidance", "package_fingerprint", "counts", "request_id"],
+  "properties": {
+    "scope": {"type": "object"},
+    "domain_brief": {"type": "object"},
+    "digest": {"type": "object"},
+    "working_set": {"type": "object"},
+    "read_guidance": {"type": "string"},
+    "package_fingerprint": {"type": "string"},
+    "counts": {"type": "object"},
+    "request_id": {"type": "string"}
+  }
+}

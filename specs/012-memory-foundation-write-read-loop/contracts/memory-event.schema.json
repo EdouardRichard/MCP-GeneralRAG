@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-event.schema.json",
+  "type": "object",
+  "required": ["event_id", "event_type", "aggregate_id", "knowledge_scope_id", "payload", "occurred_at"],
+  "properties": {
+    "event_id": {"type": "integer"},
+    "event_type": {"enum": ["assert", "revise", "retract", "consolidate", "access", "grant", "rollback"]},
+    "aggregate_id": {"type": "integer"},
+    "knowledge_scope_id": {"type": "integer"},
+    "payload": {"type": "object"},
+    "authority": {"type": "object"},
+    "scope_meta": {"type": "object"},
+    "mutability": {"type": "object"},
+    "provenance_meta": {"type": "object"},
+    "recoverability": {"type": "object"},
+    "actionability": {"type": "string"},
+    "actor": {"type": "string"},
+    "session_id": {"type": ["string", "null"]},
+    "request_id": {"type": "string"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "valid_from": {"type": ["string", "null"], "format": "date-time"},
+    "valid_to": {"type": ["string", "null"], "format": "date-time"}
+  }
+}
