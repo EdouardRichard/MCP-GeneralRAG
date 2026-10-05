@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from rag_mcp.models.memory_event import MemoryEvent
-from rag_mcp.services.memory_validators import MemoryProvenanceValidator, sanitize_memory
+from rag_mcp.services.memory_validators import MemoryProvenanceValidator, sanitize_submission
 
 
 class MemoryEventStore:
@@ -16,8 +16,9 @@ class MemoryEventStore:
             validation = await MemoryProvenanceValidator(self.session).validate({
                 **payload, "scope_id": event.knowledge_scope_id, "content": payload.get("content_text")
             })
-            sanitized = sanitize_memory(payload["content_text"])
-            if sanitized.content != payload["content_text"] or sanitized.status != payload.get("status"):
+            clean, sanitized = sanitize_submission({**payload, "content": payload["content_text"]})
+            del clean["content"]
+            if clean != payload or sanitized.status != payload.get("status") or sanitized.injection_flags != payload.get("injection_flags"):
                 raise ValueError("MEMORY_WRITE_UNAVAILABLE")
             event.payload = {**payload, "provenance_validation": validation}
         elif event.event_type in {"grant", "rollback"} and event.actor != "management":

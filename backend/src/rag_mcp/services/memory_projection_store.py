@@ -51,10 +51,13 @@ class MemoryProjectionStore:
     async def current(self, scope_id):
         return await self.session.get(MemoryProjectionMeta, f"current:{scope_id}", populate_existing=True)
 
-    async def _authorize(self, state, scope_id, event_id):
+    def _check_scope(self, state, scope_id):
         require_reducer_state(state)
         if any(row["knowledge_scope_id"] != scope_id for row in state["entries"].values()):
             raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
+
+    async def _authorize(self, state, scope_id, event_id):
+        self._check_scope(state, scope_id)
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
     async def _upsert(self, model, values, key):
@@ -75,7 +78,7 @@ class MemoryProjectionStore:
             await self._upsert(MemoryEntry, values, "memory_id")
 
     async def _materialize_dense(self, state, scope_id, event_id):
-        require_reducer_state(state)
+        self._check_scope(state, scope_id)
         model = get_settings().embedding_model.replace("/", "_").replace("-", "_")
         collection = f"memories_dense_{model}_012_v1_s{scope_id}_e{event_id}"
         if not await asyncio.to_thread(self.qdrant.collection_exists, collection):
@@ -106,7 +109,7 @@ class MemoryProjectionStore:
         (directory / "INDEX.md").write_text("\n".join(sorted(state["files"])), encoding="utf-8")
 
     async def _materialize_files(self, state, scope_id, event_id):
-        require_reducer_state(state)
+        self._check_scope(state, scope_id)
         directory = self.root / str(scope_id) / str(event_id)
         for key, row in state["files"].items():
             path = (directory / key).resolve()

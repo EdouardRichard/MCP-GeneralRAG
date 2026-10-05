@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -115,12 +116,24 @@ _SHORT_CREDENTIAL = re.compile(
 )
 
 
+def _credential_type(field):
+    field = field.lower()
+    return "password" if field in {"password", "passwd", "pwd"} else "api-key" if field in {"api_key", "api-key"} else "secret" if "secret" in field else "token"
+
+
+def _redact_tree(value):
+    if isinstance(value, str):
+        return _SHORT_CREDENTIAL.sub(lambda match: f"{match[1]}{match[3]}<{_credential_type(match[2])}>{match[5]}", redact_credentials(value))
+    if isinstance(value, list):
+        return [_redact_tree(item) for item in value]
+    if isinstance(value, dict):
+        return {key: f"<{_credential_type(key)}>" if key.lower() in {"password", "passwd", "pwd", "token", "api_key", "api-key", "client_secret", "secret"}
+                and item is not None else _redact_tree(item) for key, item in value.items()}
+    return value
+
+
 def sanitize_memory(content):
-    def replace(match):
-        field = match[2].lower()
-        kind = "password" if field in {"password", "passwd", "pwd"} else "api-key" if field in {"api_key", "api-key"} else "secret" if "secret" in field else "token"
-        return f"{match[1]}{match[3]}<{kind}>{match[5]}"
-    redacted = _SHORT_CREDENTIAL.sub(replace, redact_credentials(content))
+    redacted = _redact_tree(content)
     try:
         report = InjectionDetector().detect(redacted, strict=True)
         if report.risk_level not in {"none", "low", "high"}:
@@ -130,6 +143,13 @@ def sanitize_memory(content):
     flags = {"suspicious": report.suspicious, "risk_level": report.risk_level,
              "matched_patterns": report.matched_patterns}
     return SanitizedMemory(redacted, flags, "quarantined" if report.risk_level == "high" else "active")
+
+
+def sanitize_submission(payload):
+    clean = _redact_tree(payload)
+    untrusted = {key: clean.get(key) for key in ("content", "title", "tags", "agent_id", "task_context", "inference_meta")}
+    checked = sanitize_memory(json.dumps(untrusted, ensure_ascii=False))
+    return clean, SanitizedMemory(clean.get("content", ""), checked.injection_flags, checked.status)
 
 
 def validate_supersede(payload):

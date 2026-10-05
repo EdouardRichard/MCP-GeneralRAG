@@ -11,7 +11,7 @@ from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import MemoryProjectionStore, ProjectionFailure
 from rag_mcp.services.memory_reducer import reduce_events
-from rag_mcp.services.memory_validators import validate_memory, sanitize_memory
+from rag_mcp.services.memory_validators import sanitize_submission
 from rag_mcp.services.memory_validators import MemoryProvenanceValidator, check_quota, derive_ttl, validate_supersede
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
@@ -70,8 +70,7 @@ class MemoryService:
         scope = await self.session.get(KnowledgeScope, scope_id) if isinstance(scope_id, int) else None
         if not scope or scope.status != "active":
             raise ValueError("MISSING_KNOWLEDGE_SCOPE")
-        sanitized = sanitize_memory(payload.get("content", ""))
-        clean = {**payload, "content": sanitized.content}
+        clean, sanitized = sanitize_submission(payload)
         validation = await MemoryProvenanceValidator(self.session).validate(clean)
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
         profile = await self.session.get(DomainProfile, scope.domain_key)
