@@ -1,4 +1,0 @@
-$ node --import tsx/esm apps/cli/src/bin.ts "web"
-dsh: all_proxy names a SOCKS proxy, which is not supported; connecting directly for that scheme — set an http:// or https:// proxy URL instead
-dsh web: http://127.0.0.1:3080/?token=6FWkTUwXuHvmB9_m8dQGUgbEWIWcGe_L6gUCA98vFgg
-dsh web: opening the default browser; pass --no-open to disable
