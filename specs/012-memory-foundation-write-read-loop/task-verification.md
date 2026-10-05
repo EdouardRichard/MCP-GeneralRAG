@@ -17,7 +17,15 @@ Evidence at this checkpoint:
   failures (`4e25753`, `45bb5a2`). Same-transaction reuse still checks the
   latest event under the scope lock; different savepoints revalidate the log.
 - Read diagnostics d: `final-regression-d/read-diagnostics.json`.
-- Full suite e is in progress; it will supersede intermediate suite evidence.
+- Full suite e: 2133 passed, three failed, zero skipped. Two old Agentic
+  Recall@K failures used identical constant dense vectors; the old management
+  lifespan failure reused a global asyncpg pool across closed test loops.
+  These results are not final acceptance.
+- Fixture repair (`8755ecf`, `6ca55a6`): constant-vector red assertion and
+  real PostgreSQL cross-loop red reproduction, then 17 tests passed in a
+  serial run (`final-regression-e/legacy-fixture-green-serial.xml`). Real BGE
+  vectors/reranking retain the original Recall@K and expected-source checks.
+- Full suite f is running with actual memory observations and read diagnostics.
 
 Test locations below use U = `backend/tests/unit/`,
 C = `backend/tests/contract/`, I = `backend/tests/integration/`.
