@@ -43,6 +43,8 @@ async def test_snapshot_10000_cadence_archive_and_corrupt_recovery_use_real_log(
     restored = await history.load(sid)
     assert restored.status == "complete" and restored.source == "snapshot_delta"
     assert restored.state["salience"][first["memory_id"]]["access_count"] == 10000
+    report = await service.rebuild(sid, actor="management")
+    assert all(row.get("recovery_source") == "snapshot_delta" for row in report.values()), "management rebuild ignored its verified snapshot"
     from rag_mcp.runtime.projection_rebuild import ProjectionRebuilder
     damaged = {**snapshot, "fingerprints": {**snapshot["fingerprints"], "dense": "corrupt"}}
     recovered = ProjectionRebuilder().restore(snapshot=damaged, delta=[], full_events=await MemoryEventStore(db_session).replay(sid))
@@ -66,3 +68,33 @@ async def test_24_hour_snapshot_and_archive_preserve_correction_dependencies(db_
     await history.archive(sid, now=datetime.now(timezone.utc) + timedelta(days=91))
     online = await MemoryEventStore(db_session).replay_online(sid)
     assert any(event["event_id"] == first["memory_id"] for event in online), "correction source was truncated"
+
+
+@pytest.mark.asyncio
+async def test_management_rebuild_uses_verified_snapshot(db_session):
+    from rag_mcp.runtime.projection_rebuild import MemoryHistory
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    first = await service.record(payload)
+    history = MemoryHistory(service)
+    await history.capture(sid, force=True)
+    await service.record({**payload, "content": "An incremental memory after the checkpoint."})
+    report = await service.rebuild(sid, actor="management")
+    assert all(row.get("recovery_source") == "snapshot_delta" for row in report.values())
+
+
+@pytest.mark.asyncio
+async def test_missing_checkpoint_log_cannot_be_declared_complete(db_session, monkeypatch):
+    from rag_mcp.runtime.projection_rebuild import MemoryHistory
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    first = await service.record(payload)
+    history = MemoryHistory(service)
+    await history.capture(sid, force=True)
+    await service.record({**payload, "content": "A second independent identity."})
+    original = MemoryEventStore.replay
+    async def incomplete(store, scope_id, **kwargs):
+        return [event for event in await original(store, scope_id, **kwargs) if event["event_id"] != first["memory_id"]]
+    monkeypatch.setattr(MemoryEventStore, "replay", incomplete)
+    with pytest.raises(ValueError, match="MEMORY_WRITE_UNAVAILABLE|incomplete"):
+        await history.load(sid)

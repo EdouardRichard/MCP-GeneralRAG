@@ -177,7 +177,9 @@ class MemoryService:
         history = await MemoryEventStore(self.session).replay(scope_id)
         if not history:
             raise ValueError("MEMORY_WRITE_UNAVAILABLE")
-        state = reduce_events(history)
+        from rag_mcp.runtime.projection_rebuild import MemoryHistory
+        recovered = await MemoryHistory(self).load(scope_id)
+        state = recovered.state
         self._ensure_vector_store()
         try:
             async with self.session.begin_nested():
@@ -189,4 +191,6 @@ class MemoryService:
         except Exception:
             await self.session.rollback()
             raise
+        for row in report.values():
+            row.update(recovery_source=recovered.source, source_event_id=history[-1]["event_id"], knowledge_scope_id=scope_id)
         return report

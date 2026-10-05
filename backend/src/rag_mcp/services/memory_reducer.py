@@ -48,13 +48,15 @@ def _scoped_target(entries, memory_id, scope):
     return target
 
 
-def reduce_events(events):
+def reduce_events(events, *, initial_state=None):
     history = sorted(deepcopy(list(events)), key=lambda item: item["event_id"])
     if len({event["event_id"] for event in history}) != len(history):
         raise ValueError("duplicate authority event")
-    entries = {}
-    salience = {}
-    bindings = {}
+    if initial_state is not None:
+        require_reducer_state(initial_state)
+    entries = initial_state["entries"] if initial_state is not None else {}
+    salience = initial_state["salience"] if initial_state is not None else {}
+    bindings = {int(key): row for key, row in initial_state["bindings"].items()} if initial_state is not None else {}
     for index, event in enumerate(history):
         eid = event["aggregate_id"]
         scope = event["knowledge_scope_id"]
@@ -101,6 +103,8 @@ def reduce_events(events):
             state["last_access_at"] = timestamp
             state["reinforced_at"] = timestamp
         elif kind == "rollback":
+            if initial_state is not None:
+                raise ValueError("rollback requires complete authority history")
             point = payload.get("event_point")
             if not isinstance(point, int) or point >= event["event_id"] or not payload.get("reason"):
                 raise ValueError("MEMORY_ROLLBACK_FORBIDDEN")

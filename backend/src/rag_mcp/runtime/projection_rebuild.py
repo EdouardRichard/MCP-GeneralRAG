@@ -54,7 +54,7 @@ class ProjectionRebuilder:
                 raise ValueError("SNAPSHOT_INVALID")
             if any(event["knowledge_scope_id"] != scope_id or event["event_id"] <= covered for event in delta):
                 raise ValueError("SNAPSHOT_INVALID")
-            state = reduce_events([*prefix, *delta])
+            state = reduce_events(delta, initial_state=base)
             return RebuildResult(projection_fingerprint(state), state=state, source="snapshot_delta")
         except (KeyError, ValueError, TypeError):
             if full_events is not None:
@@ -104,6 +104,9 @@ class MemoryHistory:
         latest = await self._latest(scope_id)
         snapshot = latest.payload if latest and hashlib.sha256(encoded(latest.payload)).hexdigest() == latest.fingerprint else None
         if snapshot is not None:
+            prefix = [event for event in events if event["event_id"] <= latest.covered_through_event_id]
+            if snapshot.get("source_events") != prefix:
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: incomplete immutable checkpoint log")
             return ProjectionRebuilder().rebuild(events, snapshot=snapshot)
         return ProjectionRebuilder().rebuild(events)
 
@@ -113,6 +116,9 @@ class MemoryHistory:
         events = await MemoryEventStore(self.session).replay(scope_id)
         online = await MemoryEventStore(self.session).replay_online(scope_id)
         latest = await self._latest(scope_id)
+        if latest is not None and (hashlib.sha256(encoded(latest.payload)).hexdigest() != latest.fingerprint
+            or ProjectionRebuilder().rebuild(events, snapshot=latest.payload).source != "snapshot_delta"):
+            latest = None
         protected = set()
         for event in events:
             if event["event_type"] in {"revise", "retract", "consolidate", "grant", "rollback"}:
