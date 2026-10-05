@@ -260,8 +260,12 @@ class TestSmokeGuardT051:
 
     def test_ensure_mcp_server_fails_when_unreachable(self):
         port = self._free_port()
-        with pytest.raises(pytest.fail.Exception):
+        try:
             _ensure_mcp_server(f'http://127.0.0.1:{port}/mcp', timeout=0.5)
+        except BaseException as error:
+            assert isinstance(error, pytest.fail.Exception), "unavailable acceptance must fail, never skip"
+        else:
+            pytest.fail("unavailable acceptance was accepted")
 
     def test_raw_dir_resolves_under_settings_data_root(self):
         # T051 ①: the fixture's raw-file dir MUST resolve exactly like
