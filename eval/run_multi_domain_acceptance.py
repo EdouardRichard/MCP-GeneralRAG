@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import argparse
 import json
 import logging
 import sys
@@ -40,6 +41,7 @@ from rag_mcp.mcp.list_knowledge_domains import list_knowledge_domains_core  # no
 from rag_mcp.mcp.search_knowledge import search_knowledge_core  # noqa: E402
 from rag_mcp.services.evidence_service import EvidenceService  # noqa: E402
 from run_eval import _EvalEmbeddingProvider  # noqa: E402
+from memory_acceptance_reports import write_report  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,9 @@ def _load_schema(name: str) -> dict:
     return json.loads((p / name).read_text(encoding="utf-8"))
 
 
-async def run() -> int:
+async def run(output: Path) -> int:
+    if output.exists():
+        raise FileExistsError(output)
     settings = get_settings()
     embedding = _EvalEmbeddingProvider(settings.embedding_model)
     qdrant = QdrantStore(url=settings.qdrant_url)
@@ -177,27 +181,28 @@ async def run() -> int:
             "hard_constraints": hard,
             "per_query_measurements": per_query,
             "reference_client": {
-                "deepseek_harness": "passed",
+                "deepseek_harness": "not_measured_by_core_runner",
                 "chatgpt_app": "recorded_non_blocking",
                 "claude_code": "recorded_non_blocking",
             },
         }
-        out = Path(_OUTPUT)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with open(out, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
+        out = output
+        write_report(out, report)
         logger.info("multi-domain acceptance written to %s (leakage=%d schema=%.2f locatability=%.2f)",
                     out, leakage, schema_rate, locatability_rate)
         print(json.dumps(report, indent=2, ensure_ascii=False))
-        return 0
+        return 0 if hard["all_passed"] and all(item["status"] == "passed" for item in scenarios) else 1
     finally:
         await engine.dispose()
 
 
 async def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True, help="New report path; existing evidence is never overwritten")
+    args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    return await run()
+    return await run(args.output)
 
 
 if __name__ == "__main__":
