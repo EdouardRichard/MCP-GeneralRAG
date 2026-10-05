@@ -11,6 +11,7 @@ def test_remote_protocol_forms_resolve_the_same_explicit_binding(reference):
 
 
 def test_directory_binding_is_a_scoped_fallback_not_a_default(tmp_path):
+    (tmp_path / "repo").mkdir()
     service = ScopeBindingService([{"binding_kind": "dir_name", "binding_value": "repo",
                                     "knowledge_scope_id": 7, "priority": 0}])
     assert service.resolve("path:" + str(tmp_path / "repo")).scope_id == 7

@@ -13,7 +13,7 @@ def memory_result(body, *, is_error=False):
         isError=is_error)
 
 
-def memory_error(exception):
+def memory_error(exception, *, recall=False):
     code = str(exception).split(":", 1)[0]
     if isinstance(exception, TimeoutError):
         code = "MEMORY_TIMEOUT"
@@ -24,7 +24,10 @@ def memory_error(exception):
         error["memory_id"] = exception.memory_id
     if getattr(exception, "candidates", None):
         error["candidates"] = exception.candidates
-    return memory_result({"error": error, "request_id": str(uuid4())}, is_error=True)
+    body = {"error": error, "request_id": str(uuid4())}
+    if recall:
+        body.update(completion_status="failed", memories=[], counts={"returned": 0})
+    return memory_result(body, is_error=True)
 
 
 def close_input_schema(server, name):

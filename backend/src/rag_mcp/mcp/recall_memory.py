@@ -29,5 +29,5 @@ def register_recall_memory_tool(server, session_factory, embedding_provider, qdr
                     as_of=as_of, include_superseded=include_superseded, include_delivered=include_delivered, limit=limit)
                 return memory_result(result, is_error=result["completion_status"] == "failed")
         except Exception as exception:
-            return memory_error(exception)
+            return memory_error(exception, recall=True)
     close_input_schema(server, "recall_memory")

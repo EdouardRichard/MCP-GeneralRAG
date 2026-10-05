@@ -25,11 +25,15 @@ class ScopeBindingService:
         self.bindings = list(bindings)
 
     @staticmethod
-    def _normalize_path(value):
+    def _normalize_path(value, *, strict=False):
         path = Path(value)
         if not path.is_absolute():
             raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
-        return os.path.normcase(str(path.resolve(strict=False))).replace("\\", "/").rstrip("/")
+        try:
+            resolved = path.resolve(strict=strict)
+        except (OSError, RuntimeError, ValueError):
+            raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE") from None
+        return os.path.normcase(str(resolved)).replace("\\", "/").rstrip("/")
 
     @staticmethod
     def normalize_remote(value):
@@ -60,7 +64,7 @@ class ScopeBindingService:
         if scope_ref.startswith("path:"):
             raw = scope_ref[5:]
             remote = "://" in raw or bool(re.match(r"(?:[^/@:]+@)?[^/:]+:[^\\/].+", raw)) and not re.match(r"^[A-Za-z]:", raw)
-            value = self.normalize_remote(raw) if remote else self._normalize_path(raw)
+            value = self.normalize_remote(raw) if remote else self._normalize_path(raw, strict=True)
             candidates = []
             for binding in self.bindings:
                 if binding.get("status", "active") != "active":

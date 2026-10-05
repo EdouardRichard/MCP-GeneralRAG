@@ -129,7 +129,7 @@ async def test_protocol_memory_acceptance_matrix_writer_reader_schemas_and_budge
             result = await client.call_tool(tool, arguments)
             assert isinstance(result, CallToolResult)
             assert json.loads(result.content[0].text) == result.structuredContent
-            if not result.isError:
+            if not result.isError or tool == "recall_memory":
                 Draft202012Validator(schemas[f"mcp-{stem}.output.schema.json"], registry=registry).validate(result.structuredContent)
             calls.append((tool, result.structuredContent))
             return result
