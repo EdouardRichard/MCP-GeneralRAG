@@ -70,3 +70,15 @@ def test_invocation_evidence_keeps_request_ids_paths_and_stable_fingerprints():
     assert measurement["paths"]["elapsed_seconds"] == .25
     assert measurement["paths"]["counts"] == {"characters": 220}
 
+
+def test_invocation_evidence_reads_failure_paths_from_public_envelopes():
+    spec = importlib.util.spec_from_file_location("memory_pytest_evidence", ROOT / "eval/memory_pytest_evidence.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    recall = module.observe_result("recall", {"scope_ref": ["7"]}, {
+        "completion_status": "partial", "memory_notice": {"failed_paths": ["dense_unavailable"]}}, elapsed=.1)
+    package = module.observe_result("start_work", {"scope_ref": "7"}, {
+        "counts": {"failed_paths": ["files"]}}, elapsed=.1)
+    assert recall["failed_paths"] == ["dense_unavailable"]
+    assert package["failed_paths"] == ["files"]
+

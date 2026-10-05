@@ -32,7 +32,8 @@ def observe_result(operation, parameters, result, *, elapsed):
     return {"scenario": operation, "scope_ids": scope_ids(parameters, result),
             "request_ids": [result["request_id"]] if result.get("request_id") else [],
             "status": result.get("completion_status", result.get("status", "returned")),
-            "failed_paths": result.get("failed_paths", []), "fingerprints": fingerprints, "paths": paths}
+            "failed_paths": result.get("failed_paths", result.get("memory_notice", {}).get("failed_paths",
+                            result.get("counts", {}).get("failed_paths", []))), "fingerprints": fingerprints, "paths": paths}
 
 
 def pytest_addoption(parser):
