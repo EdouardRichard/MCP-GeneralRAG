@@ -15,6 +15,7 @@ This test MUST FAIL before steps 4/5 are wired (TDD Red).
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 import pytest_asyncio
@@ -196,6 +197,14 @@ def _make_pipeline(setup, reranker=None):
 
 class TestPipelineRecall:
     """Step 4: per-sub-problem hybrid recall with metadata."""
+
+    @pytest.mark.asyncio
+    async def test_dense_fixture_contains_distinct_real_semantic_vectors(self, pipeline_setup):
+        points = pipeline_setup["store"]._client.retrieve(
+            collection_name=pipeline_setup["collection"],
+            ids=list(pipeline_setup["chunk_ids"].values()), with_vectors=True)
+        assert len(points) == len(_CHUNKS)
+        assert len({json.dumps(point.vector, sort_keys=True) for point in points}) > 1, "constant dense vectors make Recall@K depend on arbitrary Qdrant ties"
 
     @pytest.mark.asyncio
     async def test_recall_candidates_carry_metadata(self, db_session, pipeline_setup):
