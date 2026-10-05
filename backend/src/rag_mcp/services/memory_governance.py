@@ -69,7 +69,7 @@ class MemoryGovernance:
             if binding_kind == "workdir_prefix":
                 binding_value = normalizer._normalize_path(binding_value)
             elif binding_kind == "git_remote":
-                binding_value = normalizer._normalize_remote(binding_value)
+                binding_value = normalizer.normalize_remote(binding_value)
             elif any(character in binding_value for character in "/\\"):
                 raise ValueError("MEMORY_PROVENANCE_INVALID: dir_name")
             existing = await self.session.scalar(select(ScopeBinding).where(

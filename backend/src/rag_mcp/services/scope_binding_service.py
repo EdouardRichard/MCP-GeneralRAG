@@ -34,7 +34,9 @@ class ScopeBindingService:
     @staticmethod
     def normalize_remote(value):
         if "://" not in value:
-            match = re.fullmatch(r"(?:[^/@:]+@)?([^/:]+):(.+)", value)
+            match = re.fullmatch(r"([^/@:]+(?::[0-9]+)?)/(.+)", value)
+            if match is None:
+                match = re.fullmatch(r"(?:[^/@:]+@)?([^/:]+):(.+)", value)
             if not match:
                 raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
             host, path = match.groups()

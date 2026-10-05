@@ -54,7 +54,7 @@ class MemoryProjectionStore:
 
     def _check_scope(self, state, scope_id):
         require_reducer_state(state)
-        if any(row["knowledge_scope_id"] != scope_id for row in state["entries"].values()):
+        if any(row["knowledge_scope_id"] != scope_id for key in ("entries", "bindings") for row in state[key].values()):
             raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
 
     async def _authorize(self, state, scope_id, event_id):
@@ -134,6 +134,9 @@ class MemoryProjectionStore:
         await self._authorize(state, scope_id, event_id)
         for row in state["bindings"].values():
             values = {key: value for key, value in row.items() if key in ScopeBinding.__table__.columns}
+            existing = await self.session.get(ScopeBinding, values["binding_id"], populate_existing=True)
+            if existing and all(getattr(existing, key) == value for key, value in values.items()):
+                continue
             await self._upsert(ScopeBinding, values, "binding_id")
 
     async def materialize(self, state, scope_id, event_id):
