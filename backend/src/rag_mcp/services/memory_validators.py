@@ -6,7 +6,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -73,7 +73,7 @@ class MemoryProvenanceValidator:
     def __init__(self, session):
         self.session = session
 
-    async def validate(self, payload):
+    async def validate(self, payload, *, _chain=()):
         validate_memory(payload)
         attributions = []
         if payload["provenance"] == "hard":
@@ -104,10 +104,20 @@ class MemoryProvenanceValidator:
                 if not identifier.isdecimal():
                     raise ValueError("MEMORY_PROVENANCE_INVALID")
                 source = await self.session.get(MemoryEntry, int(identifier))
-                if source is None or source.knowledge_scope_id != payload["scope_id"]:
+                if source is None or source.knowledge_scope_id != payload["scope_id"] or source.status != "active" or source.write_status != "complete":
                     raise ValueError("MEMORY_PROVENANCE_INVALID")
+                if source.memory_id in _chain or len(_chain) >= 32 or source.expires_at and source.expires_at <= datetime.now(timezone.utc):
+                    raise ValueError("MEMORY_PROVENANCE_INVALID")
+                source_payload = {"scope_id": source.knowledge_scope_id, "kind": source.kind,
+                    "content": source.content_text, "provenance": source.provenance,
+                    "confidence": source.confidence, "evidence_refs": source.evidence_refs, "inference_meta": source.inference_meta}
+                try:
+                    verified = await self.validate(source_payload, _chain=(*_chain, source.memory_id))
+                except ValueError:
+                    raise ValueError("MEMORY_PROVENANCE_INVALID") from None
                 attributions.append({"memory_id": source.memory_id, "provenance": source.provenance,
-                                     "evidence_refs": source.evidence_refs, "inference_meta": source.inference_meta})
+                                     "evidence_refs": source.evidence_refs, "inference_meta": source.inference_meta,
+                                     "source_chain": verified})
         return {"provenance": payload["provenance"], "validated": True, "attributions": attributions}
 
 
