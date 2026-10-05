@@ -120,6 +120,8 @@ async def test_failed_revision_is_not_consumed_and_package_is_stable_read_only(d
         await service.record({**payload, "content": "Pending replacement must stay hidden.", "supersedes_memory_id": first["memory_id"]})
     recall = await service.recall(scope_ref=[str(sid)])
     assert [row["memory_id"] for row in recall["memories"]] == [first["memory_id"]]
+    assert recall["completion_status"] == "partial"
+    assert recall["memory_notice"]["failed_paths"] == ["files"]
     before = await db_session.scalar(select(func.count()).select_from(MemoryEvent))
     sessions = await db_session.scalar(select(func.count()).select_from(MemorySession))
     for mode, budget in (("standard", 2000), ("compact", 800), ("minimal", 300)):
@@ -138,3 +140,30 @@ async def test_failed_revision_is_not_consumed_and_package_is_stable_read_only(d
     await service.rebuild(sid, actor="management")
     new_package = await service.start_work(scope_ref=str(sid))
     assert old_package["package_fingerprint"] != new_package["package_fingerprint"]
+
+
+@pytest.mark.asyncio
+async def test_nonsemantic_reads_never_construct_vector_client(db_session, monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail("nonsemantic read constructed a network vector client")
+    monkeypatch.setattr("rag_mcp.services.memory_service.QdrantStore", forbidden)
+    sid, _ = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    assert (await service.recall(scope_ref=[str(sid)]))["completion_status"] == "no_evidence"
+    assert (await service.start_work(scope_ref=str(sid)))["counts"]["returned"] == 0
+
+
+@pytest.mark.asyncio
+async def test_dense_timeout_returns_filtered_partial_inside_recall_budget(db_session, monkeypatch):
+    from time import monotonic
+    service = MemoryService(db_session)
+    sid, payload = await scope_and_payload(db_session)
+    memory = await service.record(payload)
+    async def blocked(query):
+        await asyncio.sleep(10)
+    monkeypatch.setattr(service.projections.embedding, "embed_query", blocked)
+    started = monotonic()
+    result = await service.recall(scope_ref=[str(sid)], query="scope", kind="procedural")
+    assert monotonic() - started < 3
+    assert result["completion_status"] == "partial"
+    assert [row["memory_id"] for row in result["memories"]] == [memory["memory_id"]]
