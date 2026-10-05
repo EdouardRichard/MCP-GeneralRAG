@@ -71,8 +71,8 @@ def build_report(*, suite, trace, host, regression, diagnostics):
     diagnostic_data = read_json(diagnostics) if diagnostics else {}
     criteria = []
     for identifier, modules in CRITERIA.items():
-        selected = {name: outcome for name, outcome in outcomes.items() if any(module + "::" in name for module in modules)}
-        present = all(any(module + "::" in name for name in selected) for module in modules)
+        selected = {name: outcome for name, outcome in outcomes.items() if any(module in name.split("::", 1)[0].split(".") for module in modules)}
+        present = all(any(module in name.split("::", 1)[0].split(".") for name in selected) for module in modules)
         traced = [test for test in traces if any(module + ".py::" in test["nodeid"] for module in modules) and test.get("measurements")]
         measured = bool(traced) or identifier == "SC-012"
         state = "failed" if "failed" in selected.values() else "passed" if present and all(value == "passed" for value in selected.values()) and measured else "not_verified"
