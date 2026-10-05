@@ -82,3 +82,22 @@ def test_invocation_evidence_reads_failure_paths_from_public_envelopes():
     assert recall["failed_paths"] == ["dense_unavailable"]
     assert package["failed_paths"] == ["files"]
 
+
+def test_legacy_regression_criterion_uses_completed_suites_without_memory_traces(tmp_path):
+    module = report_module()
+    suite, trace, host = inputs(tmp_path)
+    modules = module.CRITERIA["SC-012"]
+    suite.write_text('<testsuites><testsuite>' + ''.join(
+        f'<testcase classname="tests.integration.{name}" name="test_real_compatibility"/>'
+        for name in modules) + '</testsuite></testsuites>', encoding="utf-8")
+    regression = tmp_path / "legacy.json"
+    regression.write_text(json.dumps({"all_passed": True}), encoding="utf-8")
+    report = module.build_report(suite=suite, trace=trace, host=host,
+                                 regression=[regression], diagnostics=None)
+    criterion = next(row for row in report["success_criteria"] if row["id"] == "SC-012")
+    assert criterion["status"] == "passed"
+    regression.write_text(json.dumps({"all_passed": False}), encoding="utf-8")
+    report = module.build_report(suite=suite, trace=trace, host=host,
+                                 regression=[regression], diagnostics=None)
+    assert next(row for row in report["success_criteria"] if row["id"] == "SC-012")["status"] != "passed"
+

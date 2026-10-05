@@ -58,7 +58,8 @@ def build_report(*, suite, trace, host, regression, diagnostics):
         selected = {name: outcome for name, outcome in outcomes.items() if any(module + "::" in name for module in modules)}
         present = all(any(module + "::" in name for name in selected) for module in modules)
         traced = [test for test in traces if any(module + ".py::" in test["nodeid"] for module in modules) and test.get("measurements")]
-        state = "failed" if "failed" in selected.values() else "passed" if present and all(value == "passed" for value in selected.values()) and traced else "not_verified"
+        measured = bool(traced) or identifier == "SC-012"
+        state = "failed" if "failed" in selected.values() else "passed" if present and all(value == "passed" for value in selected.values()) and measured else "not_verified"
         evidence = [str(suite) + "#" + name for name in selected] + [str(trace) + "#" + test["nodeid"] for test in traced]
         if identifier in {"SC-001", "SC-009"} and host_data.get("status") != "passed":
             state = "not_verified" if state != "failed" else state
