@@ -72,6 +72,8 @@ def create_mcp_server(
     Raises:
         ValueError: If embedding_provider is not supplied.
     """
+    if mode not in {"writer", "reader"}:
+        raise ValueError("mode must be writer or reader")
     if embedding_provider is None:
         raise ValueError(
             "embedding_provider must be supplied to create_mcp_server(). "
@@ -119,14 +121,13 @@ def create_mcp_server(
     )
 
     # Memory tools are mode-gated: reader instances never receive the write tool.
-    from rag_mcp.mcp.memory_tools import tool_names
+    from rag_mcp.mcp.record_memory import register_record_memory_tool
+    from rag_mcp.mcp.recall_memory import register_recall_memory_tool
+    from rag_mcp.mcp.start_work import register_start_work_tool
     if mode == "writer":
-        from rag_mcp.mcp.record_memory import record_memory
-        mcp_server.tool(name="record_memory")(record_memory)
-    from rag_mcp.mcp.recall_memory import recall_memory
-    from rag_mcp.mcp.start_work import start_work
-    mcp_server.tool(name="recall_memory")(recall_memory)
-    mcp_server.tool(name="start_work")(start_work)
+        register_record_memory_tool(mcp_server, session_factory, embedding_provider, qdrant_store)
+    register_recall_memory_tool(mcp_server, session_factory, embedding_provider, qdrant_store)
+    register_start_work_tool(mcp_server, session_factory, embedding_provider, qdrant_store)
 
     logger.info(
         "MCP server created with tools: search_knowledge, get_evidence, list_knowledge_domains "
