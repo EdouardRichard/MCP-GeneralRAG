@@ -6,11 +6,12 @@ from datetime import datetime
 from pathlib import Path
 
 from qdrant_client.models import PointStruct
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from rag_mcp.config import get_settings
 from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.memory_salience import MemorySalience
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode
@@ -41,6 +42,7 @@ class MemoryProjectionStore:
         self.qdrant = qdrant_store
         self.embedding = embedding_provider
         self.root = Path(projection_root or Path(get_settings().data_root) / "memory_projection").resolve()
+        self._verified_authority = None
 
     def upsert_from_reducer(self, memory_id, reducer_state):
         require_reducer_state(reducer_state)
@@ -63,9 +65,19 @@ class MemoryProjectionStore:
         from rag_mcp.services.memory_reducer import reduce_events
 
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
-        history = await MemoryEventStore(self.session).replay(scope_id)
-        if not history or history[-1]["event_id"] != event_id or projection_fingerprint(state) != projection_fingerprint(reduce_events(history)):
+        latest = await self.session.scalar(select(func.max(MemoryEvent.event_id)).where(MemoryEvent.knowledge_scope_id == scope_id))
+        if latest != event_id:
             raise ValueError("projection authority must match current immutable log replay")
+        # Reuse only an exact log verification within the same root/savepoint.
+        # Each adapter still locks the scope and checks its latest log revision.
+        transaction = self.session.sync_session.get_nested_transaction() or self.session.sync_session.get_transaction()
+        fingerprint = projection_fingerprint(state)
+        authority = (transaction, scope_id, event_id, fingerprint)
+        if self._verified_authority != authority:
+            history = await MemoryEventStore(self.session).replay(scope_id)
+            if not history or history[-1]["event_id"] != event_id or fingerprint != projection_fingerprint(reduce_events(history)):
+                raise ValueError("projection authority must match current immutable log replay")
+            self._verified_authority = authority
         await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
