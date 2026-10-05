@@ -49,3 +49,18 @@ def test_registered_memory_errors_keep_their_public_codes(code):
     result = memory_error(ValueError(code + ":private detail"))
     assert result.isError is True
     assert result.structuredContent["error"] == {"code": code, "message": code}
+
+
+def test_only_typed_content_conflict_can_expose_the_existing_memory_id():
+    import rag_mcp.errors as errors
+    from rag_mcp.mcp.serialization import memory_error
+    conflict_type = getattr(errors, "MemoryContentConflictError", None)
+    assert conflict_type is not None, "validated scoped conflicts need typed public metadata"
+    result = memory_error(conflict_type(123))
+    assert result.structuredContent["error"] == {"code": "MEMORY_CONTENT_CONFLICT", "message": "MEMORY_CONTENT_CONFLICT", "memory_id": 123}
+    assert json.loads(result.content[0].text) == result.structuredContent
+    untrusted = ValueError("MEMORY_CONTENT_CONFLICT:private detail 456")
+    untrusted.memory_id = 456
+    generic = memory_error(untrusted)
+    assert "memory_id" not in generic.structuredContent["error"]
+    assert "456" not in generic.content[0].text and "private" not in generic.content[0].text

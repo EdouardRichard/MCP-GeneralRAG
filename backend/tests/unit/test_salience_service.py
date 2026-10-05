@@ -20,3 +20,17 @@ def test_rank_signal_requires_explicit_decay_execution():
     assert service.rank_signal(10, decay_rate=.05) == 0
     assert service.rank_signal(10, decay_rate=.05, age_days=20) == 9
 
+
+def test_zero_access_long_inactivity_and_clock_reversal_boundaries():
+    from rag_mcp.services.salience_service import SalienceService
+    service = SalienceService()
+    for days in (0, 20, 10000):
+        assert service.update(0, access_count=0, age_days=days) == 0
+        assert service.rank_signal(0, decay_rate=.05, age_days=days) == 0
+    assert service.rank_signal(1, decay_rate=.05, age_days=20) == 0
+    assert service.rank_signal(1, decay_rate=.05, age_days=10000) == 0
+    assert service.rank_signal(1, decay_rate=.05, age_days=-10) == 1
+    assert service.update(1, access_count=1, age_days=-10) == 2
+    assert SalienceService(beta=.2).update(1, access_count=1, age_days=5) == 1
+    assert service.rank_signal(2, decay_rate=.2, age_days=5) == 1
+

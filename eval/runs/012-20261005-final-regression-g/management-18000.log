@@ -1,0 +1,9 @@
+INFO:     Started server process [30540]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18000 (Press CTRL+C to quit)
+writer lease 365471269182767104 could not be renewed (released/expired); the management process keeps serving read paths but must be restarted to re-enter write mode
+writer lease 365471269182767104 could not be renewed (released/expired); the management process keeps serving read paths but must be restarted to re-enter write mode
+writer lease 365471269182767104 could not be renewed (released/expired); the management process keeps serving read paths but must be restarted to re-enter write mode
+writer lease 365471269182767104 could not be renewed (released/expired); the management process keeps serving read paths but must be restarted to re-enter write mode
+writer lease 365471269182767104 could not be renewed (released/expired); the management process keeps serving read paths but must be restarted to re-enter write mode

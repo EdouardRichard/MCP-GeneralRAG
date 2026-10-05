@@ -1,0 +1,167 @@
+2026-10-05 19:51:57,886 [INFO] __main__: Limited to first 18 queries (002 fixed scope)
+2026-10-05 19:51:57,886 [INFO] __main__: Loaded 18 queries from eval\eval_dataset.json
+2026-10-05 19:51:57,887 [INFO] rag_mcp.providers.local_cpu: Loading embedding model BAAI/bge-m3 (first use)...
+2026-10-05 19:52:07,709 [INFO] sentence_transformers.base.model: Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 80620.04it/s]
+D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dimension = self._model.get_sentence_embedding_dimension()
+2026-10-05 19:52:09,075 [INFO] rag_mcp.providers.local_cpu: Embedding model BAAI/bge-m3 loaded (dim=1024)
+2026-10-05 19:52:09,075 [INFO] run_eval: Loaded real embedding provider: BAAI/bge-m3 (dim=1024)
+2026-10-05 19:52:09,495 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+Building prefix dict from the default dictionary ...
+2026-10-05 19:52:13,579 [DEBUG] jieba: Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+2026-10-05 19:52:13,579 [DEBUG] jieba: Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.296 seconds.
+2026-10-05 19:52:13,874 [DEBUG] jieba: Loading model cost 0.296 seconds.
+Prefix dict has been built successfully.
+2026-10-05 19:52:13,874 [DEBUG] jieba: Prefix dict has been built successfully.
+2026-10-05 19:52:15,150 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 23305 terms, avgdl=3.9 docs=32592
+2026-10-05 19:52:15,152 [INFO] __main__: Sparse encoder fitted on 32592 chunk texts
+2026-10-05 19:52:15,152 [INFO] __main__: === Dense Baseline Run ===
+2026-10-05 19:52:15,331 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:15,455 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:15,577 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:15,699 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:15,824 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:15,945 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,063 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,124 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,187 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,244 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,245 [INFO] run_eval:   Processed 10/18 queries
+2026-10-05 19:52:16,304 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,359 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,471 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,582 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,692 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,802 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:16,910 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:17,018 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:17,065 [INFO] run_eval:   Processed 18/18 queries
+2026-10-05 19:52:17,065 [INFO] __main__: === Hybrid Run ===
+2026-10-05 19:52:17,066 [INFO] rag_mcp.providers.local_cpu_reranker: Loading reranker model BAAI/bge-reranker-v2-m3 (first use)...
+2026-10-05 19:52:17,069 [INFO] sentence_transformers.base.model: No modules.json found for D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-reranker-v2-m3\snapshots\953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e, initializing a new CrossEncoder model.
+Loading weights:   0%|          | 0/393 [00:00<?, ?it/s]Loading weights: 100%|██████████| 393/393 [00:00<00:00, 11648.29it/s]
+2026-10-05 19:52:18,297 [INFO] rag_mcp.providers.local_cpu_reranker: Reranker model BAAI/bge-reranker-v2-m3 loaded
+2026-10-05 19:52:18,297 [INFO] __main__: Reranker loaded: BAAI/bge-reranker-v2-m3
+2026-10-05 19:52:18,355 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:18,424 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.24s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.24s/it]
+2026-10-05 19:52:19,906 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:19,976 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]
+2026-10-05 19:52:21,285 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:21,343 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.18s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.18s/it]
+2026-10-05 19:52:22,693 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:22,755 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.18s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.18s/it]
+2026-10-05 19:52:24,053 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:24,112 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]
+2026-10-05 19:52:25,426 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:25,482 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]
+2026-10-05 19:52:26,787 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:26,795 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 19.66it/s]
+2026-10-05 19:52:26,957 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:26,964 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 16.87it/s]
+2026-10-05 19:52:27,127 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:27,135 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 18.48it/s]
+2026-10-05 19:52:27,291 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:27,298 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 18.70it/s]
+2026-10-05 19:52:27,395 [INFO] run_eval:   Processed 10/18 queries
+2026-10-05 19:52:27,455 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:27,463 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 17.96it/s]
+2026-10-05 19:52:27,618 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:27,677 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]
+2026-10-05 19:52:28,908 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:28,968 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.11s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.11s/it]
+2026-10-05 19:52:30,179 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:30,239 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]
+2026-10-05 19:52:31,479 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:31,538 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]
+2026-10-05 19:52:32,759 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:32,825 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.16s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.16s/it]
+2026-10-05 19:52:34,097 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:34,153 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]
+2026-10-05 19:52:35,397 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:35,460 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]
+2026-10-05 19:52:36,628 [INFO] run_eval:   Processed 18/18 queries
+2026-10-05 19:52:36,799 [INFO] __main__: Hard constraints measured over 70 evidence items: leakage=0 schema=1.0000 locatable=1.0000 all_passed=True
+2026-10-05 19:52:36,799 [INFO] __main__: === Reproducibility Check ===
+2026-10-05 19:52:36,858 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:36,916 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.16s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.16s/it]
+2026-10-05 19:52:38,186 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:38,249 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]
+2026-10-05 19:52:39,571 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:39,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]
+2026-10-05 19:52:40,999 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:41,061 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.19s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.20s/it]
+2026-10-05 19:52:42,377 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:42,444 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]
+2026-10-05 19:52:43,764 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:43,819 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.21s/it]
+2026-10-05 19:52:45,132 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:45,140 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 20.07it/s]
+2026-10-05 19:52:45,294 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:45,302 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 16.84it/s]
+2026-10-05 19:52:45,467 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:45,475 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 16.55it/s]
+2026-10-05 19:52:45,642 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:45,651 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 16.79it/s]
+2026-10-05 19:52:45,757 [INFO] run_eval:   Processed 10/18 queries
+2026-10-05 19:52:45,816 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:45,825 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:00<00:00, 17.38it/s]
+2026-10-05 19:52:45,984 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:46,044 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]
+2026-10-05 19:52:47,289 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:47,355 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]
+2026-10-05 19:52:48,582 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:48,639 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.14s/it]
+2026-10-05 19:52:49,887 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:49,952 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]
+2026-10-05 19:52:51,194 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:51,253 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.17s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.17s/it]
+2026-10-05 19:52:52,543 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:52,601 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]
+2026-10-05 19:52:53,839 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:52:53,907 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.13s/it]
+2026-10-05 19:52:55,084 [INFO] run_eval:   Processed 18/18 queries
+2026-10-05 19:52:55,085 [INFO] __main__: Comparison report written to D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-f\retrieval\012_002_regression_report.json
+2026-10-05 19:52:55,085 [INFO] __main__: enters_default_path: False
+2026-10-05 19:52:55,085 [INFO] __main__:   MRR: 0.9722 -> 0.7778 (delta -0.1944)
+2026-10-05 19:52:55,085 [INFO] __main__:   nDCG: 0.9795 -> 0.8360 (delta -0.1435)
+2026-10-05 19:52:55,085 [INFO] __main__:   Original-11 gate: MRR 0.9545 -> 0.7727 | nDCG 0.9664 -> 0.8322 | recall 1.0000 -> 1.0000
+2026-10-05 19:52:55,089 [INFO] __main__: Format expansion report written to D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-f\retrieval\012_002_format_regression_report.json

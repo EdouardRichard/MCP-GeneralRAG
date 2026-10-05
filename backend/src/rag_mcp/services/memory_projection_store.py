@@ -54,6 +54,22 @@ class MemoryProjectionStore:
     async def current(self, scope_id):
         return await self.session.get(MemoryProjectionMeta, f"current:{scope_id}", populate_existing=True)
 
+    async def versions(self, scope_id):
+        current = await self.current(scope_id)
+        if current is None or current.status != "complete":
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+        rows = (await self.session.execute(select(MemoryProjectionMeta).where(
+            MemoryProjectionMeta.knowledge_scope_id == scope_id,
+            MemoryProjectionMeta.source_event_id == current.source_event_id,
+            MemoryProjectionMeta.projection_type.in_(VIEW_KEYS),
+            MemoryProjectionMeta.status == "complete",
+        ).execution_options(populate_existing=True))).scalars().all()
+        versions = {row.projection_type: row.projection_version for row in rows}
+        collection = current.payload.get("collection")
+        if len(rows) != len(VIEW_KEYS) or set(versions) != set(VIEW_KEYS) or not all(versions.values()) or not collection:
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: incomplete projection versions")
+        return {"schema_version": 1, "index_version": collection, "projection_versions": versions}
+
     def _check_scope(self, state, scope_id):
         require_reducer_state(state)
         if any(row["knowledge_scope_id"] != scope_id for key in ("entries", "bindings") for row in state[key].values()):
@@ -81,7 +97,8 @@ class MemoryProjectionStore:
         await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
-    async def _upsert(self, model, values, key):
+    async def _upsert(self, state, scope_id, event_id, model, values, key):
+        await self._authorize(state, scope_id, event_id)
         statement = insert(model).values(**values)
         await self.session.execute(statement.on_conflict_do_update(
             index_elements=[key], set_={name: getattr(statement.excluded, name) for name in values if name != key}
@@ -96,7 +113,7 @@ class MemoryProjectionStore:
                 if value is not None and isinstance(value, str) and name.endswith("_at") or value is not None and isinstance(value, str) and name in {"valid_from", "valid_to"}:
                     values[name] = datetime.fromisoformat(value)
             values["write_status"] = write_status
-            await self._upsert(MemoryEntry, values, "memory_id")
+            await self._upsert(state, scope_id, event_id, MemoryEntry, values, "memory_id")
 
     async def _materialize_dense(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
@@ -116,13 +133,13 @@ class MemoryProjectionStore:
     async def _materialize_links(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
         for key, row in state["links"].items():
-            await self._upsert(MemoryLink, {"row_id": f"{scope_id}:{event_id}:{key}",
+            await self._upsert(state, scope_id, event_id, MemoryLink, {"row_id": f"{scope_id}:{event_id}:{key}",
                 "knowledge_scope_id": scope_id, "revision_id": event_id, "node_key": key, "data": row}, "row_id")
 
     async def _materialize_summary(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
         for key, rows in state["summary"].items():
-            await self._upsert(MemorySummaryNode, {"row_id": f"{scope_id}:{event_id}:{key}",
+            await self._upsert(state, scope_id, event_id, MemorySummaryNode, {"row_id": f"{scope_id}:{event_id}:{key}",
                 "knowledge_scope_id": scope_id, "revision_id": event_id, "node_key": key, "data": rows}, "row_id")
         directory = self.root / str(scope_id) / str(event_id)
         directory.mkdir(parents=True, exist_ok=True)
@@ -158,18 +175,18 @@ class MemoryProjectionStore:
             for key in ("last_access_at", "reinforced_at"):
                 if values.get(key):
                     values[key] = datetime.fromisoformat(values[key])
-            await self._upsert(MemorySalience, values, "memory_id")
+            await self._upsert(state, scope_id, event_id, MemorySalience, values, "memory_id")
 
     async def _materialize_bindings(self, state, scope_id, event_id):
+        await self._authorize(state, scope_id, event_id)
         if not state["bindings"]:
             return
-        await self._authorize(state, scope_id, event_id)
         for row in state["bindings"].values():
             values = {key: value for key, value in row.items() if key in ScopeBinding.__table__.columns}
             existing = await self.session.get(ScopeBinding, values["binding_id"], populate_existing=True)
             if existing and all(getattr(existing, key) == value for key, value in values.items()):
                 continue
-            await self._upsert(ScopeBinding, values, "binding_id")
+            await self._upsert(state, scope_id, event_id, ScopeBinding, values, "binding_id")
 
     async def materialize(self, state, scope_id, event_id):
         collection = None
@@ -183,13 +200,13 @@ class MemoryProjectionStore:
         await self._authorize(state, scope_id, event_id)
         await self._materialize_bindings(state, scope_id, event_id)
         for name, key in VIEW_KEYS.items():
-            await self._upsert(MemoryProjectionMeta, {
+            await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
                 "projection_id": f"{scope_id}:{event_id}:{name}", "projection_type": name,
                 "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
                 "fingerprint": projection_fingerprint(state[key]),
                 "payload": {"state": state[key], "collection": collection, "root": str(self.root), "dense_revision": event_id},
             }, "projection_id")
-        await self._upsert(MemoryProjectionMeta, {
+        await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
             "projection_id": f"current:{scope_id}", "projection_type": "manifest",
             "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
             "fingerprint": projection_fingerprint(state),
@@ -199,7 +216,7 @@ class MemoryProjectionStore:
 
     async def retain_failure(self, state, scope_id, event_id, path):
         await self._materialize_relation(state, scope_id, event_id, write_status="failed")
-        await self._upsert(MemoryProjectionMeta, {
+        await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
             "projection_id": f"pending:{scope_id}:{event_id}", "projection_type": "pending",
             "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "failed",
             "fingerprint": projection_fingerprint(state),

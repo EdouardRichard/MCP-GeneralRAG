@@ -1,0 +1,391 @@
+{
+  "report_type": "generic_domain_baseline",
+  "generated_at": "2026-10-05T12:06:13.638502+00:00",
+  "config": {
+    "domain_key": "personal",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "dataset_path": "eval\\generic_domain_eval_dataset.json",
+    "num_queries": 13,
+    "retrieval_modes": [
+      "dense",
+      "hybrid"
+    ]
+  },
+  "dense_metrics": {
+    "recall_at_k": {
+      "mean": 0.923077,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.74359,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.789374,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 59.2262,
+      "p95": 80.24582,
+      "mean": 51.852685
+    }
+  },
+  "hybrid_metrics": {
+    "recall_at_k": {
+      "mean": 0.923077,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.737179,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.784041,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 724.0708,
+      "p95": 1014.5865,
+      "mean": 726.696038
+    }
+  },
+  "deltas": {
+    "mrr_mean_delta": -0.00641,
+    "ndcg_mean_delta": -0.005333,
+    "recall_mean_delta": 0.0,
+    "latency_p50_delta_ms": 664.8446,
+    "latency_p95_delta_ms": 934.34068
+  },
+  "hard_constraints": {
+    "cross_domain_leakage_events": 0,
+    "schema_validity_rate": 1.0,
+    "source_locatability_rate": 1.0,
+    "all_passed": true
+  },
+  "per_query_comparison": [
+    {
+      "query_index": 0,
+      "query": "嵌入模型选型时本地部署首选哪个模型",
+      "domain_scope": [
+        "personal-eval-rag-notes"
+      ],
+      "expected_heading": "嵌入模型选型笔记",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.706586,
+      "hybrid_dense_score": 0.706586,
+      "hybrid_sparse_score": 36.0666,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.998526,
+      "rank_improved": false
+    },
+    {
+      "query_index": 1,
+      "query": "混合检索笔记这一节讲了什么",
+      "domain_scope": [
+        "personal-eval-rag-notes"
+      ],
+      "expected_heading": "混合检索笔记",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.642429,
+      "hybrid_dense_score": 0.642429,
+      "hybrid_sparse_score": 10.748787,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.76241,
+      "rank_improved": false
+    },
+    {
+      "query_index": 2,
+      "query": "本周三上午有什么安排",
+      "domain_scope": [
+        "personal-eval-weekly-plan"
+      ],
+      "expected_heading": "个人周计划",
+      "format": "txt",
+      "dense_rank": null,
+      "hybrid_rank": null,
+      "dense_score": null,
+      "hybrid_dense_score": null,
+      "hybrid_sparse_score": null,
+      "hybrid_fused_score": null,
+      "hybrid_rerank_score": null,
+      "rank_improved": false
+    },
+    {
+      "query_index": 3,
+      "query": "个人周计划里健身目标是什么",
+      "domain_scope": [
+        "personal-eval-weekly-plan"
+      ],
+      "expected_heading": "个人周计划",
+      "format": "txt",
+      "dense_rank": 2,
+      "hybrid_rank": 2,
+      "dense_score": 0.618011,
+      "hybrid_dense_score": 0.618011,
+      "hybrid_sparse_score": 19.697636,
+      "hybrid_fused_score": 0.032522,
+      "hybrid_rerank_score": 0.017246,
+      "rank_improved": false
+    },
+    {
+      "query_index": 4,
+      "query": "个人开支记录里九月房租是多少",
+      "domain_scope": [
+        "personal-eval-expenses"
+      ],
+      "expected_heading": "sheet:个人开支记录",
+      "format": "csv",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.57081,
+      "hybrid_dense_score": 0.57081,
+      "hybrid_sparse_score": 2.886792,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.454967,
+      "rank_improved": false
+    },
+    {
+      "query_index": 5,
+      "query": "这个月餐饮支出主要有哪些",
+      "domain_scope": [
+        "personal-eval-expenses"
+      ],
+      "expected_heading": "sheet:个人开支记录",
+      "format": "csv",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.636009,
+      "hybrid_dense_score": 0.636009,
+      "hybrid_sparse_score": 2.495169,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.085172,
+      "rank_improved": false
+    },
+    {
+      "query_index": 6,
+      "query": "RAG 的开山之作是哪篇论文",
+      "domain_scope": [
+        "personal-eval-bookmarks"
+      ],
+      "expected_heading": "必读论文与教程",
+      "format": "html",
+      "dense_rank": 3,
+      "hybrid_rank": 3,
+      "dense_score": 0.385728,
+      "hybrid_dense_score": 0.385728,
+      "hybrid_sparse_score": 13.221054,
+      "hybrid_fused_score": 0.032002,
+      "hybrid_rerank_score": 0.000615,
+      "rank_improved": false
+    },
+    {
+      "query_index": 7,
+      "query": "经典书籍这一节推荐了哪些书",
+      "domain_scope": [
+        "personal-eval-bookmarks"
+      ],
+      "expected_heading": "经典书籍",
+      "format": "html",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.789421,
+      "hybrid_dense_score": 0.789421,
+      "hybrid_sparse_score": 28.136145,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.81056,
+      "rank_improved": false
+    },
+    {
+      "query_index": 8,
+      "query": "hybrid A/B test 的 Recall@5 结果如何",
+      "domain_scope": [
+        "generic-eval-meeting-notes"
+      ],
+      "expected_heading": "2026-09-01 Weekly Sync",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.659074,
+      "hybrid_dense_score": 0.659074,
+      "hybrid_sparse_score": 17.347782,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.987316,
+      "rank_improved": false
+    },
+    {
+      "query_index": 9,
+      "query": "架构评审会议确定了哪些决策",
+      "domain_scope": [
+        "generic-eval-meeting-notes"
+      ],
+      "expected_heading": "2026-08-25 Architecture Review",
+      "format": "markdown",
+      "dense_rank": 3,
+      "hybrid_rank": 1,
+      "dense_score": 0.462181,
+      "hybrid_dense_score": 0.462181,
+      "hybrid_sparse_score": null,
+      "hybrid_fused_score": 0.015873,
+      "hybrid_rerank_score": 0.07135,
+      "rank_improved": true
+    },
+    {
+      "query_index": 10,
+      "query": "Reading queue curator 这个点子是什么",
+      "domain_scope": [
+        "generic-eval-brainstorm"
+      ],
+      "expected_heading": "brainstorm_ideas",
+      "format": "txt",
+      "dense_rank": 2,
+      "hybrid_rank": 4,
+      "dense_score": 0.46466,
+      "hybrid_dense_score": 0.46466,
+      "hybrid_sparse_score": null,
+      "hybrid_fused_score": 0.016129,
+      "hybrid_rerank_score": 2.1e-05,
+      "rank_improved": false
+    },
+    {
+      "query_index": 11,
+      "query": "reading tracker 里评分 5 分的书有哪些",
+      "domain_scope": [
+        "generic-eval-reading-tracker"
+      ],
+      "expected_heading": "sheet:reading_tracker",
+      "format": "csv",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.472776,
+      "hybrid_dense_score": 0.472776,
+      "hybrid_sparse_score": 2.912904,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.017743,
+      "rank_improved": false
+    },
+    {
+      "query_index": 12,
+      "query": "vector database 对比的结论是什么",
+      "domain_scope": [
+        "generic-eval-bookmarks"
+      ],
+      "expected_heading": "Vector Databases",
+      "format": "html",
+      "dense_rank": 1,
+      "hybrid_rank": 2,
+      "dense_score": 0.627159,
+      "hybrid_dense_score": 0.627159,
+      "hybrid_sparse_score": 8.159948,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.109973,
+      "rank_improved": false
+    }
+  ],
+  "reproducibility": {
+    "non_latency_reproducible": true,
+    "tolerance": 0.01,
+    "checks": [
+      {
+        "metric": "dense.recall_at_k.mean",
+        "run_1": 0.923077,
+        "run_2": 0.923077,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.mrr.mean",
+        "run_1": 0.74359,
+        "run_2": 0.74359,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.ndcg_at_k.mean",
+        "run_1": 0.789374,
+        "run_2": 0.789374,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.latency_ms.p50",
+        "run_1": 59.2262,
+        "run_2": 60.6712,
+        "relative_delta": 0.023817,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "dense.latency_ms.p95",
+        "run_1": 80.24582,
+        "run_2": 64.27914,
+        "relative_delta": 0.198972,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "hybrid.recall_at_k.mean",
+        "run_1": 0.923077,
+        "run_2": 0.923077,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.mrr.mean",
+        "run_1": 0.737179,
+        "run_2": 0.737179,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.ndcg_at_k.mean",
+        "run_1": 0.784041,
+        "run_2": 0.784041,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.latency_ms.p50",
+        "run_1": 724.0708,
+        "run_2": 727.321,
+        "relative_delta": 0.004469,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "hybrid.latency_ms.p95",
+        "run_1": 1014.5865,
+        "run_2": 935.13022,
+        "relative_delta": 0.078314,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      }
+    ]
+  }
+}

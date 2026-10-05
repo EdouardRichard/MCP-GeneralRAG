@@ -1,0 +1,536 @@
+{
+  "report_type": "format_expansion_comparison",
+  "generated_at": "2026-10-05T08:17:12.941334+00:00",
+  "config": {
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "dense_collection": "chunks_dense_bge-m3_v1",
+    "hybrid_collection": "chunks_hybrid_bge-m3_v1",
+    "fusion_algorithm": "rrf",
+    "rrf_k": 60,
+    "rerank_budget": 20,
+    "dataset_path": "D:\\Project_new\\docsToCode\\eval\\eval_dataset.json",
+    "num_queries": 18
+  },
+  "per_format": {
+    "java": {
+      "num_queries": 13,
+      "dense": {
+        "num_queries": 13,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 0.9615,
+          "min": 0.5,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.9716,
+          "min": 0.6309,
+          "max": 1.0
+        },
+        "p50": 108.88,
+        "p95": 171.13
+      },
+      "hybrid": {
+        "num_queries": 13,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 0.6923,
+          "min": 0.5,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.7729,
+          "min": 0.6309,
+          "max": 1.0
+        },
+        "p50": 1369.01,
+        "p95": 1504.87
+      }
+    },
+    "markdown": {
+      "num_queries": 5,
+      "dense": {
+        "num_queries": 5,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "p50": 55.78,
+        "p95": 57.48
+      },
+      "hybrid": {
+        "num_queries": 5,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "p50": 167.94,
+        "p95": 171.81
+      }
+    },
+    "openapi": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "ddl": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "go": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "python": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "word": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    },
+    "pdf": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    }
+  },
+  "regression": {
+    "original_18": {
+      "num_queries": 18,
+      "dense": {
+        "num_queries": 18,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 0.9722,
+          "min": 0.5,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.9795,
+          "min": 0.6309,
+          "max": 1.0
+        },
+        "p50": 108.0,
+        "p95": 142.0
+      },
+      "hybrid": {
+        "num_queries": 18,
+        "recall_at_5": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "mrr": {
+          "mean": 0.7778,
+          "min": 0.5,
+          "max": 1.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.836,
+          "min": 0.6309,
+          "max": 1.0
+        },
+        "p50": 1328.5,
+        "p95": 1472.53
+      }
+    },
+    "new_12": {
+      "num_queries": 0,
+      "dense": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "hybrid": {
+        "num_queries": 0,
+        "recall_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "mrr": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "ndcg_at_5": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "p50": 0.0,
+        "p95": 0.0
+      }
+    }
+  },
+  "baseline_comparison": {
+    "001_dense": {
+      "num_queries": 18,
+      "recall_at_5": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.9722,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_5": {
+        "mean": 0.9795,
+        "min": 0.6309,
+        "max": 1.0
+      },
+      "p50": 108.0,
+      "p95": 142.0
+    },
+    "002_hybrid": {
+      "num_queries": 18,
+      "recall_at_5": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.7778,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_5": {
+        "mean": 0.836,
+        "min": 0.6309,
+        "max": 1.0
+      },
+      "p50": 1328.5,
+      "p95": 1472.53
+    },
+    "deltas": {
+      "recall_mean_delta": 0.0,
+      "mrr_mean_delta": -0.194444,
+      "ndcg_mean_delta": -0.143527
+    },
+    "001_dense_stored": {
+      "num_queries": 11,
+      "recall_at_5": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.9091,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_5": {
+        "mean": 0.9329,
+        "min": 0.6309,
+        "max": 1.0
+      },
+      "p50": 138.45,
+      "p95": 185.15
+    },
+    "002_hybrid_stored": {
+      "num_queries": 0,
+      "recall_at_5": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.7778,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_5": {
+        "mean": 0.836,
+        "min": 0.6309,
+        "max": 1.0
+      },
+      "p50": 1355.01,
+      "p95": 1505.55
+    }
+  }
+}

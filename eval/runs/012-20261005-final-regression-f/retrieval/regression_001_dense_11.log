@@ -1,0 +1,35 @@
+2026-10-05 19:51:43,908 [INFO] __main__: Loaded 11 queries from D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-f\retrieval\dataset_11.json
+2026-10-05 19:51:43,909 [INFO] rag_mcp.providers.local_cpu: Loading embedding model BAAI/bge-m3 (first use)...
+2026-10-05 19:51:52,993 [INFO] sentence_transformers.base.model: Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 74557.78it/s]
+D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dimension = self._model.get_sentence_embedding_dimension()
+2026-10-05 19:51:54,343 [INFO] rag_mcp.providers.local_cpu: Embedding model BAAI/bge-m3 loaded (dim=1024)
+2026-10-05 19:51:54,343 [INFO] __main__: Loaded real embedding provider: BAAI/bge-m3 (dim=1024)
+2026-10-05 19:51:54,688 [INFO] __main__: Mode: dense | Collection: chunks_dense_bge-m3_v1 | Top-K: 5
+2026-10-05 19:51:54,708 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 19:51:54,716 [INFO] __main__: === Evaluation Run 1 ===
+2026-10-05 19:51:54,758 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+2026-10-05 19:51:54,888 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,018 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,141 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,261 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,391 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,513 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,650 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,714 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,777 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,836 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,837 [INFO] __main__:   Processed 10/11 queries
+2026-10-05 19:51:55,895 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 19:51:55,895 [INFO] __main__:   Processed 11/11 queries
+2026-10-05 19:51:55,895 [INFO] __main__: Run 1 completed in 1.18s
+2026-10-05 19:51:55,895 [INFO] __main__: Skipping reproducibility check (--no-reproducibility-check)
+2026-10-05 19:51:55,896 [INFO] __main__: Baseline report written to D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-f\retrieval\012_001_regression_report.json
+2026-10-05 19:51:55,897 [INFO] __main__: === Baseline Summary ===
+2026-10-05 19:51:55,897 [INFO] __main__:   Queries:     11
+2026-10-05 19:51:55,897 [INFO] __main__:   Recall@5:   1.0000
+2026-10-05 19:51:55,897 [INFO] __main__:   MRR:         0.9545
+2026-10-05 19:51:55,897 [INFO] __main__:   nDCG@5:     0.9664
+2026-10-05 19:51:55,897 [INFO] __main__:   Latency P50: 122.37 ms
+2026-10-05 19:51:55,897 [INFO] __main__:   Latency P95: 178.17 ms

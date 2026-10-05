@@ -1,0 +1,398 @@
+{
+  "report_type": "legal_domain_baseline",
+  "generated_at": "2026-10-05T12:08:20.052178+00:00",
+  "config": {
+    "domain_key": "legal",
+    "embedding_model": "BAAI/bge-m3",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "dataset_path": "eval\\legal_domain_eval_dataset.json",
+    "num_queries": 11,
+    "retrieval_modes": [
+      "dense",
+      "hybrid"
+    ]
+  },
+  "dense_metrics": {
+    "recall_at_k": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.848485,
+      "min": 0.333333,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.887442,
+      "min": 0.5,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 71.4565,
+      "p95": 82.07995,
+      "mean": 69.982127
+    }
+  },
+  "hybrid_metrics": {
+    "recall_at_k": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.734848,
+      "min": 0.25,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.802133,
+      "min": 0.430677,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 500.5457,
+      "p95": 772.07065,
+      "mean": 540.864082
+    }
+  },
+  "deltas": {
+    "mrr_mean_delta": -0.113636,
+    "ndcg_mean_delta": -0.085309,
+    "recall_mean_delta": 0.0,
+    "latency_p50_delta_ms": 429.0892,
+    "latency_p95_delta_ms": 689.9907
+  },
+  "hard_constraints": {
+    "cross_domain_leakage_events": 0,
+    "schema_validity_rate": 1.0,
+    "source_locatability_rate": 1.0,
+    "all_passed": true
+  },
+  "per_query_comparison": [
+    {
+      "query_index": 0,
+      "query": "标准服务合同里违约责任条款怎么规定的",
+      "domain_scope": [
+        "legal-eval-svc-contract"
+      ],
+      "expected_heading": "第六条 违约责任",
+      "format": "word",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.725229,
+      "hybrid_dense_score": 0.725229,
+      "hybrid_sparse_score": 25.864386,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.528512,
+      "rank_improved": false
+    },
+    {
+      "query_index": 1,
+      "query": "数据处理协议对跨境提供个人数据有什么要求",
+      "domain_scope": [
+        "legal-eval-dpa"
+      ],
+      "expected_heading": "第七条 跨境提供",
+      "format": "word",
+      "dense_rank": 1,
+      "hybrid_rank": 3,
+      "dense_score": 0.682974,
+      "hybrid_dense_score": 0.682974,
+      "hybrid_sparse_score": 18.174784,
+      "hybrid_fused_score": 0.032522,
+      "hybrid_rerank_score": 0.220032,
+      "rank_improved": false
+    },
+    {
+      "query_index": 2,
+      "query": "数据安全管理办法对重要数据处理者有什么义务",
+      "domain_scope": [
+        "legal-eval-data-security"
+      ],
+      "expected_heading": "3.2 重要数据处理者义务",
+      "format": "pdf",
+      "dense_rank": 1,
+      "hybrid_rank": 2,
+      "dense_score": 0.820157,
+      "hybrid_dense_score": 0.820157,
+      "hybrid_sparse_score": 25.956337,
+      "hybrid_fused_score": 0.032522,
+      "hybrid_rerank_score": 0.991858,
+      "rank_improved": false
+    },
+    {
+      "query_index": 3,
+      "query": "个人信息保护规范里敏感个人信息包括哪些",
+      "domain_scope": [
+        "legal-eval-pip"
+      ],
+      "expected_heading": "2.2 敏感个人信息",
+      "format": "pdf",
+      "dense_rank": 1,
+      "hybrid_rank": 2,
+      "dense_score": 0.80108,
+      "hybrid_dense_score": 0.80108,
+      "hybrid_sparse_score": 15.608229,
+      "hybrid_fused_score": 0.032266,
+      "hybrid_rerank_score": 0.866458,
+      "rank_improved": false
+    },
+    {
+      "query_index": 4,
+      "query": "标准服务合同有效期是多久",
+      "domain_scope": [
+        "legal-eval-svc-contract"
+      ],
+      "expected_heading": "第九条 合同期限与终止",
+      "format": "word",
+      "dense_rank": 3,
+      "hybrid_rank": 4,
+      "dense_score": 0.6166,
+      "hybrid_dense_score": 0.6166,
+      "hybrid_sparse_score": null,
+      "hybrid_fused_score": 0.015873,
+      "hybrid_rerank_score": 0.00517,
+      "rank_improved": false
+    },
+    {
+      "query_index": 5,
+      "query": "谁引用了第二条适用范围",
+      "domain_scope": [
+        "legal-eval-regulation"
+      ],
+      "expected_heading": "第三条 数据处理原则",
+      "format": "markdown",
+      "dense_rank": 2,
+      "hybrid_rank": 2,
+      "dense_score": 0.465181,
+      "hybrid_dense_score": 0.465181,
+      "hybrid_sparse_score": 11.507523,
+      "hybrid_fused_score": 0.032522,
+      "hybrid_rerank_score": 0.116362,
+      "rank_improved": false
+    },
+    {
+      "query_index": 6,
+      "query": "数据安全规范被哪条引用",
+      "domain_scope": [
+        "legal-eval-regulation"
+      ],
+      "expected_heading": "第五条 数据安全",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.603068,
+      "hybrid_dense_score": 0.603068,
+      "hybrid_sparse_score": 12.377132,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.952929,
+      "rank_improved": false
+    },
+    {
+      "query_index": 7,
+      "query": "跨境提供数据依照哪条执行安全评估",
+      "domain_scope": [
+        "legal-eval-regulation"
+      ],
+      "expected_heading": "第六条 跨境提供",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.811369,
+      "hybrid_dense_score": 0.811369,
+      "hybrid_sparse_score": 49.8536,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.998907,
+      "rank_improved": false
+    },
+    {
+      "query_index": 8,
+      "query": "数据处理原则依据什么确定",
+      "domain_scope": [
+        "legal-eval-regulation"
+      ],
+      "expected_heading": "第三条 数据处理原则",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.748995,
+      "hybrid_dense_score": 0.748995,
+      "hybrid_sparse_score": 31.864273,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.981981,
+      "rank_improved": false
+    },
+    {
+      "query_index": 9,
+      "query": "实施细则依据什么制定",
+      "domain_scope": [
+        "legal-eval-rules"
+      ],
+      "expected_heading": "第二条 依据",
+      "format": "markdown",
+      "dense_rank": 2,
+      "hybrid_rank": 1,
+      "dense_score": 0.624721,
+      "hybrid_dense_score": 0.624721,
+      "hybrid_sparse_score": 8.688585,
+      "hybrid_fused_score": 0.032522,
+      "hybrid_rerank_score": 0.707949,
+      "rank_improved": true
+    },
+    {
+      "query_index": 10,
+      "query": "跨境数据安全评估程序按照什么执行",
+      "domain_scope": [
+        "legal-eval-rules"
+      ],
+      "expected_heading": "第四条 评估程序",
+      "format": "markdown",
+      "dense_rank": 1,
+      "hybrid_rank": 1,
+      "dense_score": 0.829534,
+      "hybrid_dense_score": 0.829534,
+      "hybrid_sparse_score": 33.989613,
+      "hybrid_fused_score": 0.032787,
+      "hybrid_rerank_score": 0.995927,
+      "rank_improved": false
+    }
+  ],
+  "reproducibility": {
+    "non_latency_reproducible": true,
+    "tolerance": 0.01,
+    "checks": [
+      {
+        "metric": "dense.recall_at_k.mean",
+        "run_1": 1.0,
+        "run_2": 1.0,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.mrr.mean",
+        "run_1": 0.848485,
+        "run_2": 0.848485,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.ndcg_at_k.mean",
+        "run_1": 0.887442,
+        "run_2": 0.887442,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "dense.latency_ms.p50",
+        "run_1": 71.4565,
+        "run_2": 61.6873,
+        "relative_delta": 0.136715,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "dense.latency_ms.p95",
+        "run_1": 82.07995,
+        "run_2": 68.56095,
+        "relative_delta": 0.164705,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "hybrid.recall_at_k.mean",
+        "run_1": 1.0,
+        "run_2": 1.0,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.mrr.mean",
+        "run_1": 0.734848,
+        "run_2": 0.734848,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.ndcg_at_k.mean",
+        "run_1": 0.802133,
+        "run_2": 0.802133,
+        "relative_delta": 0.0,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hybrid.latency_ms.p50",
+        "run_1": 500.5457,
+        "run_2": 479.4519,
+        "relative_delta": 0.042142,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      },
+      {
+        "metric": "hybrid.latency_ms.p95",
+        "run_1": 772.07065,
+        "run_2": 706.43355,
+        "relative_delta": 0.085014,
+        "tolerance": 0.01,
+        "passed": true,
+        "env_sensitive": true
+      }
+    ]
+  },
+  "cross_reference_benefit": {
+    "baseline_metrics": {
+      "recall_at_k": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.916667,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_k": {
+        "mean": 0.938488,
+        "min": 0.63093,
+        "max": 1.0
+      }
+    },
+    "graph_metrics": {
+      "recall_at_k": {
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "mrr": {
+        "mean": 0.833333,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "ndcg_at_k": {
+        "mean": 0.876977,
+        "min": 0.63093,
+        "max": 1.0
+      }
+    },
+    "mrr_improvement_pct": -9.0909,
+    "ndcg_improvement_pct": -6.5543,
+    "recall_non_decreasing": true,
+    "three_gate_pass": false,
+    "vocabulary_disposition": "kept_empty_r11"
+  }
+}

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from sqlalchemy import func, select, text
 
+from rag_mcp.errors import MemoryContentConflictError
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import MemoryProjectionStore, ProjectionFailure
@@ -74,7 +75,7 @@ class MemoryService:
             if existing.write_status != "complete":
                 raise ValueError("MEMORY_WRITE_UNAVAILABLE")
             if existing.submission_meta != metadata:
-                raise ValueError(f"MEMORY_CONTENT_CONFLICT:{existing.memory_id}")
+                raise MemoryContentConflictError(existing.memory_id)
             return {"memory_id": existing.memory_id, "status": existing.status,
                     "provenance_validation": validation, "injection_flags": existing.injection_flags,
                     "request_id": request_id}
@@ -168,10 +169,14 @@ class MemoryService:
                 report = await self.projections.inspect(state, scope_id)
                 if not all(row["matches_replay"] for row in report.values()):
                     raise ProjectionFailure("integrity")
+                versions = await self.projections.versions(scope_id)
             await self.session.commit()
         except Exception:
             await self.session.rollback()
             raise
-        for row in report.values():
-            row.update(recovery_source=recovered.source, source_event_id=history[-1]["event_id"], knowledge_scope_id=scope_id)
+        for name, row in report.items():
+            row.update(recovery_source=recovered.source, source_event_id=history[-1]["event_id"], knowledge_scope_id=scope_id,
+                       schema_version=versions["schema_version"], projection_version=versions["projection_versions"][name])
+            if name == "dense":
+                row["index_version"] = versions["index_version"]
         return report

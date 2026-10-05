@@ -1,0 +1,173 @@
+2026-10-05 20:08:52,096 [INFO] rag_mcp.providers.local_cpu: Loading embedding model BAAI/bge-m3 (first use)...
+2026-10-05 20:09:02,040 [INFO] sentence_transformers.base.model: Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 391/391 [00:00<00:00, 65928.56it/s]
+D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dimension = self._model.get_sentence_embedding_dimension()
+2026-10-05 20:09:03,532 [INFO] rag_mcp.providers.local_cpu: Embedding model BAAI/bge-m3 loaded (dim=1024)
+2026-10-05 20:09:03,532 [INFO] run_eval: Loaded real embedding provider: BAAI/bge-m3 (dim=1024)
+2026-10-05 20:09:03,944 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+2026-10-05 20:09:07,952 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+Building prefix dict from the default dictionary ...
+2026-10-05 20:09:07,994 [DEBUG] jieba: Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+2026-10-05 20:09:07,994 [DEBUG] jieba: Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.310 seconds.
+2026-10-05 20:09:08,303 [DEBUG] jieba: Loading model cost 0.310 seconds.
+Prefix dict has been built successfully.
+2026-10-05 20:09:08,303 [DEBUG] jieba: Prefix dict has been built successfully.
+2026-10-05 20:09:08,304 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 164 terms, avgdl=38.7 docs=6
+2026-10-05 20:09:08,304 [INFO] rag_mcp.services.retrieval_service: Sparse encoder cached for scopes (355308275387858944,) (164 terms)
+2026-10-05 20:09:08,322 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,386 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,387 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=6 sparse=2 graph=0 fused=6 rerank=0ms, failed=[], timings={'dense_recall_ms': 78.0, 'sparse_recall_ms': 78.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 78.0}
+2026-10-05 20:09:08,462 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=703ms, request_id=faf9a5a7-2120-4364-9874-c60da9797d2a
+2026-10-05 20:09:08,561 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,581 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,648 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,648 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=6 sparse=2 graph=0 fused=6 rerank=0ms, failed=[], timings={'dense_recall_ms': 78.0, 'sparse_recall_ms': 78.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 78.0}
+2026-10-05 20:09:08,685 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=203ms, request_id=23242d69-edee-4df7-9e3d-eb67e3eba3ea
+2026-10-05 20:09:08,791 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,809 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,880 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:08,882 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=6 sparse=2 graph=0 fused=6 rerank=0ms, failed=[], timings={'dense_recall_ms': 78.0, 'sparse_recall_ms': 78.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 78.0}
+2026-10-05 20:09:08,921 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=219ms, request_id=b0552f8c-63fb-49d7-8eb6-4f7803a81ef7
+2026-10-05 20:09:08,994 [INFO] rag_mcp.services.evidence_service: Evidence retrieved: id=355308275928924161, scope=355308275387858944, version=1
+2026-10-05 20:09:09,102 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,123 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 110 terms, avgdl=45.3 docs=3
+2026-10-05 20:09:09,123 [INFO] rag_mcp.services.retrieval_service: Sparse encoder cached for scopes (355308300050366464,) (110 terms)
+2026-10-05 20:09:09,133 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,202 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,202 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=3 sparse=1 graph=0 fused=3 rerank=0ms, failed=[], timings={'dense_recall_ms': 78.0, 'sparse_recall_ms': 78.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 78.0}
+2026-10-05 20:09:09,247 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=3, duration=235ms, request_id=8d387116-2627-4f0c-8123-3bbe21cf0280
+2026-10-05 20:09:09,339 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,358 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,422 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,422 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=3 sparse=1 graph=0 fused=3 rerank=0ms, failed=[], timings={'dense_recall_ms': 63.0, 'sparse_recall_ms': 63.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 63.0}
+2026-10-05 20:09:09,458 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=3, duration=188ms, request_id=b2a279d0-7233-43a4-b1ed-94ffabd198e7
+2026-10-05 20:09:09,559 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,577 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,635 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,635 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=3 sparse=1 graph=0 fused=3 rerank=0ms, failed=[], timings={'dense_recall_ms': 62.0, 'sparse_recall_ms': 62.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 62.0}
+2026-10-05 20:09:09,673 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=3, duration=203ms, request_id=8014fce1-77a9-4203-9ce1-ac9965c7f8fe
+2026-10-05 20:09:09,716 [INFO] rag_mcp.services.evidence_service: Evidence retrieved: id=355308300398493696, scope=355308300050366464, version=1
+2026-10-05 20:09:09,823 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,845 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 219 terms, avgdl=12.0 docs=37
+2026-10-05 20:09:09,845 [INFO] rag_mcp.services.retrieval_service: Sparse encoder cached for scopes (355308320472432640,) (219 terms)
+2026-10-05 20:09:09,855 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,912 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:09,963 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=15 rerank=0ms, failed=[], timings={'dense_recall_ms': 125.0, 'sparse_recall_ms': 125.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 125.0}
+2026-10-05 20:09:09,999 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=265ms, request_id=e34e890d-1560-42af-b6a2-1489dfc48687
+2026-10-05 20:09:10,087 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,103 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,173 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,224 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=15 rerank=0ms, failed=[], timings={'dense_recall_ms': 140.0, 'sparse_recall_ms': 140.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 140.0}
+2026-10-05 20:09:10,260 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=250ms, request_id=415bd738-4348-461e-a63b-43aaf1b357fd
+2026-10-05 20:09:10,367 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,383 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,449 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,501 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=15 rerank=0ms, failed=[], timings={'dense_recall_ms': 125.0, 'sparse_recall_ms': 125.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 125.0}
+2026-10-05 20:09:10,536 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=266ms, request_id=89ca1c47-5d3c-43ad-bade-a7d9d11f4f70
+2026-10-05 20:09:10,578 [INFO] rag_mcp.services.evidence_service: Evidence retrieved: id=355308321068023833, scope=355308320472432640, version=1
+2026-10-05 20:09:10,671 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,693 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 203 terms, avgdl=17.3 docs=23
+2026-10-05 20:09:10,693 [INFO] rag_mcp.services.retrieval_service: Sparse encoder cached for scopes (355308345470484480,) (203 terms)
+2026-10-05 20:09:10,702 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,770 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,822 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=12 rerank=0ms, failed=[], timings={'dense_recall_ms': 125.0, 'sparse_recall_ms': 125.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 125.0}
+2026-10-05 20:09:10,857 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=264ms, request_id=cbc59f50-96d5-473b-b646-5f679d8292b3
+2026-10-05 20:09:10,948 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:10,966 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:11,032 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:11,087 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=12 rerank=0ms, failed=[], timings={'dense_recall_ms': 125.0, 'sparse_recall_ms': 125.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 125.0}
+2026-10-05 20:09:11,125 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=250ms, request_id=4340b77f-242d-4c12-a0ee-a3c8795eaafa
+2026-10-05 20:09:11,219 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 20:09:11,238 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:11,295 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 20:09:11,349 [INFO] rag_mcp.services.retrieval_service: Hybrid recall: dense=10 sparse=10 graph=0 fused=12 rerank=0ms, failed=[], timings={'dense_recall_ms': 125.0, 'sparse_recall_ms': 125.0, 'fusion_ms': 0.0, 'rerank_ms': 0.0, 'total_ms': 125.0}
+2026-10-05 20:09:11,385 [INFO] rag_mcp.services.retrieval_service: Search completed: status=complete, evidence=5, duration=250ms, request_id=c573d47c-936b-4996-b1fa-522ba71de11e
+2026-10-05 20:09:11,441 [INFO] rag_mcp.services.evidence_service: Evidence retrieved: id=355308345952829454, scope=355308345470484480, version=1
+2026-10-05 20:09:11,456 [INFO] __main__: multi-domain acceptance written to eval\runs\012-20261005-final-regression-f\012_multi_domain_core_report.json (leakage=0 schema=1.00 locatability=1.00)
+{
+  "report_type": "multi_domain_acceptance",
+  "generated_at": "2026-10-05T12:09:11.456641+00:00",
+  "scenarios": [
+    {
+      "id": "discovery_four_axes",
+      "description": "list_knowledge_domains covers personal/generic/legal/se-project",
+      "status": "passed"
+    },
+    {
+      "id": "three_form_addressing_closed_loop",
+      "description": "domain_scope numeric/slug/type:name addressing + get_evidence expansion",
+      "status": "passed"
+    },
+    {
+      "id": "hard_metrics_three_piece",
+      "description": "跨域串库=0 / Schema 100% / 定位 100%",
+      "status": "passed"
+    }
+  ],
+  "hard_constraints": {
+    "cross_domain_leakage_events": 0,
+    "schema_validity_rate": 1.0,
+    "source_locatability_rate": 1.0,
+    "all_passed": true
+  },
+  "per_query_measurements": [
+    {
+      "domain_key": "personal",
+      "slug": "personal-eval-rag-notes",
+      "query": "嵌入模型选型时本地部署首选哪个模型",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "generic",
+      "slug": "generic-eval-meeting-notes",
+      "query": "hybrid A/B test 的 Recall@5 结果如何",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 3,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "legal",
+      "slug": "legal-eval-dpa",
+      "query": "数据处理协议对跨境提供个人数据有什么要求",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    },
+    {
+      "domain_key": "legal",
+      "slug": "legal-eval-data-security",
+      "query": "数据安全管理办法对重要数据处理者有什么义务",
+      "forms": {
+        "numeric": "complete",
+        "slug": "complete",
+        "type_name": "complete"
+      },
+      "evidence_count": 5,
+      "closed_loop": "passed"
+    }
+  ],
+  "reference_client": {
+    "deepseek_harness": "not_measured_by_core_runner",
+    "chatgpt_app": "recorded_non_blocking",
+    "claude_code": "recorded_non_blocking"
+  }
+}

@@ -1,0 +1,318 @@
+2026-10-05 13:31:17,629 [INFO] __main__: Loaded 37 queries from eval\eval_dataset.json
+2026-10-05 13:31:17,630 [INFO] rag_mcp.providers.local_cpu: Loading embedding model BAAI/bge-m3 (first use)...
+2026-10-05 13:31:25,580 [INFO] sentence_transformers.base.model: Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 124788.68it/s]
+D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dimension = self._model.get_sentence_embedding_dimension()
+2026-10-05 13:31:26,834 [INFO] rag_mcp.providers.local_cpu: Embedding model BAAI/bge-m3 loaded (dim=1024)
+2026-10-05 13:31:26,834 [INFO] run_eval: Loaded real embedding provider: BAAI/bge-m3 (dim=1024)
+2026-10-05 13:31:27,034 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+2026-10-05 13:31:27,034 [INFO] __main__: === Graph Corpus Preparation ===
+2026-10-05 13:31:27,165 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+2026-10-05 13:31:27,270 [WARNING] __main__: Raw file missing for source 351194688474054656: data\uploads\351193748123680768\351194688474054656\_TestService.java
+2026-10-05 13:31:27,270 [INFO] __main__: Scope 351193748123680768: extracted 0 graph edges
+2026-10-05 13:31:27,296 [INFO] __main__: Scope 351207349697904640: extracted 0 graph edges
+2026-10-05 13:31:27,338 [INFO] __main__: Scope 351221148429582336: extracted 0 graph edges
+2026-10-05 13:31:27,365 [INFO] __main__: Scope 351222351527936000: extracted 0 graph edges
+2026-10-05 13:31:27,403 [INFO] __main__: Scope 351222576757866496: extracted 0 graph edges
+2026-10-05 13:31:27,437 [INFO] __main__: Scope 351222872145920000: extracted 0 graph edges
+2026-10-05 13:31:27,471 [INFO] __main__: Scope 351989134090305537: extracted 0 graph edges
+2026-10-05 13:31:27,504 [INFO] __main__: Scope 352014591405850625: extracted 0 graph edges
+2026-10-05 13:31:27,509 [INFO] __main__: Scope 352016496592945153: 2 graph edges present
+2026-10-05 13:31:27,553 [INFO] __main__: Scope 352016589224148993: extracted 0 graph edges
+2026-10-05 13:31:27,587 [INFO] __main__: Scope 352016598489366529: extracted 0 graph edges
+2026-10-05 13:31:27,615 [INFO] __main__: Scope 352016602247462913: extracted 0 graph edges
+2026-10-05 13:31:27,629 [INFO] __main__: Graph-eligible scopes: 12
+Building prefix dict from the default dictionary ...
+2026-10-05 13:31:31,294 [DEBUG] jieba: Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+2026-10-05 13:31:31,295 [DEBUG] jieba: Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.240 seconds.
+2026-10-05 13:31:31,534 [DEBUG] jieba: Loading model cost 0.240 seconds.
+Prefix dict has been built successfully.
+2026-10-05 13:31:31,534 [DEBUG] jieba: Prefix dict has been built successfully.
+2026-10-05 13:31:32,629 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 21916 terms, avgdl=3.8 docs=30066
+2026-10-05 13:31:32,630 [INFO] __main__: Sparse encoder fitted on 30066 chunk texts
+2026-10-05 13:31:32,630 [INFO] __main__: === Dense Baseline Re-Run (same session, SC-002 basis) ===
+2026-10-05 13:31:32,798 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:32,924 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,033 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,140 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,255 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,359 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,465 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,527 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,580 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,633 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,633 [INFO] run_eval:   Processed 10/37 queries
+2026-10-05 13:31:33,687 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,734 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,830 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:33,934 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,034 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,143 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,234 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,334 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,534 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,587 [INFO] run_eval:   Processed 20/37 queries
+2026-10-05 13:31:34,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,734 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,834 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:34,934 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,034 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,143 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,253 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,353 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,446 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,544 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,593 [INFO] run_eval:   Processed 30/37 queries
+2026-10-05 13:31:35,647 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,762 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,865 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:35,965 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,078 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,186 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,286 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_dense_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,334 [INFO] run_eval:   Processed 37/37 queries
+2026-10-05 13:31:36,334 [INFO] __main__: === Hybrid Baseline Re-Run (same session) ===
+2026-10-05 13:31:36,387 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,665 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,727 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,803 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,863 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:36,996 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,063 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,149 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,203 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,288 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,339 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,427 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,512 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,523 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,597 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,598 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,665 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,681 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,696 [INFO] run_eval:   Processed 10/37 queries
+2026-10-05 13:31:37,761 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,765 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,834 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,896 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:37,967 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,025 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,094 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,162 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,234 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,294 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,365 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,431 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,505 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,560 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,694 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,765 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,834 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,904 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:38,965 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,034 [INFO] run_eval:   Processed 20/37 queries
+2026-10-05 13:31:39,091 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,134 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,265 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,326 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,464 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,522 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,594 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,659 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,736 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,791 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,903 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:39,966 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,087 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,146 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,269 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,325 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,392 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,565 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,696 [INFO] run_eval:   Processed 30/37 queries
+2026-10-05 13:31:40,765 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,826 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,909 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:40,962 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,037 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,095 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,165 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,229 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,360 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,425 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,537 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,597 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,675 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,734 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,808 [INFO] run_eval:   Processed 37/37 queries
+2026-10-05 13:31:41,808 [INFO] __main__: === Graph-Enhanced Run ===
+2026-10-05 13:31:41,861 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,925 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:41,996 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:41,996 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,065 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,132 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,141 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:42,141 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,196 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,262 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,326 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:42,326 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,386 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,449 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:42,449 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,513 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,565 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,580 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:42,580 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,696 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,696 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:42,696 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,761 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,765 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,765 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351207349697904640/3, candidates=0, budget=10
+2026-10-05 13:31:42,765 [INFO] rag_mcp.graph.expansion: Expansion engine: start=1 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,830 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,835 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,849 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351221148429582336/2, candidates=0, budget=10
+2026-10-05 13:31:42,849 [INFO] rag_mcp.graph.expansion: Expansion engine: start=1 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,896 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,896 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,912 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351222351527936000/2, candidates=0, budget=10
+2026-10-05 13:31:42,912 [INFO] rag_mcp.graph.expansion: Expansion engine: start=1 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,965 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,965 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:42,984 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351222576757866496/2, candidates=0, budget=10
+2026-10-05 13:31:42,984 [INFO] rag_mcp.graph.expansion: Expansion engine: start=1 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:42,984 [INFO] __main__:   Processed 10/37 queries
+2026-10-05 13:31:43,034 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,034 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,054 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351222872145920000/3, candidates=0, budget=10
+2026-10-05 13:31:43,054 [INFO] rag_mcp.graph.expansion: Expansion engine: start=1 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,102 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,164 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,171 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,171 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,215 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,265 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,280 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,280 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,331 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,394 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,403 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,403 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,460 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,509 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,525 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,525 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,578 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,636 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,636 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,696 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,754 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,762 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,762 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,815 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,872 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,878 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:43,878 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:43,936 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,990 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:43,999 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352014591405850625/1, candidates=0, budget=10
+2026-10-05 13:31:43,999 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:44,053 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,110 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,166 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352014591405850625/1, candidates=0, budget=10
+2026-10-05 13:31:44,167 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:44,167 [INFO] __main__:   Processed 20/37 queries
+2026-10-05 13:31:44,217 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,272 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,334 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016496592945153/1, candidates=2, budget=10
+2026-10-05 13:31:44,334 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 13:31:44,387 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,434 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,496 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016496592945153/1, candidates=1, budget=10
+2026-10-05 13:31:44,496 [INFO] rag_mcp.graph.expansion: Expansion engine: start=6 chunks, hop=2, budget=10, dir=bidirectional, candidates=1
+2026-10-05 13:31:44,565 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,634 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351989134090305537/2, candidates=0, budget=10
+2026-10-05 13:31:44,634 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:44,692 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,747 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,756 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351989134090305537/2, candidates=0, budget=10
+2026-10-05 13:31:44,756 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:44,796 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,863 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:44,925 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016589224148993/1, candidates=0, budget=10
+2026-10-05 13:31:44,926 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:44,971 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,024 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,065 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016589224148993/1, candidates=0, budget=10
+2026-10-05 13:31:45,065 [INFO] rag_mcp.graph.expansion: Expansion engine: start=6 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,131 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,194 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,248 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016598489366529/1, candidates=0, budget=10
+2026-10-05 13:31:45,248 [INFO] rag_mcp.graph.expansion: Expansion engine: start=6 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,293 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,363 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,365 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016598489366529/1, candidates=0, budget=10
+2026-10-05 13:31:45,365 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,411 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,479 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,534 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016602247462913/1, candidates=0, budget=10
+2026-10-05 13:31:45,534 [INFO] rag_mcp.graph.expansion: Expansion engine: start=6 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,585 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,634 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,696 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016602247462913/1, candidates=0, budget=10
+2026-10-05 13:31:45,696 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,696 [INFO] __main__:   Processed 30/37 queries
+2026-10-05 13:31:45,755 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,809 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,815 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:45,815 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,865 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,934 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:45,934 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:45,934 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:45,995 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,062 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,065 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:46,065 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:46,124 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,165 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,234 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016496592945153/1, candidates=2, budget=10
+2026-10-05 13:31:46,234 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 13:31:46,286 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,340 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,394 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016496592945153/1, candidates=2, budget=10
+2026-10-05 13:31:46,394 [INFO] rag_mcp.graph.expansion: Expansion engine: start=7 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 13:31:46,442 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,496 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,502 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=351193748123680768/2, candidates=0, budget=10
+2026-10-05 13:31:46,502 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=0
+2026-10-05 13:31:46,558 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,625 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 13:31:46,696 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=352016496592945153/1, candidates=2, budget=10
+2026-10-05 13:31:46,696 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 13:31:46,696 [INFO] __main__:   Processed 37/37 queries
+2026-10-05 13:31:46,696 [INFO] __main__: Structural subset (7 queries): MRR 0.7381->0.8571 (16.13%), nDCG 0.8044->0.8946 (11.20%)
+2026-10-05 13:31:46,696 [INFO] __main__: SC-002 001 non-inferior: True (ok)
+2026-10-05 13:31:46,696 [INFO] __main__: SC-002 stored-report cross-check: stored baseline reflects pre-rebuild corpus (expected chunk IDs differ); same-session dense baseline used for the SC-002 gate
+2026-10-05 13:31:46,696 [INFO] __main__: SC-013 002 non-structural non-inferior: True
+2026-10-05 13:31:46,982 [INFO] __main__: Hard constraints: {'cross_project_leakage_events': 0, 'schema_validity_rate': 1.0, 'source_locatability_rate': 1.0, 'all_passed': True}
+2026-10-05 13:31:46,996 [INFO] __main__: Report validates against eval-graph-comparison-report.schema.json
+2026-10-05 13:31:46,996 [INFO] __main__: Graph comparison report written to D:\Project_new\docsToCode\eval\runs\012-20261005-regression\012_004_regression_report.json
+2026-10-05 13:31:46,996 [INFO] __main__: three_gate_pass: {'sc001_structural_improvement': True, 'sc002_001_noninferior': True, 'sc013_002_nonstructural_noninferior': True, 'hard_constraints_passed': True, 'all_passed': True}
+2026-10-05 13:31:46,996 [INFO] __main__: enters_default_path: True

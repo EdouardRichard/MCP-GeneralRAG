@@ -1,0 +1,33 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.9, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\Richard\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Project_new\docsToCode\backend
+configfile: pyproject.toml
+plugins: anyio-4.14.2, langsmith-0.11.1, asyncio-0.25.3
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+collecting ... collected 5 items
+
+tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False] PASSED [ 20%]
+tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_probe_reports_unreachable_port PASSED [ 40%]
+tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_probe_reports_reachable_port PASSED [ 60%]
+tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_ensure_mcp_server_fails_when_unreachable PASSED [ 80%]
+tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_raw_dir_resolves_under_settings_data_root PASSED [100%]
+
+============================== warnings summary ===============================
+tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False]
+  D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+    self._dimension = self._model.get_sentence_embedding_dimension()
+
+tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False]
+  C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\contextlib.py:105: DeprecationWarning: Use `streamable_http_client` instead.
+    self.gen = func(*args, **kwds)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-d\target-host-green.xml -
+============================= slowest 5 durations =============================
+30.34s setup    tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False]
+2.54s call     tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False]
+0.51s call     tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_probe_reports_unreachable_port
+0.51s call     tests/integration/test_target_host_smoke.py::TestSmokeGuardT051::test_ensure_mcp_server_fails_when_unreachable
+0.37s teardown tests/integration/test_target_host_smoke.py::TestTargetHostSmoke::test_search_and_get_evidence_via_mcp_host[False]
+======================= 5 passed, 2 warnings in 34.59s ========================

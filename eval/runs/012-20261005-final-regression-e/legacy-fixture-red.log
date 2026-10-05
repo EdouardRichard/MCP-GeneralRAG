@@ -1,0 +1,257 @@
+FFF                                                                      [100%]
+================================== FAILURES ===================================
+___ test_global_database_connections_do_not_outlive_the_test_event_loop[1] ____
+asyncpg/protocol/prepared_stmt.pyx:175: in asyncpg.protocol.protocol.PreparedStatementState._encode_bind_msg
+    ???
+asyncpg/protocol/codecs/base.pyx:251: in asyncpg.protocol.protocol.Codec.encode
+    ???
+asyncpg/protocol/codecs/base.pyx:153: in asyncpg.protocol.protocol.Codec.encode_scalar
+    ???
+asyncpg/pgproto/codecs/text.pyx:29: in asyncpg.pgproto.pgproto.text_encode
+    ???
+asyncpg/pgproto/codecs/text.pyx:12: in asyncpg.pgproto.pgproto.as_pg_string_and_size
+    ???
+E   TypeError: expected str, got int
+
+The above exception was the direct cause of the following exception:
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:550: in _prepare_and_execute
+    self._rows = deque(await prepared_stmt.fetch(*parameters))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\prepared_stmt.py:177: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\prepared_stmt.py:268: in __bind_execute
+    data, status, _ = await self.__do_execute(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\prepared_stmt.py:257: in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+asyncpg/protocol/protocol.pyx:184: in bind_execute
+    ???
+asyncpg/protocol/prepared_stmt.pyx:204: in asyncpg.protocol.protocol.PreparedStatementState._encode_bind_msg
+    ???
+E   asyncpg.exceptions.DataError: invalid input for query argument $1: 1 (expected str, got int)
+
+The above exception was the direct cause of the following exception:
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: in _handle_exception
+    raise translated_error from error
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.Error: <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $1: 1 (expected str, got int)
+
+The above exception was the direct cause of the following exception:
+tests\unit\test_database_fixture_lifetime.py:11: in test_global_database_connections_do_not_outlive_the_test_event_loop
+    assert await session.scalar(text("SELECT :iteration"), {"iteration": iteration}) == iteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:504: in scalar
+    return await greenlet_spawn(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:2421: in scalar
+    return self._execute_internal(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:2266: in _execute_internal
+    return conn.scalar(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1310: in scalar
+    return meth(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\sql\elements.py:544: in _execute_on_scalar
+    return self._execute_on_connection(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:797: in _handle_exception
+    raise translated_error from error
+E   sqlalchemy.exc.DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $1: 1 (expected str, got int)
+E   [SQL: SELECT $1]
+E   [parameters: (1,)]
+E   (Background on this error at: https://sqlalche.me/e/20/dbapi)
+___ test_global_database_connections_do_not_outlive_the_test_event_loop[2] ____
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:799: in call_soon
+    self._check_closed()
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py:545: in _check_closed
+    raise RuntimeError('Event loop is closed')
+E   RuntimeError: Event loop is closed
+
+During handling of the above exception, another exception occurred:
+tests\unit\test_database_fixture_lifetime.py:11: in test_global_database_connections_do_not_outlive_the_test_event_loop
+    assert await session.scalar(text("SELECT :iteration"), {"iteration": iteration}) == iteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:504: in scalar
+    return await greenlet_spawn(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:2421: in scalar
+    return self._execute_internal(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:2261: in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:2113: in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in _connection_for_bind
+    ???
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\orm\session.py:1191: in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\pool\base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\pool\base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\pool\base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\engine\default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:818: in ping
+    self._handle_exception(error)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:799: in _handle_exception
+    raise error
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py:825: in _async_ping
+    await tr.start()
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\transaction.py:146: in start
+    await self._connection.execute(query)
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncpg/protocol/protocol.pyx:369: in query
+    ???
+asyncpg/protocol/protocol.pyx:362: in asyncpg.protocol.protocol.BaseProtocol.query
+    ???
+asyncpg/protocol/coreproto.pyx:1174: in asyncpg.protocol.protocol.CoreProtocol._simple_query
+    ???
+asyncpg/protocol/protocol.pyx:956: in asyncpg.protocol.protocol.BaseProtocol._write
+    ???
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\proactor_events.py:366: in write
+    self._loop_writing(data=bytes(data))
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\proactor_events.py:402: in _loop_writing
+    self._write_fut = self._loop._proactor.send(self._sock, data)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'send'
+------------------------------ Captured log call ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x0000022D19C80B90>>
+Traceback (most recent call last):
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\pool\base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\sqlalchemy\dialects\postgresql\asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\asyncpg\connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 455, in create_task
+    self._check_closed()
+  File "C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\asyncio\base_events.py", line 545, in _check_closed
+    raise RuntimeError('Event loop is closed')
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\site-packages\_pytest\unraisableexception.py:33: RuntimeWarning: coroutine 'Connection._cancel' was never awaited
+  gc.collect()
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+RuntimeError: Event loop is closed
+_ TestPipelineRecall.test_dense_fixture_contains_distinct_real_semantic_vectors _
+tests\integration\test_agentic_real_retrieval.py:207: in test_dense_fixture_contains_distinct_real_semantic_vectors
+    assert len({json.dumps(point.vector, sort_keys=True) for point in points}) > 1, "constant dense vectors make Recall@K depend on arbitrary Qdrant ties"
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py:238: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:200: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:258: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+C:\Users\Richard\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:180: in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+E   TypeError: Object of type SparseVector is not JSON serializable
+---------------------------- Captured stderr setup ----------------------------
+Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.300 seconds.
+Prefix dict has been built successfully.
+----------------------------- Captured log setup ------------------------------
+DEBUG    jieba:__init__.py:113 Building prefix dict from the default dictionary ...
+DEBUG    jieba:__init__.py:132 Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+DEBUG    jieba:__init__.py:164 Loading model cost 0.300 seconds.
+DEBUG    jieba:__init__.py:166 Prefix dict has been built successfully.
+=========================== short test summary info ===========================
+FAILED tests/unit/test_database_fixture_lifetime.py::test_global_database_connections_do_not_outlive_the_test_event_loop[1]
+FAILED tests/unit/test_database_fixture_lifetime.py::test_global_database_connections_do_not_outlive_the_test_event_loop[2]
+FAILED tests/integration/test_agentic_real_retrieval.py::TestPipelineRecall::test_dense_fixture_contains_distinct_real_semantic_vectors
+3 failed in 4.37s

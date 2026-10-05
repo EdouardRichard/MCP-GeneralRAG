@@ -1,0 +1,41 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.9, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\Richard\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Project_new\docsToCode\backend
+configfile: pyproject.toml
+plugins: anyio-4.14.2, langsmith-0.11.1, asyncio-0.25.3
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+collecting ... collected 3 items
+
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[numeric] FAILED [ 33%]
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[prefixed] PASSED [ 66%]
+tests/unit/test_memory_acceptance_report.py::test_report_records_the_actual_suite_command FAILED [100%]
+
+================================== FAILURES ===================================
+__ test_archive_preserves_every_accepted_distilled_source_reference[numeric] __
+tests\integration\test_012_live_history.py:121: in test_archive_preserves_every_accepted_distilled_source_reference
+    assert any(event["event_id"] == source["memory_id"] for event in online), "an accepted distilled source reference was truncated"
+E   AssertionError: an accepted distilled source reference was truncated
+E   assert False
+E    +  where False = any(<generator object test_archive_preserves_every_accepted_distilled_source_reference.<locals>.<genexpr> at 0x00000273D0C5B3E0>)
+---------------------------- Captured stderr call -----------------------------
+
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]
+Loading weights: 100%|��������������������| 391/391 [00:00<00:00, 64698.31it/s]
+________________ test_report_records_the_actual_suite_command _________________
+tests\unit\test_memory_acceptance_report.py:55: in test_report_records_the_actual_suite_command
+    report = module.build_report(suite=suite, trace=trace, host=host, regression=[],
+E   TypeError: build_report() got an unexpected keyword argument 'suite_command'
+============================== warnings summary ===============================
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[numeric]
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[prefixed]
+  D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+    self._dimension = self._model.get_sentence_embedding_dimension()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[numeric] - AssertionError: an accepted distilled source reference was truncated
+assert False
+ +  where False = any(<generator object test_archive_preserves_every_accepted_distilled_source_reference.<locals>.<genexpr> at 0x00000273D0C5B3E0>)
+FAILED tests/unit/test_memory_acceptance_report.py::test_report_records_the_actual_suite_command - TypeError: build_report() got an unexpected keyword argument 'suite_command'
+================== 2 failed, 1 passed, 2 warnings in 18.43s ===================

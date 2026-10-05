@@ -240,3 +240,21 @@
 
 所有任务均使用 `- [ ] Txxx` 格式；用户故事阶段任务带 `[USn]`；可并行任务带 `[P]`；每项均包含具体文件路径，并映射至少一个 FR/US。测试任务均明确“先红后绿”。
 
+## Phase 9: Convergence
+
+- [X] T089 CRITICAL 封闭投影只读旁路：在 `backend/src/rag_mcp/services/memory_projection_store.py` 为底层写入口要求 sealed reducer 及当前日志验证；新增 `backend/alembic/versions/0090_memory_projection_bypass_guards.py` 拒绝投影 TRUNCATE 并补齐未守卫字段；在 `backend/tests/integration/test_012_convergence_boundaries.py` 和 `backend/tests/unit/test_memory_read_only.py` 先红后绿逐入口验证 per Constitution XIII、FR-005、T021 (contradicts)
+- [X] T090 建立 012 最小确定性巩固候选过滤（不实现 013 LLM 巩固）：在 `backend/src/rag_mcp/services/memory_reader.py` 只读取完成投影、按 scope/policy/status/TTL 筛选；在 `backend/tests/integration/test_012_convergence_boundaries.py` 分别验证默认 recall 与巩固窗口 quarantined 零进入，包含 include 开关、dense 降级和 distilled 来源拒绝 per FR-010、FR-038、SC-004、T039 (partial)
+- [X] T091 在 `backend/tests/unit/test_memory_recall_modes.py` 和 `backend/tests/integration/test_012_convergence_boundaries.py` 增加双时态矩阵（valid_from 前/等值/区间内、valid_to 等值/后、open interval、observed 不变、superseded 显式开关、retired/quarantined 永不默认返回），先红后绿修复 `backend/src/rag_mcp/services/memory_reader.py` per FR-023、SC-014、T047 (partial)
+- [X] T092 在 `backend/tests/unit/test_salience_service.py`、`backend/tests/integration/test_012_convergence_boundaries.py` 补齐零 access、长期未访问耗尽、时间回退及 rollback 后保留 access/衰减/事实不变边界；修复 `backend/src/rag_mcp/services/memory_reader.py` 零信号 RRF 加权问题并验证 policy 参数 per FR-026a、FR-032、SC-010、SC-015、SC-016 (partial)
+- [X] T093 在 `backend/tests/integration/test_012_convergence_history.py` 增加快照→归档在线裁剪→supersede→回滚→再回滚的交叉场景，逐类验证六投影、access 原文与计数、完整日志和快照回放指纹、坏快照回退及坏归档 fail-loud；必要时修复 `backend/src/rag_mcp/runtime/projection_rebuild.py` per FR-004a、FR-035a、SC-013、SC-016、T069–T070 (partial)
+- [x] T094 在 `backend/tests/integration/test_012_live_mcp_tools.py` 增加实际 FastMCP writer/reader acceptance，逐调用验证 structuredContent 与 JSON 镜像、输入/成功输出 schema、reader 拒写、无成功事件的错误、隔离状态开关与历史读取、三档稳定工作包预算；串行运行新增测试及 backend 既有全集并保留新 JUnit/log 路径 per FR-018–FR-031、FR-038–FR-040、T067 (partial)
+- [X] T095 同步 `外置型记忆回路-开发实施蓝图.md` 当前宪法 v1.4.0 的十三原则及 XII/XIII、批准生效措辞，不改历史 Feature 和规范意图；在 `backend/tests/unit/test_memory_constitution_wording.py` 增加回归断言 per Constitution v1.4.0、plan: Constitution Check (partial)
+
+## Phase 10: Convergence
+
+- [X] T096 补齐快照及 rebuild 的版本证据：在 `backend/tests/integration/test_012_convergence_history.py` 先红验证快照保存实际 dense collection/index version、六投影版本及 schema version，rebuild 每类输出对应版本；在 `backend/src/rag_mcp/runtime/projection_rebuild.py`、`backend/src/rag_mcp/services/memory_service.py` 从已完成 manifest/registry 派生并输出这些字段，兼容旧快照全日志回放且不改变权威状态或旧 MCP 契约；执行相关历史/投影回归 per FR-004a、FR-036、SC-013、plan: projection version contract (partial)
+
+## Phase 11: Convergence
+
+- [x] T097 保全 MCP 内容冲突的同域已有 ID：在 `backend/tests/integration/test_012_live_mcp_tools.py` 先红测试等价重复无新事件、非等价元数据冲突携带已有 memory_id、跨域相同正文独立且不泄露另一域 ID；在 `backend/src/rag_mcp/errors.py`、`backend/src/rag_mcp/services/memory_service.py`、`backend/src/rag_mcp/mcp/serialization.py` 使用类型化冲突异常保留经 scope 校验的 ID，禁止从任意异常文本抽取私有详情，并运行 MCP/错误码/旧工具字节兼容回归 per FR-019a、SC-017、FR-039、T041/T094 (partial)
+

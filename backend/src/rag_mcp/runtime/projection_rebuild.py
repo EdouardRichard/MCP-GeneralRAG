@@ -89,7 +89,8 @@ class MemoryHistory:
         if not all(row["matches_replay"] for row in (await self.service.inspect_projections(scope_id)).values()):
             raise ValueError("MEMORY_WRITE_UNAVAILABLE")
         state = reduce_events(events)
-        payload = {"status": "complete", "schema_version": 1, "scope_id": scope_id,
+        version_metadata = await self.service.projections.versions(scope_id)
+        payload = {"status": "complete", **version_metadata, "scope_id": scope_id,
             "covered_through_event_id": events[-1]["event_id"], "covered_through_occurred_at": events[-1]["occurred_at"],
             "source_events": events, "state_fingerprint": projection_fingerprint(state),
             "fingerprints": {name: projection_fingerprint(state[key]) for name, key in SNAPSHOT_VIEWS.items()}}
@@ -99,8 +100,31 @@ class MemoryHistory:
         await self.session.commit()
         return payload
 
+    async def _verify_archives(self, scope_id, events):
+        archives = (await self.session.execute(select(MemoryArchive).where(
+            MemoryArchive.knowledge_scope_id == scope_id))).scalars().all()
+        authority = {event["event_id"]: event for event in events}
+        archive_root = (self.service.projections.root / "archives" / str(scope_id)).resolve()
+        for archive in archives:
+            ids = set((await self.session.execute(select(MemoryArchivedEvent.event_id).where(
+                MemoryArchivedEvent.archive_id == archive.archive_id))).scalars().all())
+            try:
+                path = Path(archive.path).resolve()
+                if not path.is_relative_to(archive_root):
+                    raise ValueError("archive scope mismatch")
+                blob = path.read_bytes()
+                if hashlib.sha256(blob).hexdigest() != archive.fingerprint or not ids or not ids <= authority.keys():
+                    raise ValueError("archive checksum or membership mismatch")
+                archived = json.loads(blob)
+                expected = [event for event in events if event["event_id"] in ids]
+                if archived != expected:
+                    raise ValueError("archive differs from immutable authority")
+            except (OSError, ValueError, TypeError) as error:
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: archive integrity failed") from error
+
     async def load(self, scope_id):
         events = await MemoryEventStore(self.session).replay(scope_id)
+        await self._verify_archives(scope_id, events)
         latest = await self._latest(scope_id)
         snapshot = latest.payload if latest and hashlib.sha256(encoded(latest.payload)).hexdigest() == latest.fingerprint else None
         if snapshot is not None:
@@ -114,6 +138,7 @@ class MemoryHistory:
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
         reference = now or datetime.now(timezone.utc)
         events = await MemoryEventStore(self.session).replay(scope_id)
+        await self._verify_archives(scope_id, events)
         online = await MemoryEventStore(self.session).replay_online(scope_id)
         latest = await self._latest(scope_id)
         if latest is not None and (hashlib.sha256(encoded(latest.payload)).hexdigest() != latest.fingerprint
@@ -146,6 +171,8 @@ class MemoryHistory:
         path.parent.mkdir(parents=True, exist_ok=True)
         blob = encoded(eligible)
         path.write_bytes(blob)
+        if path.read_bytes() != blob:
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: archive verification failed before truncation")
         self.session.add(MemoryArchive(archive_id=archive_id, knowledge_scope_id=scope_id,
             path=str(path), fingerprint=hashlib.sha256(blob).hexdigest(), created_at=reference))
         await self.session.flush()

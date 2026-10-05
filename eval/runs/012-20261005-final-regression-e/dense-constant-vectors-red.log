@@ -1,0 +1,30 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+_ TestPipelineRecall.test_dense_fixture_contains_distinct_real_semantic_vectors _
+tests\integration\test_agentic_real_retrieval.py:181: in test_dense_fixture_contains_distinct_real_semantic_vectors
+    assert len({tuple(point.vector["dense"]) for point in points}) > 1, "constant dense vectors make Recall@K depend on arbitrary Qdrant ties"
+E   AssertionError: constant dense vectors make Recall@K depend on arbitrary Qdrant ties
+E   assert 1 > 1
+E    +  where 1 = len({(0.03125, 0.03125, 0.03125, 0.03125, 0.03125, 0.03125, ...)})
+---------------------------- Captured stderr setup ----------------------------
+
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]
+Loading weights: 100%|��������������������| 391/391 [00:00<00:00, 64317.71it/s]
+Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.299 seconds.
+Prefix dict has been built successfully.
+----------------------------- Captured log setup ------------------------------
+DEBUG    jieba:__init__.py:113 Building prefix dict from the default dictionary ...
+DEBUG    jieba:__init__.py:132 Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+DEBUG    jieba:__init__.py:164 Loading model cost 0.299 seconds.
+DEBUG    jieba:__init__.py:166 Prefix dict has been built successfully.
+============================== warnings summary ===============================
+tests/integration/test_agentic_real_retrieval.py::TestPipelineRecall::test_dense_fixture_contains_distinct_real_semantic_vectors
+  D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+    self._dimension = self._model.get_sentence_embedding_dimension()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_agentic_real_retrieval.py::TestPipelineRecall::test_dense_fixture_contains_distinct_real_semantic_vectors
+1 failed, 1 warning in 15.02s

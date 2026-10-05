@@ -17,3 +17,11 @@ MEMORY_ERROR_CODES = frozenset({
 })
 
 ERROR_CODES = LEGACY_ERROR_CODES | MEMORY_ERROR_CODES
+
+
+class MemoryContentConflictError(ValueError):
+    """Raised only after a matching entry is found in the requested scope."""
+
+    def __init__(self, memory_id: int):
+        self.memory_id = memory_id
+        super().__init__(f"MEMORY_CONTENT_CONFLICT:{memory_id}")

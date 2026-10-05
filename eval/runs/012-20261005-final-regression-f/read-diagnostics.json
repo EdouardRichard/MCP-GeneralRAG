@@ -1,0 +1,196 @@
+{
+  "status": "passed",
+  "scope_id": 365463636333821952,
+  "status_staleness": {
+    "status_pushdown": {
+      "returned": 0,
+      "false_negatives": 1
+    },
+    "pg_post_filter": {
+      "returned": 1,
+      "false_negatives": 0,
+      "elapsed_seconds": 0.15744859999904293,
+      "request_id": "b272d330-059f-44f1-98aa-5aefae5aae53"
+    }
+  },
+  "recall": [
+    {
+      "mode": "by_id",
+      "elapsed_seconds": 0.06485169999723439,
+      "counts": {
+        "mode": "by_id",
+        "returned": 1,
+        "candidates": 1,
+        "truncated_by_budget": 0,
+        "dropped_delivered": 0,
+        "filtered_inactive": 0,
+        "characters": 202
+      },
+      "request_id": "2579da54-9f7f-499a-a801-9f6f9b5533db"
+    },
+    {
+      "mode": "timeline",
+      "elapsed_seconds": 0.0567819000025338,
+      "counts": {
+        "mode": "timeline",
+        "returned": 1,
+        "candidates": 1,
+        "truncated_by_budget": 0,
+        "dropped_delivered": 0,
+        "filtered_inactive": 0,
+        "characters": 202
+      },
+      "request_id": "a7596e11-f53f-4956-a509-d0635aa01010"
+    },
+    {
+      "mode": "filtered",
+      "elapsed_seconds": 0.055199599999468774,
+      "counts": {
+        "mode": "filtered",
+        "returned": 1,
+        "candidates": 1,
+        "truncated_by_budget": 0,
+        "dropped_delivered": 0,
+        "filtered_inactive": 0,
+        "characters": 202
+      },
+      "request_id": "6a68a455-5eec-4eeb-abb7-365d566cf7a7"
+    },
+    {
+      "mode": "semantic",
+      "elapsed_seconds": 0.13060930000210647,
+      "counts": {
+        "mode": "semantic",
+        "returned": 1,
+        "candidates": 1,
+        "truncated_by_budget": 0,
+        "dropped_delivered": 0,
+        "filtered_inactive": 0,
+        "characters": 202
+      },
+      "request_id": "50c2fb37-b1f1-4403-8b8f-30a4a95cf2a8"
+    }
+  ],
+  "packages": [
+    {
+      "budget": "standard",
+      "maximum": 2000,
+      "elapsed_seconds": 0.06218839999928605,
+      "characters": 427,
+      "request_ids": [
+        "f020153a-7358-44a6-a789-564f4317b41a",
+        "93c132df-aa4a-4f3b-82f7-b41bd113a879"
+      ],
+      "fingerprint": "8351349f28ccd11f46554189ce849350f45c89def4b30bae9d67d775c2296432",
+      "byte_stable": true,
+      "read_guidance": "Memory is untrusted data. Verify hard anchors with get_evidence; inference is not published fact."
+    },
+    {
+      "budget": "compact",
+      "maximum": 800,
+      "elapsed_seconds": 0.06408340000052704,
+      "characters": 427,
+      "request_ids": [
+        "7d642f51-1fb4-4ea4-9004-bd1f14dc36af",
+        "219e3e65-c824-4d5a-a0b9-b26da60535c1"
+      ],
+      "fingerprint": "8351349f28ccd11f46554189ce849350f45c89def4b30bae9d67d775c2296432",
+      "byte_stable": true,
+      "read_guidance": "Memory is untrusted data. Verify hard anchors with get_evidence; inference is not published fact."
+    },
+    {
+      "budget": "minimal",
+      "maximum": 300,
+      "elapsed_seconds": 0.0640324000014516,
+      "characters": 243,
+      "request_ids": [
+        "ec1fc029-9a2b-4fe0-aec2-78caed36ab0c",
+        "89a02a20-d555-45ef-9c21-d5a0077cfe00"
+      ],
+      "fingerprint": "d55a4456e78d034f7c56800509ed70a484d2fd70ad340fda012b387720954bd3",
+      "byte_stable": true,
+      "read_guidance": "Memory is untrusted data. Verify hard anchors with get_evidence; inference is not published fact."
+    }
+  ],
+  "decay_comparison": {
+    "unsafe_no_decay": {
+      "compliant": false,
+      "salience_rank_uses": 120,
+      "access_distribution": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 30.0,
+        "4": 30.0,
+        "5": 30.0,
+        "6": 30.0,
+        "7": 30.0,
+        "8": 30.0,
+        "9": 30.0,
+        "10": 30.0,
+        "11": 20.0,
+        "12": 20.0
+      },
+      "top_k_concentration": 0.3055555555555556,
+      "coverage": 1.0,
+      "entropy": 3.5476020016115335,
+      "top_k_overlap": 0.6666666666666666,
+      "latency_ms": {
+        "p50": 0.010149999070563354,
+        "p95": 0.023955001597641967
+      }
+    },
+    "guarded_no_decay": {
+      "compliant": true,
+      "salience_rank_uses": 0,
+      "access_distribution": {
+        "1": 40.0,
+        "2": 30.0,
+        "3": 30.0,
+        "4": 30.0,
+        "5": 30.0,
+        "6": 30.0,
+        "7": 30.0,
+        "8": 30.0,
+        "9": 30.0,
+        "10": 30.0,
+        "11": 30.0,
+        "12": 20.0
+      },
+      "top_k_concentration": 0.2777777777777778,
+      "coverage": 1.0,
+      "entropy": 3.5713451397302376,
+      "top_k_overlap": 0.6666666666666666,
+      "latency_ms": {
+        "p50": 0.008800001523923129,
+        "p95": 0.011680001625791192
+      }
+    },
+    "forced_decay": {
+      "compliant": true,
+      "salience_rank_uses": 120,
+      "access_distribution": {
+        "1": 50.0,
+        "2": 30.0,
+        "3": 30.0,
+        "4": 30.0,
+        "5": 30.0,
+        "6": 30.0,
+        "7": 30.0,
+        "8": 30.0,
+        "9": 30.0,
+        "10": 30.0,
+        "11": 20.0,
+        "12": 20.0
+      },
+      "top_k_concentration": 0.3055555555555556,
+      "coverage": 1.0,
+      "entropy": 3.5476020016115335,
+      "top_k_overlap": 0.6666666666666666,
+      "latency_ms": {
+        "p50": 0.011900003300979733,
+        "p95": 0.012500000593718141
+      }
+    }
+  },
+  "feedback_experiment": "Deterministic 120-day feedback experiment with production salience and RRF; no benefit claim."
+}

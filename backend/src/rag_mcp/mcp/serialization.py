@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from mcp.types import CallToolResult, TextContent
 
-from rag_mcp.errors import MEMORY_ERROR_CODES
+from rag_mcp.errors import MEMORY_ERROR_CODES, MemoryContentConflictError
 
 
 def memory_result(body, *, is_error=False):
@@ -20,6 +20,8 @@ def memory_error(exception):
     if code not in MEMORY_ERROR_CODES:
         code = "MEMORY_PROVENANCE_INVALID" if isinstance(exception, ValueError) else "SYSTEM_ERROR"
     error = {"code": code, "message": code}
+    if isinstance(exception, MemoryContentConflictError):
+        error["memory_id"] = exception.memory_id
     if getattr(exception, "candidates", None):
         error["candidates"] = exception.candidates
     return memory_result({"error": error, "request_id": str(uuid4())}, is_error=True)

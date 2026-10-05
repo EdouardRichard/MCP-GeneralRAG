@@ -48,6 +48,21 @@ def text_characters(value):
     return len(value) if isinstance(value, str) else 0
 
 
+def memory_visible(row, *, point, now, include_superseded=False):
+    allowed = {"active", "superseded"} if include_superseded else {"active"}
+    if row["status"] not in allowed or point is None and row.get("retention_stage") == "archived":
+        return False
+    reference = point or now
+    # An explicit chain read can show closed superseded entries; as_of never
+    # relaxes the valid interval, regardless of the include flags.
+    if point is not None or row["status"] == "active":
+        start, end = timestamp(row.get("valid_from")), timestamp(row.get("valid_to"))
+        if start is not None and reference < start or end is not None and reference >= end:
+            return False
+    expires = timestamp(row.get("expires_at"))
+    return expires is None or reference < expires
+
+
 def public_entry(row, *, match=None):
     content = row["content_text"]
     keys = ("memory_id", "knowledge_scope_id", "kind", "provenance", "title", "confidence", "evidence_refs", "retention_stage",
@@ -152,17 +167,7 @@ class MemoryReader:
                 eligible = {}
                 inactive = 0
                 for mid, row in rows.items():
-                    if row["status"] == "quarantined" or point is None and row.get("retention_stage") == "archived":
-                        inactive += 1
-                        continue
-                    if row["status"] == "superseded" and not include_superseded:
-                        inactive += 1
-                        continue
-                    if point is not None:
-                        valid = (timestamp(row["valid_from"]) is None or timestamp(row["valid_from"]) <= point) and (timestamp(row.get("valid_to")) is None or point < timestamp(row["valid_to"]))
-                    else:
-                        valid = row["status"] == "active" or include_superseded and row["status"] == "superseded"
-                    if not valid or timestamp(row.get("expires_at")) is not None and timestamp(row["expires_at"]) <= (point or now):
+                    if not memory_visible(row, point=point, now=now, include_superseded=include_superseded):
                         inactive += 1
                         continue
                     if any(value is not None and row.get(key) != value for key, value in (("kind", kind), ("session_id", session_id), ("agent_id", agent_id))):
@@ -208,8 +213,10 @@ class MemoryReader:
                         beta = policies[eligible[mid]["knowledge_scope_id"]].get("decay_rate", .05)
                         last = timestamp(state.get("last_access_at"))
                         if beta > 0 and last is not None:
-                            signals[mid] = SalienceService().rank_signal(state.get("salience", 0.),
+                            signal = SalienceService().rank_signal(state.get("salience", 0.),
                                 decay_rate=beta, age_days=(now - last).total_seconds() / 86400)
+                            if signal > 0:
+                                signals[mid] = signal
                     paths = {"dense": dense, "recency": recency, "kind": kinds}
                     if signals:
                         paths["salience"] = sorted(signals, key=lambda mid: (-signals[mid], mid))
@@ -256,6 +263,23 @@ class MemoryReader:
         await self.session.commit()
         return result
 
+    async def consolidation_candidates(self, *, scope_ref):
+        """Deterministic candidate window only; proposal/adjudication belongs to 013."""
+        scope_ids = await MemoryScopeResolver(self.session).resolve_many(scope_ref)
+        rows, _, _, failed_paths = await self._views(scope_ids)
+        if failed_paths:
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: incomplete consolidation window")
+        enabled = set()
+        for sid in scope_ids:
+            scope = await self.session.get(KnowledgeScope, sid)
+            profile = await self.session.get(DomainProfile, scope.domain_key)
+            if (profile.memory_policy or {}).get("consolidation_enabled", False):
+                enabled.add(sid)
+        now = datetime.now(timezone.utc)
+        candidates = [row for row in rows.values() if row["knowledge_scope_id"] in enabled
+                      and memory_visible(row, point=None, now=now)]
+        return sorted(candidates, key=lambda row: (row["observed_at"], row["memory_id"]), reverse=True)
+
     async def start_work(self, *, scope_ref, session_id=None, task_hint=None, agent_id=None, include="both", budget="standard"):
         if include != "both" or budget not in {"standard", "compact", "minimal"}:
             raise ValueError("MEMORY_PROVENANCE_INVALID: package options")
@@ -267,8 +291,7 @@ class MemoryReader:
             profile = await self.session.get(DomainProfile, scope.domain_key)
             rows, _, _, failed_paths = await self._views([sid])
             now = datetime.now(timezone.utc)
-            active = [row for row in rows.values() if row["status"] == "active" and row.get("retention_stage") != "archived"
-                      and (timestamp(row.get("expires_at")) is None or timestamp(row["expires_at"]) > now)]
+            active = [row for row in rows.values() if memory_visible(row, point=None, now=now)]
             active.sort(key=lambda row: (row["observed_at"], row["memory_id"]), reverse=True)
             digest_rows = [row for row in active if row["kind"] in {"semantic", "procedural"}]
             work_rows = [row for row in active if row["kind"] == "episodic" and

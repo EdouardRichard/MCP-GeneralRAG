@@ -136,3 +136,10 @@ Phase 8 closure evidence (2026-10-05):
 | T086 | Frontend build and Playwright smoke passed in the final verification run; backend frontend-memory-page integration cases are included in the 2142-case JUnit evidence. |
 | T087 | Quickstart phases are represented by the final JUnit, migration/contract/integration artifacts, live dual-instance logs, frontend artifacts and `final-memory-report-verified.json`. |
 | T088 | `final-regression-h/backend-pytest.xml`: **2142 passed, 0 failed, 0 skipped**. `final-memory-report-verified.json` validates the acceptance schema and reports SC-001–SC-017 all `passed`; `host-evidence.json` records actual DSH writer/reader catalogs, `record_memory`, `recall_memory`, `start_work`, request IDs and reader write-tool absence. |
+
+Phase 9–11 convergence evidence:
+
+| Task | Fresh verification evidence |
+| --- | --- |
+| T094 | `tests/integration/test_012_live_mcp_tools.py` and `tests/contract/test_012_old_tool_compat.py`: 12 passed. The protocol matrix validates writer six/reader five tools, input/output contracts, structuredContent/JSON equality, reader write absence, scope isolation, historical reads, quarantine exclusion and standard/compact/minimal stable work packages. |
+| T097 | The same protocol matrix plus `tests/contract/test_memory_error_registry.py`: equivalent duplicates return the scoped existing ID without a new event, metadata conflicts return typed `MEMORY_CONTENT_CONFLICT` with only the validated `memory_id`, and cross-scope identical content gets an independent ID. |

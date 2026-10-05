@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="18" skipped="0" tests="36" time="142.678" timestamp="2026-10-05T17:24:31.205897+08:00" hostname="DESKTOP-EHU22NB"><testcase classname="tests.integration.test_012_memory_recall_observability" name="test_database_read_timeout_returns_failure_and_persists_audit" time="3.399" /><testcase classname="tests.integration.test_012_live_reader" name="test_pg_modes_history_scope_and_delivered_are_real" time="14.031" /><testcase classname="tests.integration.test_012_live_reader" name="test_real_semantic_status_staleness_and_filter_intersection" time="3.489" /><testcase classname="tests.integration.test_012_live_reader" name="test_failed_revision_is_not_consumed_and_package_is_stable_read_only" time="4.578" /><testcase classname="tests.integration.test_012_live_reader" name="test_nonsemantic_reads_never_construct_vector_client" time="0.318" /><testcase classname="tests.integration.test_012_live_reader" name="test_dense_timeout_returns_filtered_partial_inside_recall_budget" time="5.571" /><testcase classname="tests.integration.test_012_reader_boundaries" name="test_large_inference_metadata_cannot_escape_recall_or_work_budget" time="2.539"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_reader_boundaries.py:21: in test_large_inference_metadata_cannot_escape_recall_or_work_budget
+    await service.record(payload)
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_reader_boundaries" name="test_historical_superseded_requires_explicit_permission" time="1.987"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_reader_boundaries.py:35: in test_historical_superseded_requires_explicit_permission
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_reader_boundaries" name="test_partial_dense_failure_preserves_successful_scope_intersection" time="4.546"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_reader_boundaries.py:49: in test_partial_dense_failure_preserves_successful_scope_intersection
+    await service.record(payload)
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_reader_boundaries" name="test_work_package_refreshes_after_domain_policy_change" time="2.921"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_reader_boundaries.py:67: in test_work_package_refreshes_after_domain_policy_change
+    await service.record(payload)
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_reader_boundaries" name="test_custom_domain_work_budgets_are_consumed" time="3.052"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_reader_boundaries.py:94: in test_custom_domain_work_budgets_are_consumed
+    await service.record({**payload, "content": str(index) + "Scoped procedure. " * 50})
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_memory_e2e_quarantine_reader_and_timeline" time="3.123"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:18: in test_memory_e2e_quarantine_reader_and_timeline
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_concurrent_equivalent_submissions_have_one_authority_event" time="4.479"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:41: in test_concurrent_equivalent_submissions_have_one_authority_event
+    results = await asyncio.gather(*(submit() for _ in range(4)))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\integration\test_012_memory_e2e.py:40: in submit
+    return await MemoryService(session, embedding_provider=provider).record(payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_relation_failure_rolls_back_event_and_all_projection_visibility" time="2.952"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:66: in test_relation_failure_rolls_back_event_and_all_projection_visibility
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_hard_anchor_roundtrip" time="31.170"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:84: in test_e2e_hard_anchor_roundtrip
+    result = await service.record(payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_no_anchor_has_no_event_or_projection" time="0.238" /><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_scope_isolation_is_an_explicit_union" time="2.930"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:107: in test_e2e_scope_isolation_is_an_explicit_union
+    values = [await service.record(payload) for payload in (one, two, three)]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_supersede_keeps_history_and_refreshes_package" time="2.961"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_memory_e2e.py:116: in test_e2e_supersede_keeps_history_and_refreshes_package
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_injection_never_enters_dense_or_package" time="4.185" /><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_ttl_quota_fail_loud_without_silent_eviction" time="3.091" /><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_reader_has_no_write_or_governance_tools" time="0.200" /><testcase classname="tests.integration.test_012_memory_e2e" name="test_e2e_session_timeline_and_delivered_filter" time="4.422" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_aoep_invariants_authority_scope_deletion_provenance_rollback" time="0.000" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_authority_monotonicity_forbidden_commands_never_append[raw_event]" time="2.940" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_authority_monotonicity_forbidden_commands_never_append[untrusted_rollback]" time="3.190" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_scope_expansion_rejects_foreign_identity[retire]" time="3.304" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_scope_expansion_rejects_foreign_identity[rollback]" time="3.101" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_deletion_propagates_to_all_consumable_views_without_losing_log[retire]" time="3.916" /><testcase classname="tests.integration.test_012_aoep_obligations" name="test_deletion_propagates_to_all_consumable_views_without_losing_log[purge]" time="2.520"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_aoep_obligations.py:55: in test_deletion_propagates_to_all_consumable_views_without_losing_log
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_aoep_obligations" name="test_provenance_preserved_across_state_transitions[access]" time="1.701"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_aoep_obligations.py:71: in test_provenance_preserved_across_state_transitions
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_aoep_obligations" name="test_provenance_preserved_across_state_transitions[retire]" time="4.280"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_aoep_obligations.py:71: in test_provenance_preserved_across_state_transitions
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_aoep_obligations" name="test_rollback_is_traceable_and_keeps_access_events[event]" time="2.911"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_aoep_obligations.py:86: in test_rollback_is_traceable_and_keeps_access_events
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_aoep_obligations" name="test_rollback_is_traceable_and_keeps_access_events[time]" time="2.891"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_aoep_obligations.py:86: in test_rollback_is_traceable_and_keeps_access_events
+    first = await service.record(payload)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_hard_metrics" name="test_hard_metrics_zero_leakage_and_complete_projection_registry" time="0.000" /><testcase classname="tests.integration.test_012_hard_metrics" name="test_four_actual_paths_scope_union_and_quarantine_leakage" time="3.055"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE:dense">tests\integration\test_012_hard_metrics.py:37: in test_four_actual_paths_scope_union_and_quarantine_leakage
+    saved[sid] = await service.record(payload)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:142: in record
+    raise ValueError(f"MEMORY_WRITE_UNAVAILABLE:{failure.path}") from None
+E   ValueError: MEMORY_WRITE_UNAVAILABLE:dense</failure></testcase><testcase classname="tests.integration.test_012_hard_metrics" name="test_real_hard_attribution_schema_and_nonempty_six_projection_integrity" time="1.835"><failure message="ValueError: MEMORY_WRITE_UNAVAILABLE">tests\integration\test_012_hard_metrics.py:73: in test_real_hard_attribution_schema_and_nonempty_six_projection_integrity
+    hard = await service.record(payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\rag_mcp\services\memory_service.py:84: in record
+    raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+E   ValueError: MEMORY_WRITE_UNAVAILABLE</failure></testcase></testsuite></testsuites>

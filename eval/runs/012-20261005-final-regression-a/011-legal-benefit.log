@@ -1,0 +1,103 @@
+2026-10-05 16:50:29,317 [INFO] rag_mcp.providers.local_cpu: Loading embedding model BAAI/bge-m3 (first use)...
+2026-10-05 16:50:39,285 [INFO] sentence_transformers.base.model: Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]
+Loading weights: 100%|��������������������| 391/391 [00:00<00:00, 75995.04it/s]
+D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dimension = self._model.get_sentence_embedding_dimension()
+2026-10-05 16:50:40,675 [INFO] rag_mcp.providers.local_cpu: Embedding model BAAI/bge-m3 loaded (dim=1024)
+2026-10-05 16:50:40,675 [INFO] run_eval: Loaded real embedding provider: BAAI/bge-m3 (dim=1024)
+2026-10-05 16:50:41,139 [INFO] httpx: HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+Building prefix dict from the default dictionary ...
+2026-10-05 16:50:41,178 [DEBUG] jieba: Building prefix dict from the default dictionary ...
+Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+2026-10-05 16:50:41,178 [DEBUG] jieba: Loading model from cache C:\Users\Richard\AppData\Local\Temp\jieba.cache
+Loading model cost 0.295 seconds.
+2026-10-05 16:50:41,473 [DEBUG] jieba: Loading model cost 0.295 seconds.
+Prefix dict has been built successfully.
+2026-10-05 16:50:41,473 [DEBUG] jieba: Prefix dict has been built successfully.
+2026-10-05 16:50:41,474 [INFO] rag_mcp.indexing.sparse_encoder: BM25SparseEncoder fitted: 86 terms, avgdl=13.8 docs=12
+2026-10-05 16:50:41,556 [INFO] rag_mcp.graph.store.postgres_graph_store: Deleted 8 graph relations (hard=8, soft=0) for scope 355308366332952576
+2026-10-05 16:50:41,684 [INFO] rag_mcp.graph.store.postgres_graph_store: Deleted 2 graph relations (hard=2, soft=0) for scope 355308369826807808
+2026-10-05 16:50:41,708 [INFO] __main__: re-declared 10 cross-reference edges across 2 scope(s)
+2026-10-05 16:50:41,881 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:41,946 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,148 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,208 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,334 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,392 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,470 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,532 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,664 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,676 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,761 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,824 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,844 [INFO] run_eval:   Processed 6/6 queries
+2026-10-05 16:50:42,903 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:42,962 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,030 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308366332952576/1, candidates=6, budget=10
+2026-10-05 16:50:43,030 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=6
+2026-10-05 16:50:43,104 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,162 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,226 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308366332952576/1, candidates=5, budget=10
+2026-10-05 16:50:43,226 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=5
+2026-10-05 16:50:43,299 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,364 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,372 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308366332952576/1, candidates=5, budget=10
+2026-10-05 16:50:43,372 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=5
+2026-10-05 16:50:43,429 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,486 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,549 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308366332952576/1, candidates=5, budget=10
+2026-10-05 16:50:43,549 [INFO] rag_mcp.graph.expansion: Expansion engine: start=5 chunks, hop=2, budget=10, dir=bidirectional, candidates=5
+2026-10-05 16:50:43,614 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,669 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,678 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308369826807808/1, candidates=2, budget=10
+2026-10-05 16:50:43,678 [INFO] rag_mcp.graph.expansion: Expansion engine: start=4 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 16:50:43,736 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,790 [INFO] httpx: HTTP Request: POST http://106.55.49.216:6333/collections/chunks_hybrid_bge-m3_v1/points/query "HTTP/1.1 200 OK"
+2026-10-05 16:50:43,799 [INFO] rag_mcp.graph.store.postgres_graph_store: Graph expand: scope=355308369826807808/1, candidates=2, budget=10
+2026-10-05 16:50:43,799 [INFO] rag_mcp.graph.expansion: Expansion engine: start=4 chunks, hop=2, budget=10, dir=bidirectional, candidates=2
+2026-10-05 16:50:43,799 [INFO] run_graph_comparison:   Processed 6/6 queries
+2026-10-05 16:50:43,937 [INFO] __main__: benefit block written to eval\runs\012-20261005-final-regression-a\012_legal_benefit_result.json
+2026-10-05 16:50:43,937 [INFO] __main__: MRR -9.09% nDCG -6.55% recall_non_decreasing=True three_gate_pass=False -> kept_empty_r11
+{
+  "baseline_metrics": {
+    "recall_at_k": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.916667,
+      "min": 0.5,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.938488,
+      "min": 0.63093,
+      "max": 1.0
+    }
+  },
+  "graph_metrics": {
+    "recall_at_k": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.833333,
+      "min": 0.5,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.876977,
+      "min": 0.63093,
+      "max": 1.0
+    }
+  },
+  "mrr_improvement_pct": -9.0909,
+  "ndcg_improvement_pct": -6.5543,
+  "recall_non_decreasing": true,
+  "three_gate_pass": false,
+  "vocabulary_disposition": "kept_empty_r11"
+}

@@ -1,0 +1,72 @@
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.schemas
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.tables
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.types
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.constraints
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.defaults
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.comments
+INFO:alembic.runtime.plugins:setup plugin alembic.autogenerate.checkconstraint_byname
+INFO:rag_mcp.runtime.schema_compat:schema compat verified: database at head 0089_memory_retention
+INFO:rag_mcp.runtime.instance_registry:instance 21f52a54-d369-4989-a544-4a3683e5b8dd registered (mode=writer role=mcp worker_id=1)
+INFO:rag_mcp.mcp:MCP server created with tools: search_knowledge, get_evidence, list_knowledge_domains (host=127.0.0.1, port=18080)
+Warming up embedding provider ¡ª may take ~30-60s ...
+INFO:rag_mcp.providers.local_cpu:Loading embedding model BAAI/bge-m3 (first use)...
+INFO:httpx:HTTP Request: GET http://106.55.49.216:6333 "HTTP/1.1 200 OK"
+INFO:sentence_transformers.base.model:Loading SentenceTransformer model from D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-m3\snapshots\5617a9f61b028005a4858fdac845db406aefb181.
+INFO:rag_mcp.providers.local_cpu:Embedding model BAAI/bge-m3 loaded (dim=1024)
+Warming up reranker provider ¡ª may take ~30-60s ...
+INFO:rag_mcp.providers.local_cpu_reranker:Loading reranker model BAAI/bge-reranker-v2-m3 (first use)...
+INFO:sentence_transformers.base.model:No modules.json found for D:\Project_new\docsToCode\.models\huggingface\hub\models--BAAI--bge-reranker-v2-m3\snapshots\953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e, initializing a new CrossEncoder model.
+INFO:rag_mcp.providers.local_cpu_reranker:Reranker model BAAI/bge-reranker-v2-m3 loaded
+MCP server running on 127.0.0.1:18080 (writer mode, instance 21f52a54-d369-4989-a544-4a3683e5b8dd, worker_id=1, Streamable HTTP)
+INFO:mcp.server.streamable_http_manager:StreamableHTTP session manager started
+INFO:mcp.server.streamable_http_manager:Created new transport with session ID: 466452224f8e4f4a8c20b7a5f262936f
+INFO:     127.0.0.1:1160 - "POST /mcp HTTP/1.1" 400 Bad Request
+INFO:mcp.server.streamable_http_manager:Created new transport with session ID: 18f3154825f94a6bbdabc76122eb1f71
+INFO:     127.0.0.1:1161 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1160 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:1161 - "GET /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13785 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type ListToolsRequest
+INFO:     127.0.0.1:5275 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:5275 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type ListResourcesRequest
+INFO:     127.0.0.1:5275 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type ListResourceTemplatesRequest
+INFO:     127.0.0.1:5655 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:5655 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+WARNING:rag_mcp.services.retrieval_service:Project ref 'test-project' did not match any project
+INFO:     127.0.0.1:5655 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:httpx:HTTP Request: GET http://106.55.49.216:6333/collections "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: PUT http://106.55.49.216:6333/collections/memories_dense_BAAI_bge_m3_012_v2/points?wait=true "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://106.55.49.216:6333/collections/memories_dense_BAAI_bge_m3_012_v2/points/scroll "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:7611 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:9994 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:9994 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:httpx:HTTP Request: POST http://106.55.49.216:6333/collections/memories_dense_BAAI_bge_m3_012_v2/points/query "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:9994 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:9994 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:9321 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+INFO:     127.0.0.1:9321 - "POST /mcp HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest

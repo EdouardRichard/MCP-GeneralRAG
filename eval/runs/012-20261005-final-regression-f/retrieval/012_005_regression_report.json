@@ -1,0 +1,4988 @@
+{
+  "report_type": "agentic_comparison",
+  "generated_at": "2026-10-05T12:02:38.375838+00:00",
+  "baseline_metrics": {
+    "num_queries": 63,
+    "top_k": 10,
+    "recall_at_k": {
+      "mean": 0.9259259259259259,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.8198412698412698,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.8420396354821926,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 222.33249999771942,
+      "p95": 278.5222299997258,
+      "mean": 232.26783492028184,
+      "min": 114.87729999862495,
+      "max": 721.2021999985154
+    },
+    "p50_latency_ms": 222.33249999771942,
+    "p95_latency_ms": 278.5222299997258
+  },
+  "agentic_metrics": {
+    "num_queries": 63,
+    "top_k": 10,
+    "recall_at_k": {
+      "mean": 0.9735449735449736,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "mrr": {
+      "mean": 0.8806878306878307,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "ndcg_at_k": {
+      "mean": 0.8996734410944379,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "latency_ms": {
+      "p50": 3758.8966000002983,
+      "p95": 14826.131300000634,
+      "mean": 6074.045933333331,
+      "min": 1878.524900002958,
+      "max": 22705.780299998878
+    },
+    "p50_latency_ms": 3758.8966000002983,
+    "p95_latency_ms": 14826.131300000634,
+    "total_cost": 0.029994,
+    "estimated_llm_tokens": 111088.31
+  },
+  "per_query_comparison": [
+    {
+      "query_index": 0,
+      "query": "Find the definition of com.example.service.UserService.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582016"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 721.2,
+      "agentic_latency_ms": 3113.23,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Find the definition of com.example.service.UserService.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468693339045888"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 79.0,
+        "sparse_recall_ms": 79.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 79.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 16.0
+      },
+      "ledger_ref": {
+        "request_id": "e61615cd-ad50-4edf-9beb-71d272b2a216",
+        "ledger_entry_ids": [
+          "365468693196439552",
+          "365468693225799680",
+          "365468693250965504",
+          "365468693276131328",
+          "365468693309685760"
+        ]
+      }
+    },
+    {
+      "query_index": 1,
+      "query": "What is the purpose of com.example.service.UserService#DB_PASSWORD?",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582017"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582017",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582017",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 217.84,
+      "agentic_latency_ms": 9151.89,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "What is the purpose of com.example.service.UserService#DB_PASSWORD?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468695008378880",
+          "365468696052760576"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 140.0,
+        "sparse_recall_ms": 140.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 140.0,
+        "parallel_retrieval_ms": 422.0,
+        "evidence_analyst_ms": 15.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "22a59721-b945-47aa-9e67-e95b46ab5785",
+        "ledger_entry_ids": [
+          "365468694853189632",
+          "365468694886744064",
+          "365468694916104192",
+          "365468694945464320",
+          "365468694974824448",
+          "365468695897571328",
+          "365468695926931456",
+          "365468695956291584",
+          "365468695989846016",
+          "365468696015011840"
+        ]
+      }
+    },
+    {
+      "query_index": 2,
+      "query": "Show me the implementation of com.example.service.UserService#repository.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582018"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582018",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582018",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 268.3,
+      "agentic_latency_ms": 8475.75,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Show me the implementation of com.example.service.UserService#repository.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468697965363200",
+          "365468699257208832"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 532.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "f849d963-c88b-4475-a9d4-3354f1ff2da0",
+        "ledger_entry_ids": [
+          "365468697814368256",
+          "365468697843728384",
+          "365468697873088512",
+          "365468697902448640",
+          "365468697931808768",
+          "365468699110408192",
+          "365468699143962624",
+          "365468699169128448",
+          "365468699198488576",
+          "365468699223654400"
+        ]
+      }
+    },
+    {
+      "query_index": 3,
+      "query": "What does com.example.service.UserService#findById do?",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582019"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582018",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582018",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 226.43,
+      "agentic_latency_ms": 2805.06,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "What does com.example.service.UserService#findById do?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468700968484864"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "8b144904-465b-45cf-b296-d21410a62c6e",
+        "ledger_entry_ids": [
+          "365468700813295616",
+          "365468700846850048",
+          "365468700876210176",
+          "365468700901376000",
+          "365468700934930432"
+        ]
+      }
+    },
+    {
+      "query_index": 4,
+      "query": "Explain the code at com.example.service.UserService#getActiveUsers.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582020"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582020",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582021",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582020",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582021",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 218.58,
+      "agentic_latency_ms": 2056.63,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Explain the code at com.example.service.UserService#getActiveUsers.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468702692343808"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "69645510-cf49-4124-8bc3-0af7b96033f6",
+        "ledger_entry_ids": [
+          "365468702549737472",
+          "365468702583291904",
+          "365468702608457728",
+          "365468702633623552",
+          "365468702662983680"
+        ]
+      }
+    },
+    {
+      "query_index": 5,
+      "query": "Find the definition of com.example.service.UserService#validateToken.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582016",
+        "352016027946582021",
+        "352016027946582018",
+        "352016027946582017",
+        "352016027946582019"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582016",
+        "352016027946582021",
+        "352016027946582018",
+        "352016027946582017",
+        "352016027946582019"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 215.09,
+      "agentic_latency_ms": 2981.13,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Find the definition of com.example.service.UserService#validateToken.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468704353288192"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 79.0,
+        "sparse_recall_ms": 79.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 79.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "cd59ef68-1b35-4505-bda2-f42c69241e39",
+        "ledger_entry_ids": [
+          "365468704223264768",
+          "365468704248430592",
+          "365468704273596416",
+          "365468704302956544",
+          "365468704328122368"
+        ]
+      }
+    },
+    {
+      "query_index": 6,
+      "query": "Show me the section # extra.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351207349697904640"
+      ],
+      "expected_evidence_ids": [
+        "352016115179716608"
+      ],
+      "baseline_evidence_ids": [
+        "352016115179716608"
+      ],
+      "agentic_evidence_ids": [
+        "352016115179716608"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 176.15,
+      "agentic_latency_ms": 2560.59,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Show me the section # extra.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468705557053440"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 141.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "32ed6b5e-213b-4099-aae2-4c280f4693bd",
+        "ledger_entry_ids": [
+          "365468705527693312"
+        ]
+      }
+    },
+    {
+      "query_index": 7,
+      "query": "Show me the section # Test Content.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351221148429582336"
+      ],
+      "expected_evidence_ids": [
+        "352016116299595776"
+      ],
+      "baseline_evidence_ids": [
+        "352016116299595776"
+      ],
+      "agentic_evidence_ids": [
+        "352016116299595776"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 167.59,
+      "agentic_latency_ms": 2210.8,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Show me the section # Test Content.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468706748235776"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 15.0,
+        "sparse_recall_ms": 15.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 15.0,
+        "parallel_retrieval_ms": 156.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "40cae818-b334-4ef5-98d7-e9f4274fd450",
+        "ledger_entry_ids": [
+          "365468706714681344"
+        ]
+      }
+    },
+    {
+      "query_index": 8,
+      "query": "Explain the content of # Test Content.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351222351527936000"
+      ],
+      "expected_evidence_ids": [
+        "352016117394309120"
+      ],
+      "baseline_evidence_ids": [
+        "352016117394309120"
+      ],
+      "agentic_evidence_ids": [
+        "352016117394309120"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 168.79,
+      "agentic_latency_ms": 2523.68,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Explain the content of # Test Content.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468707922640896"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 156.0,
+        "evidence_analyst_ms": 15.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "e54a4faf-920d-42a8-8dee-2c4eb9d1ca28",
+        "ledger_entry_ids": [
+          "365468707884892160"
+        ]
+      }
+    },
+    {
+      "query_index": 9,
+      "query": "What does # Test Content describe?",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351222576757866496"
+      ],
+      "expected_evidence_ids": [
+        "352016118451273728"
+      ],
+      "baseline_evidence_ids": [
+        "352016118451273728"
+      ],
+      "agentic_evidence_ids": [
+        "352016118451273728"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 167.0,
+      "agentic_latency_ms": 2128.56,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "What does # Test Content describe?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468709071880192"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 141.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "025b1a57-0314-4650-9bad-6ac4bec06c8a",
+        "ledger_entry_ids": [
+          "365468709042520064"
+        ]
+      }
+    },
+    {
+      "query_index": 10,
+      "query": "Explain the content of # Test Content.",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351222872145920000"
+      ],
+      "expected_evidence_ids": [
+        "352016119487266816"
+      ],
+      "baseline_evidence_ids": [
+        "352016119487266816"
+      ],
+      "agentic_evidence_ids": [
+        "352016119487266816"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 170.13,
+      "agentic_latency_ms": 1878.52,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Explain the content of # Test Content.",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468710183370752"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 15.0,
+        "sparse_recall_ms": 15.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 15.0,
+        "parallel_retrieval_ms": 140.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 15.0
+      },
+      "ledger_ref": {
+        "request_id": "0438797b-eb4f-4aef-8341-c4cbeae27a86",
+        "ledger_entry_ids": [
+          "365468710145622016"
+        ]
+      }
+    },
+    {
+      "query_index": 11,
+      "query": "查找validateToken方法的定义",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582020"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582020"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 206.1,
+      "agentic_latency_ms": 2820.08,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "查找validateToken方法的定义",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468711676542976"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "76435d7c-8e3a-4900-b543-dfe7697ac32e",
+        "ledger_entry_ids": [
+          "365468711529742336",
+          "365468711554908160",
+          "365468711584268288",
+          "365468711613628416",
+          "365468711647182848"
+        ]
+      }
+    },
+    {
+      "query_index": 12,
+      "query": "UserService类的用途是什么",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582016"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 214.7,
+      "agentic_latency_ms": 15388.61,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "UserService类的用途是什么",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468713278767104",
+          "365468714281205760"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 157.0,
+        "sparse_recall_ms": 157.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 157.0,
+        "parallel_retrieval_ms": 390.0,
+        "evidence_analyst_ms": 16.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "e4740cd3-401e-41d5-b4b1-c27902e51ca7",
+        "ledger_entry_ids": [
+          "365468713140355072",
+          "365468713169715200",
+          "365468713194881024",
+          "365468713224241152",
+          "365468713249406976",
+          "365468714138599424",
+          "365468714167959552",
+          "365468714193125376",
+          "365468714222485504",
+          "365468714247651328"
+        ]
+      }
+    },
+    {
+      "query_index": 13,
+      "query": "数据库密码DB_PASSWORD的用途",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582017"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582017",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582021"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582017",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582021"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 215.43,
+      "agentic_latency_ms": 11922.58,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "数据库密码DB_PASSWORD的用途",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468715870846976",
+          "365468716890062848"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 126.0,
+        "sparse_recall_ms": 126.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 126.0,
+        "parallel_retrieval_ms": 390.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "16d329bc-2532-488e-a27b-ad6c21ba90bb",
+        "ledger_entry_ids": [
+          "365468715719852032",
+          "365468715749212160",
+          "365468715778572288",
+          "365468715807932416",
+          "365468715837292544",
+          "365468716734873600",
+          "365468716764233728",
+          "365468716797788160",
+          "365468716822953984",
+          "365468716856508416"
+        ]
+      }
+    },
+    {
+      "query_index": 14,
+      "query": "findById方法的实现逻辑",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582019"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582021",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582021",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 216.31,
+      "agentic_latency_ms": 4532.26,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "findById方法的实现逻辑",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468718517452800"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 79.0,
+        "sparse_recall_ms": 79.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 79.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "091b6857-bc73-4b8f-afab-d75dc828ff11",
+        "ledger_entry_ids": [
+          "365468718374846464",
+          "365468718400012288",
+          "365468718429372416",
+          "365468718458732544",
+          "365468718483898368"
+        ]
+      }
+    },
+    {
+      "query_index": 15,
+      "query": "com.example.service.UserService#validateToken",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582017",
+        "352016027946582019",
+        "352016027946582018"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582017",
+        "352016027946582019",
+        "352016027946582018"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 212.34,
+      "agentic_latency_ms": 3461.91,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "com.example.service.UserService#validateToken",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468720102899712"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "1dd4cbfd-ef86-4098-b5d9-c3d5ba35e0a9",
+        "ledger_entry_ids": [
+          "365468719972876288",
+          "365468719998042112",
+          "365468720027402240",
+          "365468720052568064",
+          "365468720073539584"
+        ]
+      }
+    },
+    {
+      "query_index": 16,
+      "query": "validateToken token validation method",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 222.33,
+      "agentic_latency_ms": 7084.93,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "validateToken token validation method",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468721658986496",
+          "365468722699173888"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 125.0,
+        "parallel_retrieval_ms": 390.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "2e804aef-97d7-455e-8999-20d2a9743713",
+        "ledger_entry_ids": [
+          "365468721507991552",
+          "365468721541545984",
+          "365468721566711808",
+          "365468721596071936",
+          "365468721625432064",
+          "365468722548178944",
+          "365468722581733376",
+          "365468722606899200",
+          "365468722636259328",
+          "365468722669813760"
+        ]
+      }
+    },
+    {
+      "query_index": 17,
+      "query": "getActiveUsers active users list",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582020"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582020",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582018",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582020",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582018",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 226.31,
+      "agentic_latency_ms": 2906.86,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "getActiveUsers active users list",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468724297203712"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "bf861671-d913-417f-83b3-3edea562d9c1",
+        "ledger_entry_ids": [
+          "365468724171374592",
+          "365468724196540416",
+          "365468724225900544",
+          "365468724246872064",
+          "365468724272037888"
+        ]
+      }
+    },
+    {
+      "query_index": 18,
+      "query": "GET /api/v1/users",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352014591405850625"
+      ],
+      "expected_evidence_ids": [
+        "352014592559284226"
+      ],
+      "baseline_evidence_ids": [
+        "352014592559284226",
+        "354183718245498884",
+        "354183718245498881",
+        "354183718245498883",
+        "354183718245498885"
+      ],
+      "agentic_evidence_ids": [
+        "352014592559284226",
+        "354183718245498884",
+        "354183718245498881",
+        "354183718245498883",
+        "354183718245498885"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 230.92,
+      "agentic_latency_ms": 2057.52,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "GET /api/v1/users",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468725886844928"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "bd0937c4-fb7b-44dc-975e-b7082bee04e6",
+        "ledger_entry_ids": [
+          "365468725735849984",
+          "365468725765210112",
+          "365468725790375936",
+          "365468725823930368",
+          "365468725849096192"
+        ]
+      }
+    },
+    {
+      "query_index": 19,
+      "query": "User schema definition",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352014591405850625"
+      ],
+      "expected_evidence_ids": [
+        "352014592559284224"
+      ],
+      "baseline_evidence_ids": [
+        "354183718245498884",
+        "354183718245498883",
+        "354183718245498881",
+        "354183718245498885",
+        "352014592559284226"
+      ],
+      "agentic_evidence_ids": [
+        "354183718245498884",
+        "354183718245498883",
+        "354183718245498881",
+        "354183718245498885",
+        "352014592559284226"
+      ],
+      "baseline_rank": null,
+      "agentic_rank": null,
+      "baseline_latency_ms": 269.41,
+      "agentic_latency_ms": 6476.54,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "User schema definition",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468727648452608",
+          "365468728848023552"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 484.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "32b9b912-665e-4e90-8cdb-9e5aa2c5cf85",
+        "ledger_entry_ids": [
+          "365468727514234880",
+          "365468727539400704",
+          "365468727564566528",
+          "365468727593926656",
+          "365468727619092480",
+          "365468728709611520",
+          "365468728738971648",
+          "365468728768331776",
+          "365468728793497600",
+          "365468728818663424"
+        ]
+      }
+    },
+    {
+      "query_index": 20,
+      "query": "table:users",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534464"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534464",
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534479",
+        "352016498073534481"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534464",
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534479",
+        "352016498073534481"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 280.2,
+      "agentic_latency_ms": 10256.09,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "table:users",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468730672545792",
+          "365468731939225600"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 234.0,
+        "sparse_recall_ms": 234.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 234.0,
+        "parallel_retrieval_ms": 516.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "34415a77-c7ef-401e-90d0-c80d4cd33c2b",
+        "ledger_entry_ids": [
+          "365468730521550848",
+          "365468730546716672",
+          "365468730580271104",
+          "365468730609631232",
+          "365468730638991360",
+          "365468731788230656",
+          "365468731817590784",
+          "365468731846950912",
+          "365468731880505344",
+          "365468731909865472"
+        ]
+      }
+    },
+    {
+      "query_index": 21,
+      "query": "orders table definition",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534471"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534480",
+        "352016498073534479",
+        "352016498073534481",
+        "352016498073534471",
+        "352016498073534482"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534480",
+        "352016498073534479",
+        "352016498073534481",
+        "352016498073534471",
+        "352016498073534482"
+      ],
+      "baseline_rank": 4,
+      "agentic_rank": 4,
+      "baseline_latency_ms": 267.01,
+      "agentic_latency_ms": 7920.23,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "orders table definition",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468733797302272",
+          "365468735022039040"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 235.0,
+        "sparse_recall_ms": 235.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 235.0,
+        "parallel_retrieval_ms": 516.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "06aab954-0a33-41e6-a38c-349316f5ba52",
+        "ledger_entry_ids": [
+          "365468733658890240",
+          "365468733684056064",
+          "365468733713416192",
+          "365468733738582016",
+          "365468733767942144",
+          "365468734879432704",
+          "365468734908792832",
+          "365468734933958656",
+          "365468734963318784",
+          "365468734992678912"
+        ]
+      }
+    },
+    {
+      "query_index": 22,
+      "query": "main.UserService#FindUser",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351989134090305537"
+      ],
+      "expected_evidence_ids": [
+        "352017436767158274"
+      ],
+      "baseline_evidence_ids": [
+        "352017436767158274",
+        "352017436767158273",
+        "352017436767158272",
+        "352017436767158276",
+        "352017436767158275"
+      ],
+      "agentic_evidence_ids": [
+        "352017436767158274",
+        "352017436767158273",
+        "352017436767158272",
+        "352017436767158276",
+        "352017436767158275"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 221.71,
+      "agentic_latency_ms": 2762.44,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "main.UserService#FindUser",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468736678789120"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 204.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "26b06228-7e3e-4022-82c0-cab72d0f4e9e",
+        "ledger_entry_ids": [
+          "365468736531988480",
+          "365468736565542912",
+          "365468736590708736",
+          "365468736620068864",
+          "365468736653623296"
+        ]
+      }
+    },
+    {
+      "query_index": 23,
+      "query": "FindUser method",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "351989134090305537"
+      ],
+      "expected_evidence_ids": [
+        "352017436767158274"
+      ],
+      "baseline_evidence_ids": [
+        "352017436767158274",
+        "352017436767158272",
+        "352017436767158273",
+        "352017436767158276",
+        "352017436767158275"
+      ],
+      "agentic_evidence_ids": [
+        "352017436767158274",
+        "352017436767158272",
+        "352017436767158273",
+        "352017436767158276",
+        "352017436767158275"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 219.72,
+      "agentic_latency_ms": 2078.36,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "FindUser method",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468738289401856"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "3cae4226-c41e-42dc-9286-134b44bc46c4",
+        "ledger_entry_ids": [
+          "365468738134212608",
+          "365468738167767040",
+          "365468738197127168",
+          "365468738226487296",
+          "365468738251653120"
+        ]
+      }
+    },
+    {
+      "query_index": 24,
+      "query": "module.User.validate",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016589224148993"
+      ],
+      "expected_evidence_ids": [
+        "352016589903626244"
+      ],
+      "baseline_evidence_ids": [
+        "352016589903626244",
+        "352016589903626242",
+        "352016589903626249",
+        "352016589903626247",
+        "352016589903626246"
+      ],
+      "agentic_evidence_ids": [
+        "352016589903626244",
+        "352016589903626242",
+        "352016589903626249",
+        "352016589903626247",
+        "352016589903626246"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 284.92,
+      "agentic_latency_ms": 2510.85,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "module.User.validate",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468740101341184"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 109.0,
+        "sparse_recall_ms": 109.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 109.0,
+        "parallel_retrieval_ms": 250.0,
+        "evidence_analyst_ms": 15.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "a3d464f7-a1e4-4fcc-93aa-6d9a55dcf972",
+        "ledger_entry_ids": [
+          "365468739971317760",
+          "365468740000677888",
+          "365468740025843712",
+          "365468740051009536",
+          "365468740067786752"
+        ]
+      }
+    },
+    {
+      "query_index": 25,
+      "query": "parse_config function",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016589224148993"
+      ],
+      "expected_evidence_ids": [
+        "352016589903626240"
+      ],
+      "baseline_evidence_ids": [
+        "352016589903626240",
+        "352016589903626241",
+        "352016589903626245",
+        "352016589903626242",
+        "352016589903626248"
+      ],
+      "agentic_evidence_ids": [
+        "352016589903626240",
+        "352016589903626241",
+        "352016589903626245",
+        "352016589903626242",
+        "352016589903626248"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 264.52,
+      "agentic_latency_ms": 4424.87,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "parse_config function",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468741896503296"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 125.0,
+        "parallel_retrieval_ms": 265.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "006e3750-b2d0-4bb8-bd9c-ba982c5935a2",
+        "ledger_entry_ids": [
+          "365468741753896960",
+          "365468741787451392",
+          "365468741812617216",
+          "365468741841977344",
+          "365468741867143168",
+          "365468741930057729"
+        ]
+      }
+    },
+    {
+      "query_index": 26,
+      "query": "# Architecture Design",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016598489366529"
+      ],
+      "expected_evidence_ids": [
+        "352016599349198848"
+      ],
+      "baseline_evidence_ids": [
+        "352016599349198848",
+        "352016599349198853",
+        "352016599349198850",
+        "352016599349198855",
+        "352016599349198851"
+      ],
+      "agentic_evidence_ids": [
+        "352016599349198848",
+        "352016599349198853",
+        "352016599349198850",
+        "352016599349198855",
+        "352016599349198851"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 275.52,
+      "agentic_latency_ms": 9722.1,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "# Architecture Design",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468743783940096",
+          "365468745067397120"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 500.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "a2287605-063a-4ae6-9c74-f6362fe0a6f6",
+        "ledger_entry_ids": [
+          "365468743586807808",
+          "365468743616167936",
+          "365468743666499584",
+          "365468743695859712",
+          "365468743750385664",
+          "365468744908013568",
+          "365468744941568000",
+          "365468744970928128",
+          "365468745000288256",
+          "365468745029648384"
+        ]
+      }
+    },
+    {
+      "query_index": 27,
+      "query": "Data Flow section",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016598489366529"
+      ],
+      "expected_evidence_ids": [
+        "352016599349198851"
+      ],
+      "baseline_evidence_ids": [
+        "352016599349198851",
+        "352016599349198852",
+        "352016599349198853",
+        "352016599349198855",
+        "352016599349198857"
+      ],
+      "agentic_evidence_ids": [
+        "352016599349198851",
+        "352016599349198852",
+        "352016599349198853",
+        "352016599349198855",
+        "352016599349198857"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 207.95,
+      "agentic_latency_ms": 3202.69,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Data Flow section",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468746724147200"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "3692c11e-3970-4e47-8481-4cd3040943b0",
+        "ledger_entry_ids": [
+          "365468746585735168",
+          "365468746610900992",
+          "365468746640261120",
+          "365468746669621248",
+          "365468746694787072",
+          "365468746761895936",
+          "365468746787061760"
+        ]
+      }
+    },
+    {
+      "query_index": 28,
+      "query": "page:1 §1 Introduction",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016602247462913"
+      ],
+      "expected_evidence_ids": [
+        "352016603132461057"
+      ],
+      "baseline_evidence_ids": [
+        "352016603132461057",
+        "352016603132461060",
+        "352016603132461065",
+        "352016603132461064",
+        "352016603132461062"
+      ],
+      "agentic_evidence_ids": [
+        "352016603132461057",
+        "352016603132461060",
+        "352016603132461065",
+        "352016603132461064",
+        "352016603132461062"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 278.76,
+      "agentic_latency_ms": 11403.13,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "page:1 §1 Introduction",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468748695470080",
+          "365468749991510016"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 532.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "5477c292-23d0-4c82-a535-b285cd0948c8",
+        "ledger_entry_ids": [
+          "365468748544475136",
+          "365468748578029568",
+          "365468748607389696",
+          "365468748632555520",
+          "365468748666109952",
+          "365468749840515072",
+          "365468749874069504",
+          "365468749903429632",
+          "365468749932789760",
+          "365468749962149888",
+          "365468750029258752",
+          "365468750058618880"
+        ]
+      }
+    },
+    {
+      "query_index": 29,
+      "query": "consensus algorithms",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "352016602247462913"
+      ],
+      "expected_evidence_ids": [
+        "352016603132461061"
+      ],
+      "baseline_evidence_ids": [
+        "352016603132461060",
+        "352016603132461061",
+        "352016603132461069",
+        "352016603132461067",
+        "352016603132461068"
+      ],
+      "agentic_evidence_ids": [
+        "352016603132461060",
+        "352016603132461061",
+        "352016603132461069",
+        "352016603132461067",
+        "352016603132461068"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 262.7,
+      "agentic_latency_ms": 8900.99,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "consensus algorithms",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468751908306944",
+          "365468753221124096"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 531.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "252ca06b-cd8c-41e5-bdc3-5f4c3d84e302",
+        "ledger_entry_ids": [
+          "365468751769894912",
+          "365468751795060736",
+          "365468751820226560",
+          "365468751849586688",
+          "365468751874752512",
+          "365468753078517760",
+          "365468753107877888",
+          "365468753137238016",
+          "365468753162403840",
+          "365468753187569664",
+          "365468753250484224",
+          "365468753284038656"
+        ]
+      }
+    },
+    {
+      "query_index": 30,
+      "query": "Who calls com.example.service.UserService#validateToken?",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582017",
+        "352016027946582019",
+        "352016027946582018"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582017",
+        "352016027946582019",
+        "352016027946582018"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 224.03,
+      "agentic_latency_ms": 6141.75,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Who calls com.example.service.UserService#validateToken?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "called_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468755012091904",
+          "365468756157136896"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 124.0,
+        "sparse_recall_ms": 124.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 156.0,
+        "graph_recall_ms": 32.0,
+        "parallel_retrieval_ms": 452.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "87808711-fd54-4272-85e3-8b51dc7185bd",
+        "ledger_entry_ids": [
+          "365468754865291264",
+          "365468754898845696",
+          "365468754928205824",
+          "365468754953371648",
+          "365468754982731776",
+          "365468756006141952",
+          "365468756035502080",
+          "365468756064862208",
+          "365468756090028032",
+          "365468756123582464"
+        ]
+      }
+    },
+    {
+      "query_index": 31,
+      "query": "Which methods are called by com.example.service.UserService#findById?",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582019"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582019",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 216.63,
+      "agentic_latency_ms": 3079.65,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Which methods are called by com.example.service.UserService#findById?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "calls"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468757860024320"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 79.0,
+        "graph_recall_ms": 16.0,
+        "parallel_retrieval_ms": 234.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "ecfa176e-a873-482d-818d-a464521732f2",
+        "ledger_entry_ids": [
+          "365468757721612288",
+          "365468757746778112",
+          "365468757771943936",
+          "365468757801304064",
+          "365468757830664192"
+        ]
+      }
+    },
+    {
+      "query_index": 32,
+      "query": "Show all callers of the validateToken method",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582019",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582020",
+        "352016027946582019",
+        "352016027946582017"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 201.81,
+      "agentic_latency_ms": 7442.61,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Show all callers of the validateToken method",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "called_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468759466442752",
+          "365468760577933312"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 15.0,
+        "dense_recall_ms": 141.0,
+        "sparse_recall_ms": 141.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 171.0,
+        "graph_recall_ms": 30.0,
+        "parallel_retrieval_ms": 438.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "bdddaa1a-0f96-44a5-af48-a2aa6e0fd03b",
+        "ledger_entry_ids": [
+          "365468759336419328",
+          "365468759361585152",
+          "365468759386750976",
+          "365468759407722496",
+          "365468759437082624",
+          "365468760447909888",
+          "365468760473075712",
+          "365468760498241536",
+          "365468760519213056",
+          "365468760544378880"
+        ]
+      }
+    },
+    {
+      "query_index": 33,
+      "query": "Which tables have foreign keys referencing the users table?",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534471"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534473",
+        "352016498073534479"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534477",
+        "352016498073534473",
+        "352016498073534479"
+      ],
+      "baseline_rank": 3,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 271.1,
+      "agentic_latency_ms": 6245.59,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Which tables have foreign keys referencing the users table?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "fk_referenced_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468762498924544"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 110.0,
+        "sparse_recall_ms": 110.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 141.0,
+        "graph_recall_ms": 31.0,
+        "parallel_retrieval_ms": 296.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "344fe073-6f71-4b2e-9656-19eb53660e5e",
+        "ledger_entry_ids": [
+          "365468762360512512",
+          "365468762389872640",
+          "365468762415038464",
+          "365468762444398592",
+          "365468762469564416"
+        ]
+      }
+    },
+    {
+      "query_index": 34,
+      "query": "Tables that reference users.id through foreign keys",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534471"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534464",
+        "352016498073534479",
+        "352016498073534472"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534471",
+        "352016498073534464",
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534472"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 261.94,
+      "agentic_latency_ms": 4224.56,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Tables that reference users.id through foreign keys",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "fk_referenced_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468764415721472"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 141.0,
+        "graph_recall_ms": 16.0,
+        "parallel_retrieval_ms": 282.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "7886b92e-aa6b-4271-8d0c-470e1467db2d",
+        "ledger_entry_ids": [
+          "365468764260532224",
+          "365468764289892352",
+          "365468764323446784",
+          "365468764352806912",
+          "365468764382167040"
+        ]
+      }
+    },
+    {
+      "query_index": 35,
+      "query": "谁调用了validateToken方法？",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582019",
+        "352016027946582017",
+        "352016027946582018"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 204.88,
+      "agentic_latency_ms": 5990.26,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "谁调用了validateToken方法？",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "called_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468766114414592",
+          "365468767209127936"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 157.0,
+        "sparse_recall_ms": 157.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 172.0,
+        "graph_recall_ms": 15.0,
+        "parallel_retrieval_ms": 438.0,
+        "evidence_analyst_ms": 15.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "4e6b16fe-01b8-4053-8cd1-4a81fdeba3a0",
+        "ledger_entry_ids": [
+          "365468765967613952",
+          "365468765996974080",
+          "365468766026334208",
+          "365468766055694336",
+          "365468766085054464",
+          "365468767062327296",
+          "365468767087493120",
+          "365468767121047552",
+          "365468767146213376",
+          "365468767175573504"
+        ]
+      }
+    },
+    {
+      "query_index": 36,
+      "query": "哪些表通过外键引用了users表？",
+      "category": null,
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534471"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534479",
+        "352016498073534473"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534473"
+      ],
+      "baseline_rank": 3,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 271.69,
+      "agentic_latency_ms": 22705.78,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "哪些表通过外键引用了users表？",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "fk_referenced_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468769209810944",
+          "365468770610708480"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 265.0,
+        "sparse_recall_ms": 265.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 313.0,
+        "graph_recall_ms": 48.0,
+        "parallel_retrieval_ms": 579.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "3e9be4b9-cf6b-4a15-bc45-a2fd6f3e4329",
+        "ledger_entry_ids": [
+          "365468769058816000",
+          "365468769092370432",
+          "365468769121730560",
+          "365468769146896384",
+          "365468769176256512",
+          "365468770459713536",
+          "365468770489073664",
+          "365468770522628096",
+          "365468770547793920",
+          "365468770577154048"
+        ]
+      }
+    },
+    {
+      "query_index": 37,
+      "query": "Find the quarterly report sales breakdown",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945684593442817"
+      ],
+      "expected_evidence_ids": [
+        "354945686552182785"
+      ],
+      "baseline_evidence_ids": [
+        "354945686552182785",
+        "354945686552182786",
+        "354945686552182784",
+        "354945686552182788",
+        "354945686552182787"
+      ],
+      "agentic_evidence_ids": [
+        "354945686552182785",
+        "354945686552182786",
+        "354945686552182784",
+        "354945686552182788",
+        "354945686552182787"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 275.72,
+      "agentic_latency_ms": 2633.5,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Find the quarterly report sales breakdown",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468772472979456"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 125.0,
+        "parallel_retrieval_ms": 265.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "ce1a0024-ecc9-4712-b67c-836e8177458f",
+        "ledger_entry_ids": [
+          "365468772330373120",
+          "365468772359733248",
+          "365468772389093376",
+          "365468772414259200",
+          "365468772443619328"
+        ]
+      }
+    },
+    {
+      "query_index": 38,
+      "query": "# 季度报告",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945684593442817"
+      ],
+      "expected_evidence_ids": [
+        "354945686552182784"
+      ],
+      "baseline_evidence_ids": [],
+      "agentic_evidence_ids": [
+        "354945686552182784",
+        "354945686552182785",
+        "354945686552182786",
+        "354945686552182787",
+        "354945686552182788"
+      ],
+      "baseline_rank": null,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 116.3,
+      "agentic_latency_ms": 3758.9,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "# 季度报告",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468774117146624"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 79.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "f93eb4ba-6bf6-470a-8395-693538f0caad",
+        "ledger_entry_ids": [
+          "365468773987123200",
+          "365468774016483328",
+          "365468774041649152",
+          "365468774062620672",
+          "365468774091980800"
+        ]
+      }
+    },
+    {
+      "query_index": 39,
+      "query": "What are the meeting notes action items?",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945791862767617"
+      ],
+      "expected_evidence_ids": [
+        "354945792613548033"
+      ],
+      "baseline_evidence_ids": [
+        "354945792613548032",
+        "354945792613548033",
+        "354945792613548034"
+      ],
+      "agentic_evidence_ids": [
+        "354945792613548032",
+        "354945792613548033",
+        "354945792613548034"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 226.85,
+      "agentic_latency_ms": 14842.23,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "What are the meeting notes action items?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468775597735936",
+          "365468776562425856"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 126.0,
+        "sparse_recall_ms": 126.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 126.0,
+        "parallel_retrieval_ms": 406.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "9735b8d2-e704-4bd8-a307-30793c9941cc",
+        "ledger_entry_ids": [
+          "365468775505461248",
+          "365468775530627072",
+          "365468775564181504",
+          "365468776482734080",
+          "365468776507899904",
+          "365468776537260032"
+        ]
+      }
+    },
+    {
+      "query_index": 40,
+      "query": "meeting notes follow-ups and decisions",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945791862767617"
+      ],
+      "expected_evidence_ids": [
+        "354945792613548034"
+      ],
+      "baseline_evidence_ids": [
+        "354945792613548032",
+        "354945792613548033",
+        "354945792613548034"
+      ],
+      "agentic_evidence_ids": [
+        "354945792613548032",
+        "354945792613548033",
+        "354945792613548034"
+      ],
+      "baseline_rank": 3,
+      "agentic_rank": 3,
+      "baseline_latency_ms": 261.67,
+      "agentic_latency_ms": 2356.95,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "meeting notes follow-ups and decisions",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468778265313280"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 125.0,
+        "parallel_retrieval_ms": 250.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "50065ef6-a579-4c8d-a2ec-9a380c7ea16d",
+        "ledger_entry_ids": [
+          "365468778168844288",
+          "365468778210787328",
+          "365468778235953152"
+        ]
+      }
+    },
+    {
+      "query_index": 41,
+      "query": "Report amounts for the alpha product",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945794312241153"
+      ],
+      "expected_evidence_ids": [
+        "354945795234988032"
+      ],
+      "baseline_evidence_ids": [
+        "354945795234988032"
+      ],
+      "agentic_evidence_ids": [
+        "354945795234988032"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 167.25,
+      "agentic_latency_ms": 2456.1,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Report amounts for the alpha product",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468779427135488"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 141.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "eba17e41-bdf6-4b7a-9c79-544b8f989cd8",
+        "ledger_entry_ids": [
+          "365468779385192448"
+        ]
+      }
+    },
+    {
+      "query_index": 42,
+      "query": "sheet:report",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945794312241153"
+      ],
+      "expected_evidence_ids": [
+        "354945795234988032"
+      ],
+      "baseline_evidence_ids": [],
+      "agentic_evidence_ids": [
+        "354945795234988032"
+      ],
+      "baseline_rank": null,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 114.88,
+      "agentic_latency_ms": 15128.92,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "sheet:report",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468780656066560",
+          "365468781406846976"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "parallel_retrieval_ms": 312.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "55279e0a-d71b-4142-b6f0-96180e22d4fd",
+        "ledger_entry_ids": [
+          "365468780622512128",
+          "365468781377486848"
+        ]
+      }
+    },
+    {
+      "query_index": 43,
+      "query": "Service host configuration value",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945796774297601"
+      ],
+      "expected_evidence_ids": [
+        "354945797646712832"
+      ],
+      "baseline_evidence_ids": [
+        "354945797646712832",
+        "354945797646712839",
+        "354945797646712837",
+        "354945797646712835",
+        "354945797646712833"
+      ],
+      "agentic_evidence_ids": [
+        "354945797646712832",
+        "354945797646712839",
+        "354945797646712837",
+        "354945797646712835",
+        "354945797646712833"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 231.64,
+      "agentic_latency_ms": 2484.53,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Service host configuration value",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468782887436288"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 62.0,
+        "sparse_recall_ms": 62.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 62.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "05e5f09d-1ffc-451e-a9ee-2af84e573163",
+        "ledger_entry_ids": [
+          "365468782740635648",
+          "365468782765801472",
+          "365468782799355904",
+          "365468782824521728",
+          "365468782853881856"
+        ]
+      }
+    },
+    {
+      "query_index": 44,
+      "query": "path:/service/host",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945796774297601"
+      ],
+      "expected_evidence_ids": [
+        "354945797646712833"
+      ],
+      "baseline_evidence_ids": [
+        "354945797646712832",
+        "354945797646712837",
+        "354945797646712835",
+        "354945797646712839",
+        "354945797646712833"
+      ],
+      "agentic_evidence_ids": [
+        "354945797646712832",
+        "354945797646712837",
+        "354945797646712835",
+        "354945797646712839",
+        "354945797646712833"
+      ],
+      "baseline_rank": 5,
+      "agentic_rank": 5,
+      "baseline_latency_ms": 201.11,
+      "agentic_latency_ms": 2757.4,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "path:/service/host",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468784510631936"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 218.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "fb6908b9-0f81-4ef9-9d2b-15926da3c614",
+        "ledger_entry_ids": [
+          "365468784372219904",
+          "365468784397385728",
+          "365468784426745856",
+          "365468784451911680",
+          "365468784481271808"
+        ]
+      }
+    },
+    {
+      "query_index": 45,
+      "query": "Service host in the YAML config",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945801421586433"
+      ],
+      "expected_evidence_ids": [
+        "354945802210115584"
+      ],
+      "baseline_evidence_ids": [
+        "354945802210115584",
+        "354945802210115589",
+        "354945802210115585",
+        "354945802210115587",
+        "354945802210115591"
+      ],
+      "agentic_evidence_ids": [
+        "354945802210115584",
+        "354945802210115589",
+        "354945802210115585",
+        "354945802210115587",
+        "354945802210115591"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 237.56,
+      "agentic_latency_ms": 2402.45,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Service host in the YAML config",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468786091884544"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "e99cb721-da94-4519-b3b3-1585b7500234",
+        "ledger_entry_ids": [
+          "365468785966055424",
+          "365468785987026944",
+          "365468786016387072",
+          "365468786037358592",
+          "365468786058330112"
+        ]
+      }
+    },
+    {
+      "query_index": 46,
+      "query": "path:/service/host",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945801421586433"
+      ],
+      "expected_evidence_ids": [
+        "354945802210115585"
+      ],
+      "baseline_evidence_ids": [
+        "354945802210115584",
+        "354945802210115589",
+        "354945802210115587",
+        "354945802210115591",
+        "354945802210115585"
+      ],
+      "agentic_evidence_ids": [
+        "354945802210115584",
+        "354945802210115589",
+        "354945802210115587",
+        "354945802210115591",
+        "354945802210115585"
+      ],
+      "baseline_rank": 5,
+      "agentic_rank": 5,
+      "baseline_latency_ms": 209.66,
+      "agentic_latency_ms": 2044.88,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "path:/service/host",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468787647971328"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 188.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "e6d365d2-45ab-482c-8242-41ec526322a6",
+        "ledger_entry_ids": [
+          "365468787501170688",
+          "365468787526336512",
+          "365468787559890944",
+          "365468787580862464",
+          "365468787610222592"
+        ]
+      }
+    },
+    {
+      "query_index": 47,
+      "query": "Catalog item names and prices",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945805984989185"
+      ],
+      "expected_evidence_ids": [
+        "354945806903541760"
+      ],
+      "baseline_evidence_ids": [
+        "354945806903541760",
+        "354945806903541763",
+        "354945806903541765",
+        "354945806903541762",
+        "354945806903541764"
+      ],
+      "agentic_evidence_ids": [
+        "354945806903541760",
+        "354945806903541763",
+        "354945806903541765",
+        "354945806903541762",
+        "354945806903541764"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 216.93,
+      "agentic_latency_ms": 3124.58,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Catalog item names and prices",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468789254389760"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 63.0,
+        "sparse_recall_ms": 63.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 63.0,
+        "parallel_retrieval_ms": 203.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "3ce820b8-fb22-46d1-bfaa-bf18e31ed92b",
+        "ledger_entry_ids": [
+          "365468789103394816",
+          "365468789132754944",
+          "365468789162115072",
+          "365468789191475200",
+          "365468789220835328"
+        ]
+      }
+    },
+    {
+      "query_index": 48,
+      "query": "path:/root/item",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945805984989185"
+      ],
+      "expected_evidence_ids": [
+        "354945806903541760"
+      ],
+      "baseline_evidence_ids": [
+        "354945806903541760",
+        "354945806903541763",
+        "354945806903541764",
+        "354945806903541761",
+        "354945806903541762"
+      ],
+      "agentic_evidence_ids": [
+        "354945806903541760",
+        "354945806903541763",
+        "354945806903541764",
+        "354945806903541761",
+        "354945806903541762"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 231.06,
+      "agentic_latency_ms": 2553.87,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "path:/root/item",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468790852419584"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 79.0,
+        "sparse_recall_ms": 79.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 79.0,
+        "parallel_retrieval_ms": 219.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "e75e31bf-f26f-471b-8c27-feee640d0e4a",
+        "ledger_entry_ids": [
+          "365468790714007552",
+          "365468790747561984",
+          "365468790772727808",
+          "365468790802087936",
+          "365468790827253760"
+        ]
+      }
+    },
+    {
+      "query_index": 49,
+      "query": "Product quantities and prices in the workbook",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945809667588097"
+      ],
+      "expected_evidence_ids": [
+        "354945810581946368"
+      ],
+      "baseline_evidence_ids": [
+        "354945810581946368",
+        "354945810581946369"
+      ],
+      "agentic_evidence_ids": [
+        "354945810581946368",
+        "354945810581946369"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 174.3,
+      "agentic_latency_ms": 3286.09,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Product quantities and prices in the workbook",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468792093933568"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 157.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "89e6774a-f838-4e5a-a0c9-0d84cbc30c34",
+        "ledger_entry_ids": [
+          "365468792039407616",
+          "365468792064573440"
+        ]
+      }
+    },
+    {
+      "query_index": 50,
+      "query": "sheet:Sheet1",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945809667588097"
+      ],
+      "expected_evidence_ids": [
+        "354945810581946368"
+      ],
+      "baseline_evidence_ids": [],
+      "agentic_evidence_ids": [
+        "354945810581946368",
+        "354945810581946369"
+      ],
+      "baseline_rank": null,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 120.32,
+      "agentic_latency_ms": 3565.15,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "sheet:Sheet1",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468793360613376"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 47.0,
+        "parallel_retrieval_ms": 156.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "8fa3a8ca-b710-4de2-9ce3-6482a82b4439",
+        "ledger_entry_ids": [
+          "365468793297698816",
+          "365468793331253248"
+        ]
+      }
+    },
+    {
+      "query_index": 51,
+      "query": "Slide introduction bullet points",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945812389691393"
+      ],
+      "expected_evidence_ids": [
+        "354945813249523713"
+      ],
+      "baseline_evidence_ids": [
+        "354945813249523713",
+        "354945813249523715",
+        "354945813249523714",
+        "354945813249523712"
+      ],
+      "agentic_evidence_ids": [
+        "354945813249523713",
+        "354945813249523715",
+        "354945813249523714",
+        "354945813249523712"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 273.34,
+      "agentic_latency_ms": 14681.28,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Slide introduction bullet points",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468795050917888",
+          "365468796208545792"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 484.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "333d08c0-df41-4cae-b494-e8ef0feed534",
+        "ledger_entry_ids": [
+          "365468794925088768",
+          "365468794958643200",
+          "365468794988003328",
+          "365468795021557760",
+          "365468796082716672",
+          "365468796116271104",
+          "365468796149825536",
+          "365468796179185664"
+        ]
+      }
+    },
+    {
+      "query_index": 52,
+      "query": "# Slide 1",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945812389691393"
+      ],
+      "expected_evidence_ids": [
+        "354945813249523712"
+      ],
+      "baseline_evidence_ids": [
+        "354945813249523712",
+        "354945813249523714",
+        "354945813249523715",
+        "354945813249523713"
+      ],
+      "agentic_evidence_ids": [
+        "354945813249523712",
+        "354945813249523714",
+        "354945813249523715",
+        "354945813249523713"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 259.65,
+      "agentic_latency_ms": 3107.03,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "# Slide 1",
+            "signals": [
+              "dense"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468797986930688"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 125.0,
+        "sparse_recall_ms": 125.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 125.0,
+        "parallel_retrieval_ms": 265.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "6b20bf60-6f94-4941-8f33-177f1caf9304",
+        "ledger_entry_ids": [
+          "365468797873684480",
+          "365468797903044608",
+          "365468797932404736",
+          "365468797957570560"
+        ]
+      }
+    },
+    {
+      "query_index": 53,
+      "query": "Contract review email comments",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945815023714305"
+      ],
+      "expected_evidence_ids": [
+        "354945815841603584"
+      ],
+      "baseline_evidence_ids": [
+        "354945815841603584"
+      ],
+      "agentic_evidence_ids": [
+        "354945815841603584"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 167.77,
+      "agentic_latency_ms": 10059.42,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Contract review email comments",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468799190695936",
+          "365468799861784576"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 31.0,
+        "sparse_recall_ms": 31.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 31.0,
+        "parallel_retrieval_ms": 282.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "acf719ce-404f-4854-b78e-bfe083c61657",
+        "ledger_entry_ids": [
+          "365468799161335808",
+          "365468799828230144"
+        ]
+      }
+    },
+    {
+      "query_index": 54,
+      "query": "msg:Re: Contract Review",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945815023714305"
+      ],
+      "expected_evidence_ids": [
+        "354945815841603584"
+      ],
+      "baseline_evidence_ids": [
+        "354945815841603584"
+      ],
+      "agentic_evidence_ids": [
+        "354945815841603584"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 158.04,
+      "agentic_latency_ms": 3013.51,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "msg:Re: Contract Review",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468800977469440"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 16.0,
+        "sparse_recall_ms": 16.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 16.0,
+        "parallel_retrieval_ms": 157.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "5e0adce1-563e-416a-8125-8558e8f19845",
+        "ledger_entry_ids": [
+          "365468800948109312"
+        ]
+      }
+    },
+    {
+      "query_index": 55,
+      "query": "# notes",
+      "category": null,
+      "is_beneficiary": false,
+      "project_scope": [
+        "354945791862767617"
+      ],
+      "expected_evidence_ids": [
+        "354945792613548032"
+      ],
+      "baseline_evidence_ids": [
+        "354945792613548032",
+        "354945792613548034",
+        "354945792613548033"
+      ],
+      "agentic_evidence_ids": [
+        "354945792613548032",
+        "354945792613548034",
+        "354945792613548033"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 205.99,
+      "agentic_latency_ms": 3786.34,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "# notes",
+            "signals": [
+              "dense"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468802357395456"
+        ],
+        "rounds_completed": 1,
+        "completion_status": "complete",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 78.0,
+        "sparse_recall_ms": 78.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 78.0,
+        "parallel_retrieval_ms": 187.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "60a1b1bc-91e9-4d3a-abb3-9ce7cf2beb26",
+        "ledger_entry_ids": [
+          "365468802277703680",
+          "365468802302869504",
+          "365468802328035328"
+        ]
+      }
+    },
+    {
+      "query_index": 56,
+      "query": "Which UserService methods use the repository field, and which repository methods do they invoke?",
+      "category": "multi_hop",
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 271.95,
+      "agentic_latency_ms": 12850.87,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Which UserService methods use the repository field, and which repository methods do they invoke?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          },
+          {
+            "sub_problem_id": 2,
+            "query": "Which UserService methods use the repository field?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "calls"
+            ],
+            "graph_hop": 1
+          },
+          {
+            "sub_problem_id": 3,
+            "query": "Which repository methods do UserService methods invoke?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "calls"
+            ],
+            "graph_hop": 2
+          }
+        ],
+        "judgment_ids": [
+          "365468805096275968",
+          "365468807189233664"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 815.0,
+        "sparse_recall_ms": 815.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 1002.0,
+        "graph_recall_ms": 187.0,
+        "parallel_retrieval_ms": 953.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "819d0e03-8917-4e17-9289-5a9bb92fbfd9",
+        "ledger_entry_ids": [
+          "365468804953669632",
+          "365468804983029760",
+          "365468805012389888",
+          "365468805037555712",
+          "365468805066915840",
+          "365468807038238720",
+          "365468807067598848",
+          "365468807101153280",
+          "365468807130513408",
+          "365468807155679232"
+        ]
+      }
+    },
+    {
+      "query_index": 57,
+      "query": "Which tables reference the users table through foreign keys, and what constraint enforces it?",
+      "category": "multi_hop",
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534477"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534464",
+        "352016498073534478",
+        "352016498073534479"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534464",
+        "352016498073534471",
+        "352016498073534477",
+        "352016498073534478",
+        "352016498073534479"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 275.42,
+      "agentic_latency_ms": 11449.22,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Which tables reference the users table through foreign keys, and what constraint enforces it?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "fk_referenced_by"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468809236054016",
+          "365468810603397120"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 297.0,
+        "graph_recall_ms": 47.0,
+        "parallel_retrieval_ms": 577.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "bfa07460-8ca7-4cd0-97fb-050226881718",
+        "ledger_entry_ids": [
+          "365468809080864768",
+          "365468809114419200",
+          "365468809143779328",
+          "365468809173139456",
+          "365468809202499584",
+          "365468810448207872",
+          "365468810481762304",
+          "365468810511122432",
+          "365468810540482560",
+          "365468810574036992"
+        ]
+      }
+    },
+    {
+      "query_index": 58,
+      "query": "UserService 中哪些方法依赖 repository 字段，它们各自调用了什么？",
+      "category": "multi_hop",
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020",
+        "352016027946582017"
+      ],
+      "baseline_rank": 2,
+      "agentic_rank": 2,
+      "baseline_latency_ms": 266.27,
+      "agentic_latency_ms": 14453.63,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "UserService 中哪些方法依赖 repository 字段，它们各自调用了什么？",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "calls"
+            ],
+            "graph_hop": 1
+          }
+        ],
+        "judgment_ids": [
+          "365468812515999744",
+          "365468813841399808"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 234.0,
+        "sparse_recall_ms": 234.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 266.0,
+        "graph_recall_ms": 32.0,
+        "parallel_retrieval_ms": 530.0,
+        "evidence_analyst_ms": 16.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "1a3a43fa-7d48-4467-95d7-b30c8550f317",
+        "ledger_entry_ids": [
+          "365468812369199104",
+          "365468812402753536",
+          "365468812427919360",
+          "365468812457279488",
+          "365468812486639616",
+          "365468813686210560",
+          "365468813715570688",
+          "365468813744930816",
+          "365468813778485248",
+          "365468813807845376"
+        ]
+      }
+    },
+    {
+      "query_index": 59,
+      "query": "How does UserService record audit logs when token validation fails?",
+      "category": "gap",
+      "is_beneficiary": true,
+      "project_scope": [
+        "351193748123680768"
+      ],
+      "expected_evidence_ids": [
+        "352016027946582021"
+      ],
+      "baseline_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "agentic_evidence_ids": [
+        "352016027946582021",
+        "352016027946582016",
+        "352016027946582018",
+        "352016027946582019",
+        "352016027946582020"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 209.25,
+      "agentic_latency_ms": 6912.78,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "How does UserService record audit logs when token validation fails?",
+            "signals": [
+              "dense",
+              "sparse",
+              "graph"
+            ],
+            "relation_directions": [
+              "calls"
+            ],
+            "graph_hop": 2
+          }
+        ],
+        "judgment_ids": [
+          "365468815514927104",
+          "365468816647389184"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 141.0,
+        "sparse_recall_ms": 141.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 172.0,
+        "graph_recall_ms": 31.0,
+        "parallel_retrieval_ms": 437.0,
+        "evidence_analyst_ms": 15.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "9aac69e1-df23-44cb-bf1c-c1066f9d5a19",
+        "ledger_entry_ids": [
+          "365468815363932160",
+          "365468815393292288",
+          "365468815422652416",
+          "365468815452012544",
+          "365468815485566976",
+          "365468816492199936",
+          "365468816521560064",
+          "365468816555114496",
+          "365468816584474624",
+          "365468816613834752"
+        ]
+      }
+    },
+    {
+      "query_index": 60,
+      "query": "What indexes are defined on the users table and how are they maintained?",
+      "category": "gap",
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534464"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534464",
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534479",
+        "352016498073534473"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534464",
+        "352016498073534477",
+        "352016498073534471",
+        "352016498073534479",
+        "352016498073534473"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 263.95,
+      "agentic_latency_ms": 9454.11,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "What indexes are defined on the users table and how are they maintained?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468818551603200",
+          "365468819826671616"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 532.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "1c67371a-2f4b-425e-98c1-0b3f4c8febf6",
+        "ledger_entry_ids": [
+          "365468818400608256",
+          "365468818434162688",
+          "365468818463522816",
+          "365468818492882944",
+          "365468818522243072",
+          "365468819679870976",
+          "365468819713425408",
+          "365468819738591232",
+          "365468819767951360",
+          "365468819797311488"
+        ]
+      }
+    },
+    {
+      "query_index": 61,
+      "query": "Are the column types of users.id and orders.user_id compatible for the fk_orders_user foreign key?",
+      "category": "conflict",
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534465",
+        "352016498073534473",
+        "352016498073534477"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534471",
+        "352016498073534481",
+        "352016498073534473"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534471",
+        "352016498073534481",
+        "352016498073534473"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 273.53,
+      "agentic_latency_ms": 7509.8,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "Are the column types of users.id and orders.user_id compatible for the fk_orders_user foreign key?",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468821756051456",
+          "365468823064674304"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 250.0,
+        "sparse_recall_ms": 250.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 250.0,
+        "parallel_retrieval_ms": 547.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "8fa19794-b0f4-41ef-b3bd-abc558bb62e0",
+        "ledger_entry_ids": [
+          "365468821605056512",
+          "365468821634416640",
+          "365468821663776768",
+          "365468821693136896",
+          "365468821722497024",
+          "365468822905290752",
+          "365468822938845184",
+          "365468822968205312",
+          "365468823001759744",
+          "365468823031119872"
+        ]
+      }
+    },
+    {
+      "query_index": 62,
+      "query": "orders.user_id 外键与 users 表主键的类型声明是否一致？",
+      "category": "conflict",
+      "is_beneficiary": true,
+      "project_scope": [
+        "352016496592945153"
+      ],
+      "expected_evidence_ids": [
+        "352016498073534465",
+        "352016498073534473",
+        "352016498073534477"
+      ],
+      "baseline_evidence_ids": [
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534473",
+        "352016498073534471",
+        "352016498073534481"
+      ],
+      "agentic_evidence_ids": [
+        "352016498073534477",
+        "352016498073534479",
+        "352016498073534473",
+        "352016498073534471",
+        "352016498073534481"
+      ],
+      "baseline_rank": 1,
+      "agentic_rank": 1,
+      "baseline_latency_ms": 276.38,
+      "agentic_latency_ms": 6442.29,
+      "agent_judgment": {
+        "sub_problems": [
+          {
+            "sub_problem_id": 1,
+            "query": "orders.user_id 外键与 users 表主键的类型声明是否一致？",
+            "signals": [
+              "dense",
+              "sparse"
+            ]
+          }
+        ],
+        "judgment_ids": [
+          "365468824960499712",
+          "365468826285899776"
+        ],
+        "rounds_completed": 2,
+        "completion_status": "partial",
+        "selection_decisions": [
+          "selected",
+          "selected",
+          "selected",
+          "selected",
+          "selected"
+        ],
+        "schema_valid_all": true
+      },
+      "sub_path_timings": {
+        "query_planner_ms": 0.0,
+        "dense_recall_ms": 265.0,
+        "sparse_recall_ms": 265.0,
+        "fusion_ms": 0.0,
+        "rerank_ms": 0.0,
+        "total_ms": 265.0,
+        "parallel_retrieval_ms": 531.0,
+        "evidence_analyst_ms": 0.0,
+        "context_orchestrator_ms": 0.0
+      },
+      "ledger_ref": {
+        "request_id": "ee31b925-033b-495f-803a-4493760c01e0",
+        "ledger_entry_ids": [
+          "365468824813699072",
+          "365468824843059200",
+          "365468824868225024",
+          "365468824897585152",
+          "365468824926945280",
+          "365468826134904832",
+          "365468826168459264",
+          "365468826193625088",
+          "365468826222985216",
+          "365468826252345344"
+        ]
+      }
+    }
+  ],
+  "three_gate_pass": {
+    "sc001_pass": true,
+    "sc001_relative_mrr_improvement_pct": 7.4627,
+    "sc001_relative_ndcg_improvement_pct": 5.5097,
+    "sc002_pass": true,
+    "sc002_notes": [],
+    "sc015_pass": true,
+    "sc015_notes": [],
+    "hard_metrics_pass": true,
+    "hard_metrics": {
+      "cross_project_leakage_events": 0,
+      "schema_validity_rate": 1.0,
+      "source_locatability_rate": 1.0,
+      "ledger_bridge_rate": 1.0,
+      "baseline_cross_project_leakage_events": 0
+    },
+    "all_passed": true
+  },
+  "enters_default_path": true,
+  "dataset_size": 63,
+  "beneficiary_subset_size": 14,
+  "agentic_degraded_queries": 0,
+  "subset_indices": {
+    "baseline_001": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "beneficiary": [
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62
+    ],
+    "non_beneficiary": [
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55
+    ]
+  },
+  "reproducibility": {
+    "tolerance": 0.01,
+    "latency_sensitive": true,
+    "reproducible": null
+  },
+  "measurement": {
+    "metrics_source": "deterministic warm metric passes (LLM response-cache replay)",
+    "latency_cost_source": "cold pass with real LLM calls and real guardrails",
+    "fairness": "each pass reruns the deterministic baseline before the agentic path (FR-030)",
+    "reproducibility_source": "metric pass 1 vs metric pass 2 (SC-008, 1% tolerance)",
+    "reproducibility_latency_source": "warm cache-replay metric passes (NOT the cold real-LLM latency recorded in agentic_metrics.latency_ms)"
+  }
+}

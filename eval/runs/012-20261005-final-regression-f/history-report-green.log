@@ -1,0 +1,43 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.9, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\Richard\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Project_new\docsToCode\backend
+configfile: pyproject.toml
+plugins: anyio-4.14.2, langsmith-0.11.1, asyncio-0.25.3
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+collecting ... collected 19 items / 1 deselected / 18 selected
+
+tests/integration/test_012_live_history.py::test_batch_append_sets_reducer_role_once_and_rolls_back_invalid_batch PASSED [  5%]
+tests/integration/test_012_live_history.py::test_24_hour_snapshot_and_archive_preserve_correction_dependencies PASSED [ 11%]
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[numeric] PASSED [ 16%]
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[prefixed] PASSED [ 22%]
+tests/integration/test_012_live_history.py::test_management_rebuild_uses_verified_snapshot PASSED [ 27%]
+tests/integration/test_012_live_history.py::test_missing_checkpoint_log_cannot_be_declared_complete PASSED [ 33%]
+tests/integration/test_012_snapshot_truncation.py::test_incomplete_snapshot_fails_loudly PASSED [ 38%]
+tests/integration/test_012_distilled_chain.py::test_distilled_revalidates_ready_active_source_chain PASSED [ 44%]
+tests/integration/test_012_distilled_chain.py::test_source_event_cannot_authorize_changed_projection_metadata PASSED [ 50%]
+tests/unit/test_memory_acceptance_report.py::test_partial_suite_and_missing_measurements_cannot_claim_acceptance PASSED [ 55%]
+tests/unit/test_memory_acceptance_report.py::test_failed_suite_never_becomes_passed PASSED [ 61%]
+tests/unit/test_memory_acceptance_report.py::test_report_records_the_actual_suite_command PASSED [ 66%]
+tests/unit/test_memory_acceptance_report.py::test_report_rejects_host_claim_without_actual_calls PASSED [ 72%]
+tests/unit/test_memory_acceptance_report.py::test_invocation_evidence_keeps_request_ids_paths_and_stable_fingerprints PASSED [ 77%]
+tests/unit/test_memory_acceptance_report.py::test_invocation_evidence_reads_failure_paths_from_public_envelopes PASSED [ 83%]
+tests/unit/test_memory_acceptance_report.py::test_legacy_regression_criterion_uses_completed_suites_without_memory_traces PASSED [ 88%]
+tests/unit/test_memory_acceptance_report.py::test_write_observation_measures_metadata_without_retaining_user_values PASSED [ 94%]
+tests/unit/test_memory_acceptance_report.py::test_acceptance_write_rates_require_observations_and_count_each_failure PASSED [100%]
+
+============================== warnings summary ===============================
+tests/integration/test_012_live_history.py::test_batch_append_sets_reducer_role_once_and_rolls_back_invalid_batch
+tests/integration/test_012_live_history.py::test_24_hour_snapshot_and_archive_preserve_correction_dependencies
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[numeric]
+tests/integration/test_012_live_history.py::test_archive_preserves_every_accepted_distilled_source_reference[prefixed]
+tests/integration/test_012_live_history.py::test_management_rebuild_uses_verified_snapshot
+tests/integration/test_012_live_history.py::test_missing_checkpoint_log_cannot_be_declared_complete
+tests/integration/test_012_distilled_chain.py::test_distilled_revalidates_ready_active_source_chain
+tests/integration/test_012_distilled_chain.py::test_source_event_cannot_authorize_changed_projection_metadata
+  D:\Project_new\docsToCode\backend\src\rag_mcp\providers\local_cpu.py:44: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+    self._dimension = self._model.get_sentence_embedding_dimension()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: D:\Project_new\docsToCode\eval\runs\012-20261005-final-regression-f\history-report-green.xml -
+================ 18 passed, 1 deselected, 8 warnings in 41.58s ================
