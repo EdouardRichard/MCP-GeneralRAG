@@ -7,6 +7,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -41,8 +42,24 @@ def validate_memory(payload):
         raise ValueError("MEMORY_PROVENANCE_INVALID")
     if payload.get("confidence") is not None:
         _confidence(payload["confidence"])
+    for field, maximum in (("title", 512), ("agent_id", 255)):
+        value = payload.get(field)
+        if value is not None and (not isinstance(value, str) or len(value) > maximum):
+            raise ValueError("MEMORY_PROVENANCE_INVALID")
+    tags = payload.get("tags")
+    if tags is not None and (not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags)):
+        raise ValueError("MEMORY_PROVENANCE_INVALID")
+    if payload.get("task_context") is not None and not isinstance(payload["task_context"], dict):
+        raise ValueError("MEMORY_PROVENANCE_INVALID")
+    if payload.get("session_id") is not None:
+        try:
+            UUID(payload["session_id"])
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError("MEMORY_PROVENANCE_INVALID") from None
     provenance = payload.get("provenance")
     if provenance == "hard":
+        if payload.get("confidence") is not None:
+            raise ValueError("MEMORY_PROVENANCE_INVALID")
         refs = payload.get("evidence_refs")
         if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or not ref.isdecimal() for ref in refs):
             raise ValueError("MEMORY_EVIDENCE_ANCHOR_REQUIRED")
