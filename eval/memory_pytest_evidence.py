@@ -24,6 +24,24 @@ def observe_result(operation, parameters, result, *, elapsed):
     for key in ("counts", "provenance_validation", "injection_flags", "impact"):
         if key in result:
             paths[key] = result[key]
+    if operation == "record" and result.get("provenance_validation"):
+        validation = result["provenance_validation"]
+        provenance = validation.get("provenance")
+        checks = {"provenance": validation.get("validated") is True}
+        attributions = validation.get("attributions", [])
+        if provenance == "hard":
+            references = set(parameters.get("evidence_refs") or [])
+            checks["hard_attribution"] = bool(references) and references == {
+                row.get("evidence_id") for row in attributions} and all(
+                    all(row.get(key) for key in ("source_id", "version_id", "version", "position", "content_hash"))
+                    for row in attributions)
+        if provenance in {"soft", "distilled"}:
+            required = {"source", "confidence", "model_version", "time", "supporting_evidence"}
+            checks["soft_metadata"] = required <= (parameters.get("inference_meta") or {}).keys() and checks["provenance"]
+        if provenance == "distilled":
+            checks["distilled_source_chain"] = bool(attributions) and all(
+                row.get("source_chain", {}).get("validated") is True for row in attributions)
+        paths["write_checks"] = checks
     if "memories" in result:
         paths["memory_ids"] = [row["memory_id"] for row in result["memories"]]
         paths["excerpt_lengths"] = [len(row.get("content_excerpt", "")) for row in result["memories"]]

@@ -39,6 +39,20 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def write_rates(measurements):
+    observed = [row for row in measurements if "write_checks" in row.get("paths", {})]
+    rates = {}
+    for check in ("provenance", "hard_attribution", "soft_metadata", "distilled_source_chain"):
+        values = [row["paths"]["write_checks"][check] for row in observed if check in row["paths"]["write_checks"]]
+        rates[check] = {"passed": sum(value is True for value in values), "total": len(values),
+                        "rate": sum(value is True for value in values) / len(values) if values else None}
+    status = "failed" if any(row["rate"] is not None and row["rate"] < 1 for row in rates.values()) else "passed" if all(row["rate"] == 1 for row in rates.values()) else "not_verified"
+    return {"scenario": "successful_write_rates", "scope_ids": sorted({sid for row in observed for sid in row["scope_ids"]}),
+            "request_ids": sorted({rid for row in observed for rid in row["request_ids"]}), "status": status,
+            "failed_paths": [name for name, row in rates.items() if row["rate"] is not None and row["rate"] < 1],
+            "fingerprints": {}, "paths": rates}
+
+
 def build_report(*, suite, trace, host, regression, diagnostics):
     cases = list(ET.parse(suite).getroot().iter("testcase"))
     outcomes = {}
@@ -52,6 +66,8 @@ def build_report(*, suite, trace, host, regression, diagnostics):
         if not required.issubset({call.get("operation") for call in calls}) or any(not call.get("passed") for call in calls):
             raise ValueError("host acceptance requires actual successful calls and reader rejection")
     traces = read_json(trace)["tests"]
+    measurements = [measurement for test in traces for measurement in test.get("measurements", [])]
+    rates = write_rates(measurements)
     diagnostic_data = read_json(diagnostics) if diagnostics else {}
     criteria = []
     for identifier, modules in CRITERIA.items():
@@ -63,6 +79,8 @@ def build_report(*, suite, trace, host, regression, diagnostics):
         evidence = [str(suite) + "#" + name for name in selected] + [str(trace) + "#" + test["nodeid"] for test in traced]
         if identifier in {"SC-001", "SC-009"} and host_data.get("status") != "passed":
             state = "not_verified" if state != "failed" else state
+        if identifier == "SC-003" and rates["status"] != "passed":
+            state = "failed" if rates["status"] == "failed" else "not_verified"
         if identifier == "SC-012":
             if not regression or not all(read_json(path).get("all_passed", read_json(path).get("hard_constraints", {}).get("all_passed", False)) for path in regression):
                 state = "not_verified" if state != "failed" else state
@@ -74,7 +92,7 @@ def build_report(*, suite, trace, host, regression, diagnostics):
                 evidence.append(str(diagnostics))
         criteria.append({"id": identifier, "status": state, "evidence": evidence or [str(suite) + "#required evidence absent"]})
     failed = sum(value == "failed" for value in outcomes.values())
-    measurements = [measurement for test in traces for measurement in test.get("measurements", [])]
+    measurements.append(rates)
     status = "failed" if failed or any(row["status"] == "failed" for row in criteria) or host_data.get("status") == "failed" else "passed" if all(row["status"] == "passed" for row in criteria) else "incomplete"
     report = {
         "report_type": "012_memory_acceptance", "generated_at": datetime.now(timezone.utc).isoformat(),
