@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, Index, String, Text, text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,11 +15,12 @@ class MemoryEvent(Base):
         CheckConstraint("event_type IN ('assert','revise','retract','consolidate','access','grant','rollback')", name="ck_memory_event_type"),
         Index("ix_memory_events_scope_aggregate_time", "knowledge_scope_id", "aggregate_id", "occurred_at"),
         Index("ix_memory_events_scope_event", "knowledge_scope_id", "event_id"),
+        Index("ix_memory_events_scope_type_time", "knowledge_scope_id", "event_type", "occurred_at"),
     )
     event_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     aggregate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    knowledge_scope_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    knowledge_scope_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("knowledge_scopes.scope_id"), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     authority: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     scope_meta: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
