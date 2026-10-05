@@ -155,19 +155,19 @@
 
 ### 7.1 先红测试
 
-- [ ] T068 [P] [US1] 在 `backend/tests/unit/test_projection_rebuild.py` 编写六类投影 registry、逐类非空/状态变更/删除传播/provenance 校验、snapshot+delta/full replay fingerprint 和不可用快照回退测试，先红（FR-004a、FR-005、FR-007、FR-036、SC-008、SC-013）。
-- [ ] T069 [P] [US1] 在 `backend/tests/integration/test_012_snapshot_truncation.py` 编写 10000 事件/24 小时快照、普通 assert 归档截断、修订/撤回/巩固/授权/回滚依赖保留、快照损坏后完整日志恢复以及日志不完整时拒绝完整恢复声明测试，先红（FR-004、FR-004a、SC-013）。
-- [ ] T070 [P] [US1] 在 `backend/tests/unit/test_memory_rollback.py` 编写时间点、event point、跨 scope、access 保留、supersede 冲突和 rollback 后再次 rollback 场景矩阵，先红（FR-035–FR-035a）。
-- [ ] T071 [P] [US6] 在 `backend/tests/contract/test_memory_management_api.py` 编写 browse/retire/purge/rebuild/rollback 管理 REST schema 和权限审计测试，先红（FR-035）。
+- [X] T068 [P] [US1] 在 `backend/tests/unit/test_projection_rebuild.py` 编写六类投影 registry、逐类非空/状态变更/删除传播/provenance 校验、snapshot+delta/full replay fingerprint 和不可用快照回退测试，先红（FR-004a、FR-005、FR-007、FR-036、SC-008、SC-013）。
+- [X] T069 [P] [US1] 在 `backend/tests/integration/test_012_snapshot_truncation.py` 编写 10000 事件/24 小时快照、普通 assert 归档截断、修订/撤回/巩固/授权/回滚依赖保留、快照损坏后完整日志恢复以及日志不完整时拒绝完整恢复声明测试，先红（FR-004、FR-004a、SC-013）。
+- [X] T070 [P] [US1] 在 `backend/tests/unit/test_memory_rollback.py` 编写时间点、event point、跨 scope、access 保留、supersede 冲突和 rollback 后再次 rollback 场景矩阵，先红（FR-035–FR-035a）。
+- [X] T071 [P] [US6] 在 `backend/tests/contract/test_memory_management_api.py` 编写 browse/retire/purge/rebuild/rollback 管理 REST schema 和权限审计测试，先红（FR-035）。
 
 ### 7.2 实现
 
-- [ ] T072 [US1] 实现 `backend/src/rag_mcp/runtime/projection_rebuild.py`，提供六类 projection adapter、全量/since_event_id、snapshot+delta、fingerprint、scope/计数/删除传播/provenance 校验（FR-007、FR-036）。
-- [ ] T073 [US7] 扩展 `backend/src/rag_mcp/services/maintenance_service.py`，支持运行态 7 天、access 在线 90 天、episodic 180 天、semantic/procedural 永生、遗忘阶梯、事件归档和快照截断（FR-004、FR-033–FR-034）。
-- [ ] T074 [US1] 实现 `backend/src/rag_mcp/services/rollback_service.py`，限制单 scope/管理面，按时间点或 event point 重放状态事件，保留 access，记录 reason/impact/before-after fingerprints 和 rollback 事件（FR-035a）。
-- [ ] T075 [US6] 完善 `backend/src/rag_mcp/api/memory.py` 的浏览、retire、显式 purge、policy/binding 管理、projection rebuild 和 rollback REST 路由（FR-011、FR-035）。
-- [ ] T076 [US1] 将六类投影 adapter 接入 `backend/src/rag_mcp/indexing/memory_vectors.py`、`backend/src/rag_mcp/runtime/projection_rebuild.py`、文件镜像/DIGEST/INDEX 输出，要求非空状态变化、scope 路径和版本指纹（FR-005、FR-007）。
-- [ ] T077 [US1] 运行 T068–T071 并修正治理/回滚/截断实现，确认 rollback 后六投影与目标事件点一致、access 未被删除、跨 scope 请求稳定拒绝（FR-035a–FR-036，SC-013、SC-016）。
+- [X] T072 [US1] 实现 `backend/src/rag_mcp/runtime/projection_rebuild.py`，提供六类 projection adapter、全量/since_event_id、snapshot+delta、fingerprint、scope/计数/删除传播/provenance 校验（FR-007、FR-036）。
+- [X] T073 [US7] 扩展 `backend/src/rag_mcp/services/maintenance_service.py`，支持运行态 7 天、access 在线 90 天、episodic 180 天、semantic/procedural 永生、遗忘阶梯、事件归档和快照截断（FR-004、FR-033–FR-034）。
+- [X] T074 [US1] 实现 `backend/src/rag_mcp/services/rollback_service.py`，限制单 scope/管理面，按时间点或 event point 重放状态事件，保留 access，记录 reason/impact/before-after fingerprints 和 rollback 事件（FR-035a）。
+- [X] T075 [US6] 完善 `backend/src/rag_mcp/api/memory.py` 的浏览、retire、显式 purge、policy/binding 管理、projection rebuild 和 rollback REST 路由（FR-011、FR-035）。
+- [X] T076 [US1] 将六类投影 adapter 接入 `backend/src/rag_mcp/indexing/memory_vectors.py`、`backend/src/rag_mcp/runtime/projection_rebuild.py`、文件镜像/DIGEST/INDEX 输出，要求非空状态变化、scope 路径和版本指纹（FR-005、FR-007）。
+- [X] T077 [US1] 运行 T068–T071 并修正治理/回滚/截断实现，确认 rollback 后六投影与目标事件点一致、access 未被删除、跨 scope 请求稳定拒绝（FR-035a–FR-036，SC-013、SC-016）。
 
 ## Phase 8：无回归与验收
 

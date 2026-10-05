@@ -101,6 +101,22 @@ Each test module has the `test_` prefix and `.py` extension.
 | T066 | errors.py and contracts/error-codes.json; historical contract enums preserved and content-conflict included. |
 | T067 | Actual generated contracts and fixed-request legacy byte suite; 26 supplement tests passed. |
 
-Phase 7 and Phase 8 remain open at this checkpoint. Final suite, fresh historical
-evaluation reports, real DSH `temp` sessions and schema-validated report are
-required before T088 may be marked complete.
+Phase 7 was reverified by full suite f: 2139 passed, zero failed, zero skipped
+(`eval/runs/012-20261005-final-regression-f/backend-pytest.xml`). Its invocation
+trace retains actual request IDs, failed paths and six-view fingerprints.
+
+| Task | Verification and implementation evidence |
+| --- | --- |
+| T068 | U/projection_rebuild; I/012_live_history, 012_memory_projection_equivalence and 012_projection_corruption: six actual views, snapshot/delta/full-log parity and damaged-checkpoint fallback. |
+| T069 | I/012_live_history: 10001-event checkpoint, 24-hour cadence, archive counts, retained correction dependencies and incomplete-log refusal. Numeric distilled-source truncation failed red (`5441913`); normalized reference protection passed both accepted forms (`bebc3df`, 18 tests passed in `final-regression-f/history-report-green.xml`). |
+| T070 | U/memory_rollback; I/012_live_governance and 012_aoep_obligations: time/event targets, scope refusal, preserved usage and repeat rollback. |
+| T071 | C/memory_management_api; I/012_memory_rest: production REST routes, request validation and live writer-lease loss refusal. |
+| T072 | runtime/projection_rebuild.py and memory_projection_store.py; verified snapshot/delta rebuild and six actual storage fingerprints. |
+| T073 | services/maintenance_service.py; I/012_live_maintenance: compress/archive/tombstone through logged events, permanent-kind protection and seven-day audit/session TTL. |
+| T074 | rollback_service.py and memory_governance.py; preserved access, logged reason/impact/before-after fingerprints and management-only single-scope rollback. |
+| T075 | api/memory.py; I/012_memory_rest, 012_live_governance and 012_aoep_obligations: browse/retire/purge/policy/binding/rebuild/rollback. |
+| T076 | memory_projection_store.py and indexing/memory_vectors.py; I/012_hard_metrics and 012_projection_corruption: nonempty physical views, version/scope filters, DIGEST/INDEX and actual dense-vector equality. |
+| T077 | Full suite f and SC-008/013/016 passed in the intermediate fixed-schema report. No direct projection repair path was used. |
+
+Phase 8 remains open. Fresh historical evaluation reports, real DSH `temp`
+sessions and the final schema-validated report are required before T088 closes.
