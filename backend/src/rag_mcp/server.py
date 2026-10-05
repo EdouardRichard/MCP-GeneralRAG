@@ -166,6 +166,7 @@ async def _lease_renewal_loop(lease_id: int, renew_interval_s: int, expiry_windo
     """Renew the writer lease every renew_interval_s (data-model §3.3)."""
     from rag_mcp.db import get_session_factory
     from rag_mcp.runtime.write_coordinator import PostgresLeaseWriteCoordinator
+    from rag_mcp.runtime.instance_registry import InstanceRegistryService
 
     while True:
         await asyncio.sleep(renew_interval_s)
@@ -179,6 +180,10 @@ async def _lease_renewal_loop(lease_id: int, renew_interval_s: int, expiry_windo
                     "the management process keeps serving read paths but must "
                     "be restarted to re-enter write mode", lease_id,
                 )
+            else:
+                active = await coordinator.get_active_lease()
+                if active is not None and active.lease_id == lease_id:
+                    await InstanceRegistryService(factory).heartbeat(active.holder_instance_id, expiry_window_s)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - keep the loop alive

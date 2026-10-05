@@ -60,3 +60,29 @@ async def test_writer_tool_refuses_without_management_ownership(db_session):
     result = await server.call_tool("record_memory", {**arguments, "scope_ref": str(sid)})
     assert result.isError and result.structuredContent["error"]["code"] == "MEMORY_WRITE_UNAVAILABLE"
     assert await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == sid)) == 0
+
+
+@pytest.mark.asyncio
+async def test_management_renewal_keeps_owner_registration_alive(engine, monkeypatch):
+    import asyncio
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from rag_mcp import server as management
+    from rag_mcp.models.runtime import InstanceRegistry
+    from tests.integration.memory_acceptance import writer_owner
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with writer_owner(engine) as owner:
+        async with factory() as session:
+            original = (await session.get(InstanceRegistry, owner.holder_instance_id)).last_heartbeat_at
+        calls = 0
+        async def one_cycle(seconds):
+            nonlocal calls
+            calls += 1
+            if calls > 1:
+                raise asyncio.CancelledError
+        monkeypatch.setattr(management.asyncio, "sleep", one_cycle)
+        monkeypatch.setattr("rag_mcp.db.get_session_factory", lambda: factory)
+        with pytest.raises(asyncio.CancelledError):
+            await management._lease_renewal_loop(owner.lease_id, 0, 300)
+        async with factory() as session:
+            registered = await session.get(InstanceRegistry, owner.holder_instance_id)
+            assert registered.last_heartbeat_at > original
