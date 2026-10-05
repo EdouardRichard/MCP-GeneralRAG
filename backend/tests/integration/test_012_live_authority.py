@@ -42,6 +42,22 @@ async def test_live_schema_contains_required_projection_columns(db_session):
 
 
 @pytest.mark.asyncio
+async def test_builtin_policy_is_seeded_in_the_database(db_session):
+    from rag_mcp.models.domain_profile import DomainProfile
+    rows = (await db_session.execute(select(DomainProfile).where(
+        DomainProfile.domain_key.in_(["se-project", "generic", "personal", "legal"])
+    ))).scalars().all()
+    assert len(rows) == 4
+    for row in rows:
+        policy = row.memory_policy
+        assert policy is not None, f"{row.domain_key} has no persisted policy"
+        assert policy["per_scope_memory_quota"] == 5000
+        assert policy["episodic_ttl_days"] == 180
+        assert policy["semantic_procedural_ttl_days"] is None
+        assert policy["rrf_weights"] == {"dense": 1.0, "recency": .5, "kind": .3, "salience": .2}
+
+
+@pytest.mark.asyncio
 async def test_caller_published_flag_is_not_evidence(db_session):
     from rag_mcp.services import memory_validators
     validator_type = getattr(memory_validators, "MemoryProvenanceValidator", None)
