@@ -48,14 +48,9 @@ class MemoryGovernance:
             if action == "purge":
                 payload["purge"] = True
         elif action == "rollback":
-            if (event_point is None) == (time_point is None):
-                raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
-            if time_point is not None:
-                from rag_mcp.services.memory_reader import timestamp
-                candidates = [event for event in history if timestamp(event["occurred_at"]) <= timestamp(time_point)]
-                event_point = candidates[-1]["event_id"] if candidates else None
-            if not isinstance(event_point, int) or isinstance(event_point, bool) or not any(event["event_id"] == event_point for event in history):
-                raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+            from rag_mcp.services.rollback_service import RollbackService
+            plan = RollbackService().rollback(history, scope_id=scope_id, actor=actor, event_point=event_point, time_point=time_point)
+            event_point = plan["event_point"]
             event_type, aggregate_id = "rollback", event_id
             payload["event_point"] = event_point
         else:
