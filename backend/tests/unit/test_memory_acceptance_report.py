@@ -88,7 +88,7 @@ def test_legacy_regression_criterion_uses_completed_suites_without_memory_traces
     suite, trace, host = inputs(tmp_path)
     modules = module.CRITERIA["SC-012"]
     suite.write_text('<testsuites><testsuite>' + ''.join(
-        f'<testcase classname="tests.integration.{name}" name="test_real_compatibility"/>'
+        f'<testcase classname="tests.integration.{name}.TestActualCompatibility" name="test_real_compatibility"/>'
         for name in modules) + '</testsuite></testsuites>', encoding="utf-8")
     regression = tmp_path / "legacy.json"
     regression.write_text(json.dumps({"all_passed": True}), encoding="utf-8")
