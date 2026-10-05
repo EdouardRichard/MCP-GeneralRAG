@@ -17,9 +17,34 @@ async def published_payload(session):
                                  .where(KnowledgeVersion.status == "published", KnowledgeSource.status == "published",
                                         func.length(Chunk.content_text) >= 300).limit(1))
     assert chunk is not None
-    return {"scope_id": chunk.knowledge_scope_id, "kind": "semantic",
-            "content": f"Acceptance note {uuid4()}: {chunk.content_text[:150]}",
-            "provenance": "hard", "evidence_refs": [str(chunk.chunk_id)]}
+    from hashlib import sha256
+    from pathlib import Path
+    from rag_mcp.config import get_settings
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+    from rag_mcp.indexing.qdrant_client import QdrantStore
+    from rag_mcp.services.ingestion_service import IngestionService
+    from rag_mcp.utils.snowflake import generate_id
+    # Publish the real corpus excerpt through ingestion in an independent scope;
+    # repeated memory trajectories must not enlarge historical evaluation scopes.
+    sid, source_id = generate_id(), generate_id()
+    content = ("# Acceptance evidence\n\n" + chunk.content_text).encode("utf-8")
+    session.add(KnowledgeScope(scope_id=sid, name=f"012 evidence {sid}", slug=f"012-evidence-{sid}",
+                               scope_type="project", domain_key="generic"))
+    await session.flush()
+    session.add(KnowledgeSource(source_id=source_id, knowledge_scope_id=sid, filename="anchor.md",
+        format="markdown", size_bytes=len(content), content_hash=sha256(content).hexdigest(), status="uploaded"))
+    await session.commit()
+    directory = Path(get_settings().data_root) / str(sid) / str(source_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "anchor.md").write_bytes(content)
+    await IngestionService(session, LocalCPUEmbeddingProvider(), QdrantStore()).ingest(source_id)
+    published = await session.scalar(select(Chunk).join(KnowledgeVersion).join(KnowledgeSource, Chunk.source_id == KnowledgeSource.source_id)
+        .where(Chunk.knowledge_scope_id == sid, KnowledgeVersion.status == "published", KnowledgeSource.status == "published",
+               func.length(Chunk.content_text) >= 150))
+    assert published is not None, "isolated evidence did not pass the real publication pipeline"
+    return {"scope_id": sid, "kind": "semantic", "content": f"Acceptance note {uuid4()}: {published.content_text[:150]}",
+            "provenance": "hard", "evidence_refs": [str(published.chunk_id)]}
 
 
 @pytest.mark.asyncio

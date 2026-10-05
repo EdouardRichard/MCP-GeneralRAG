@@ -28,7 +28,7 @@ def memory_schema_validators():
 
 
 @pytest.mark.asyncio
-async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session):
+async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session, request):
     service = MemoryService(db_session)
     a, payload_a = await scope_and_payload(db_session)
     b, payload_b = await scope_and_payload(db_session)
@@ -52,6 +52,9 @@ async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session):
         assert all(row.knowledge_scope_id == sid for row in relations)
         assert all(point.payload["knowledge_scope_id"] == str(sid) for point in points)
         assert all(row["knowledge_scope_id"] == sid for row in files)
+        relation_data = [{column.name: getattr(row, column.name) for column in MemoryEntry.__table__.columns} for row in relations]
+        assert "acceptancesecret" not in json.dumps(events, default=str)
+        assert "acceptancesecret" not in json.dumps(relation_data, default=str)
         for point in points:
             assert point.payload["memory_id"] != quarantined["memory_id"]
             assert "acceptancesecret" not in json.dumps(point.payload)
@@ -61,11 +64,30 @@ async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session):
         assert all(row["memory_id"] != quarantined["memory_id"] for row in files)
         result = await service.recall(scope_ref=[str(sid)], memory_ids=[item["memory_id"] for item in saved.values()])
         assert [row["memory_id"] for row in result["memories"]] == [saved[sid]["memory_id"]]
+        observation = getattr(request.node, "_memory_observation", None)
+        if observation is not None:
+            paths = {"event_log": events, "relation": relation_data,
+                     "vector": [point.payload for point in points], "file": files}
+            observation["measurements"].append({"scenario": "four_path_isolation", "scope_ids": [sid],
+                "request_ids": [saved[sid]["request_id"], result["request_id"]], "status": "passed", "failed_paths": [],
+                "fingerprints": {"manifest": manifest.fingerprint},
+                "paths": {name: {"count": len(rows),
+                    "foreign_scope_count": sum(str(row["knowledge_scope_id"]) != str(sid) for row in rows),
+                    "raw_credential_matches": json.dumps(rows, default=str).count("acceptancesecret")}
+                    for name, rows in paths.items()}})
     union = await service.recall(scope_ref=[str(a), str(b)], query="explicit scope for each memory request")
     assert {row["memory_id"] for row in union["memories"]} == {saved[a]["memory_id"], saved[b]["memory_id"]}
     assert saved[c]["memory_id"] not in {row["memory_id"] for row in union["memories"]}
     assert all(row["knowledge_scope_id"] in {a, b} for row in union["memories"])
     memory_schema_validators()["mcp-recall-memory.output.schema.json"].validate(union)
+    observation = getattr(request.node, "_memory_observation", None)
+    if observation is not None:
+        observation["measurements"].append({"scenario": "explicit_scope_union", "scope_ids": [a, b],
+            "request_ids": [union["request_id"]], "status": "passed", "failed_paths": [], "fingerprints": {},
+            "paths": {"requested_memory_ids": [saved[a]["memory_id"], saved[b]["memory_id"]],
+                      "returned_memory_ids": [row["memory_id"] for row in union["memories"]],
+                      "foreign_count": sum(row["knowledge_scope_id"] not in {a, b} for row in union["memories"]),
+                      "quarantined_leakage": sum(row["memory_id"] == quarantined["memory_id"] for row in union["memories"])}})
 
 
 @pytest.mark.asyncio
