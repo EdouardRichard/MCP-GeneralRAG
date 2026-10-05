@@ -30,6 +30,7 @@ from rag_mcp.models.memory_salience import MemorySalience  # noqa: E402, F401
 from rag_mcp.models.memory_recall_run import MemoryRecallRun  # noqa: E402, F401
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta  # noqa: E402, F401
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode  # noqa: E402, F401
+from rag_mcp.models.memory_history import MemorySnapshot, MemoryArchive, MemoryArchivedEvent  # noqa: E402, F401
 from rag_mcp.models.runtime import (  # noqa: E402, F401
     InstanceRegistry,
     WriterLease,

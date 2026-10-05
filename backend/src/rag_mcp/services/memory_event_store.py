@@ -10,7 +10,7 @@ class MemoryEventStore:
     def __init__(self, session):
         self.session = session
 
-    async def append(self, event):
+    async def append(self, event, *, flush=True):
         if event.event_type in {"assert", "revise", "consolidate"}:
             payload = event.payload
             validation = await MemoryProvenanceValidator(self.session).validate({
@@ -24,8 +24,21 @@ class MemoryEventStore:
         elif event.event_type in {"grant", "rollback"} and event.actor != "management":
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
         self.session.add(event)
-        await self.session.flush()
+        if flush:
+            await self.session.flush()
         return event
+
+    async def append_many(self, events):
+        async with self.session.begin_nested():
+            for event in events:
+                await self.append(event, flush=False)
+            await self.session.flush()
+
+    async def replay_online(self, scope_id):
+        from rag_mcp.models.memory_history import MemoryArchivedEvent
+        archived = set((await self.session.execute(select(MemoryArchivedEvent.event_id).join(MemoryEvent)
+            .where(MemoryEvent.knowledge_scope_id == scope_id))).scalars().all())
+        return [event for event in await self.replay(scope_id) if event["event_id"] not in archived]
 
     async def replay(self, scope_id, *, through_event_id=None):
         if not isinstance(scope_id, int) or isinstance(scope_id, bool) or scope_id <= 0:
