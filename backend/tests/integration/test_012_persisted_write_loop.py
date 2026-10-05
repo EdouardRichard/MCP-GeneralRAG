@@ -6,14 +6,16 @@ from sqlalchemy import func, select
 
 from rag_mcp.models.chunk import Chunk
 from rag_mcp.models.knowledge_version import KnowledgeVersion
+from rag_mcp.models.knowledge_source import KnowledgeSource
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.services.memory_service import MemoryService
 
 
 async def published_payload(session):
-    chunk = await session.scalar(select(Chunk).join(KnowledgeVersion)
-                                 .where(KnowledgeVersion.status == "published").limit(1))
+    chunk = await session.scalar(select(Chunk).join(KnowledgeVersion).join(KnowledgeSource, Chunk.source_id == KnowledgeSource.source_id)
+                                 .where(KnowledgeVersion.status == "published", KnowledgeSource.status == "published",
+                                        func.length(Chunk.content_text) >= 300).limit(1))
     assert chunk is not None
     return {"scope_id": chunk.knowledge_scope_id, "kind": "semantic",
             "content": f"Acceptance note {uuid4()}: {chunk.content_text[:150]}",
