@@ -17,6 +17,7 @@ from typing import Any
 
 from rag_mcp.config import get_settings
 from rag_mcp.providers.base import RerankerProvider
+from rag_mcp.providers.model_cache import resolve_cached_model
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class LocalCPUReranker(RerankerProvider):
             logger.info("Loading reranker model %s (first use)...", self._model_name)
             from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(self._model_name)
+            self._model = CrossEncoder(resolve_cached_model(self._model_name), device='cpu')
             logger.info("Reranker model %s loaded", self._model_name)
         return self._model
 

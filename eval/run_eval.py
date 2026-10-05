@@ -127,18 +127,10 @@ class _EvalEmbeddingProvider(EmbeddingProvider):
         self._dimension = 1024  # bge-m3 default
         self._real_provider: EmbeddingProvider | None = None
 
-        # Try to load real provider
-        try:
-            from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
-            self._real_provider = LocalCPUEmbeddingProvider(self._model_name)
-            self._dimension = self._real_provider.get_dimension()
-            logger.info("Loaded real embedding provider: %s (dim=%d)", self._model_name, self._dimension)
-        except (ImportError, Exception) as exc:
-            logger.warning(
-                "Could not load real embedding provider (%s). "
-                "Using deterministic hash-based stub. Results will NOT reflect real retrieval quality.",
-                exc,
-            )
+        from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+        self._real_provider = LocalCPUEmbeddingProvider(self._model_name)
+        self._dimension = self._real_provider.get_dimension()
+        logger.info("Loaded real embedding provider: %s (dim=%d)", self._model_name, self._dimension)
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if self._real_provider:

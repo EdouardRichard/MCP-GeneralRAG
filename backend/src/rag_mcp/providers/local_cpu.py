@@ -15,6 +15,7 @@ from typing import Any
 
 from rag_mcp.config import get_settings
 from rag_mcp.providers.base import EmbeddingProvider
+from rag_mcp.providers.model_cache import resolve_cached_model
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class LocalCPUEmbeddingProvider(EmbeddingProvider):
             logger.info("Loading embedding model %s (first use)...", self._model_name)
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._model_name)
+            self._model = SentenceTransformer(resolve_cached_model(self._model_name), device='cpu')
             self._dimension = self._model.get_sentence_embedding_dimension()
             logger.info(
                 "Embedding model %s loaded (dim=%d)", self._model_name, self._dimension
