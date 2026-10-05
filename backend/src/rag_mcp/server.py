@@ -225,6 +225,7 @@ async def lifespan(app: FastAPI):
     _validate_provider_config_or_fail(settings)
     # 抢租约 -> 失败即拒启 (no silent degradation, FR-002)
     lease = await _acquire_writer_lease(settings)
+    app.state.writer_lease = lease
     # 007: sync builtin domain profiles (drift repair; fails startup on error, FR-005/SC-008)
     await _sync_domain_profiles()
     renewal_task = asyncio.create_task(
@@ -248,6 +249,7 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
         await _release_writer_lease(lease)
+        app.state.writer_lease = None
         from rag_mcp.db import dispose_engine
 
         await dispose_engine()
@@ -293,11 +295,13 @@ def create_app() -> FastAPI:
     from rag_mcp.api.knowledge_sources import router as ks_router
     from rag_mcp.api.runtime_metrics import router as runtime_metrics_router
     from rag_mcp.api.sse import router as sse_router
+    from rag_mcp.api.memory import router as memory_router
 
     app.include_router(projects_router)
     app.include_router(ks_router)
     app.include_router(runtime_metrics_router)
     app.include_router(sse_router)
+    app.include_router(memory_router)
 
     # Mount frontend static files if build exists
     frontend_dist = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
