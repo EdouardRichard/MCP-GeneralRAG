@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -111,7 +112,16 @@ class MemoryProjectionStore:
 
     async def _materialize_files(self, state, scope_id, event_id):
         self._check_scope(state, scope_id)
-        directory = self.root / str(scope_id) / str(event_id)
+        directory = (self.root / str(scope_id) / str(event_id)).resolve()
+        if not directory.is_relative_to(self.root):
+            raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
+        expected = set(state["files"]) | {"DIGEST.md", "INDEX.md"}
+        for path in directory.rglob("*"):
+            if path.is_file() or path.is_symlink():
+                if not path.resolve().is_relative_to(directory):
+                    raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
+                if path.relative_to(directory).as_posix() not in expected:
+                    path.unlink()
         for key, row in state["files"].items():
             path = (directory / key).resolve()
             if not path.is_relative_to(directory.resolve()) or row["knowledge_scope_id"] != scope_id:
@@ -202,23 +212,35 @@ class MemoryProjectionStore:
         points, _ = await asyncio.to_thread(self.qdrant._client.scroll,
             collection_name=current.payload["collection"], limit=10000, with_payload=True, with_vectors=True)
         actual["dense"] = {int(point.id): {**point.payload, "knowledge_scope_id": int(point.payload["knowledge_scope_id"])} for point in points}
-        if points and any(not point.vector or len(point.vector) != self.embedding.get_dimension() for point in points):
-            raise ValueError("invalid real vector projection")
+        expected_ids = sorted(state["dense"])
+        vectors = await self.embedding.embed_texts([state["dense"][mid]["content_text"] for mid in expected_ids])
+        expected_vectors = dict(zip(expected_ids, vectors, strict=True))
+        actual_vectors = {int(point.id): point.vector for point in points}
+        vectors_match = set(actual_vectors) == set(expected_vectors) and all(
+            isinstance(actual_vectors[mid], list) and len(actual_vectors[mid]) == len(vector)
+            and all(math.isclose(actual, expected, abs_tol=1e-6, rel_tol=1e-5)
+                    for actual, expected in zip(actual_vectors[mid], vector, strict=True))
+            for mid, vector in expected_vectors.items())
         for name, model in (("links", MemoryLink), ("summary", MemorySummaryNode)):
             rows = (await self.session.execute(select(model).where(model.knowledge_scope_id == scope_id, model.revision_id == revision))).scalars().all()
             actual[name] = {row.node_key: row.data for row in rows}
         directory = Path(current.payload["root"]) / str(scope_id) / str(revision)
         actual["file"] = {}
+        expected_paths = set(state["files"]) | {"DIGEST.md", "INDEX.md"}
+        extra_files = sorted(path.relative_to(directory).as_posix() for path in directory.rglob("*")
+                             if (path.is_file() or path.is_symlink()) and path.relative_to(directory).as_posix() not in expected_paths)
         for key, row in state["files"].items():
             path = directory / key
             if path.is_file():
                 actual["file"][key] = {**row, "body": path.read_text(encoding="utf-8")}
-        rows = (await self.session.execute(select(MemorySalience).join(MemoryEntry).where(MemoryEntry.knowledge_scope_id == scope_id))).scalars().all()
+        rows = (await self.session.execute(select(MemorySalience, MemoryEntry).join(MemoryEntry).where(MemoryEntry.knowledge_scope_id == scope_id))).all()
         actual["salience"] = {}
-        for row in rows:
+        for row, entry in rows:
             expected_row = state["salience"].get(row.memory_id)
             if expected_row:
-                actual["salience"][row.memory_id] = {**expected_row, "salience": row.salience,
+                actual["salience"][row.memory_id] = {"memory_id": row.memory_id,
+                    "knowledge_scope_id": entry.knowledge_scope_id, "evidence_refs": entry.evidence_refs,
+                    "provenance": entry.provenance, "inference_meta": entry.inference_meta, "salience": row.salience,
                     "access_count": row.access_count, "decay_rate": row.decay_rate,
                     "reinforced_at": row.reinforced_at.isoformat() if row.reinforced_at else None,
                     "last_access_at": row.last_access_at.isoformat() if row.last_access_at else None}
@@ -227,6 +249,12 @@ class MemoryProjectionStore:
             target = expected_relation if name == "relation" else state[key]
             fingerprint = projection_fingerprint(actual[name])
             matches = fingerprint == projection_fingerprint(target)
+            if name == "dense":
+                matches = matches and vectors_match
+                fingerprint = projection_fingerprint({"payload": actual[name], "vectors": actual_vectors})
+            if name == "file":
+                matches = matches and not extra_files and (directory / "INDEX.md").read_text(encoding="utf-8") == "\n".join(sorted(state["files"]))
+                fingerprint = projection_fingerprint({"files": actual[name], "unexpected": extra_files})
             if name == "summary":
                 matches = matches and (directory / "DIGEST.md").read_text(encoding="utf-8") == json.dumps(state["summary"], sort_keys=True, ensure_ascii=False)
             report[name] = {"count": len(actual[name]), "fingerprint": fingerprint, "matches_replay": matches}
