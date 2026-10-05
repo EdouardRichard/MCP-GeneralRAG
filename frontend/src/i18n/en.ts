@@ -6,6 +6,17 @@
  * domainProfiles.* / common.*) per contracts/frontend-locale-contract.md.
  */
 export const en = {
+  'memories.title': 'Memories',
+  'memories.scope': 'Knowledge scope',
+  'memories.refresh': 'Refresh memories',
+  'memories.noScope': 'No scope selected',
+  'memories.empty': 'No memories in this scope.',
+  'memories.id': 'Memory ID',
+  'memories.projection': 'Projection',
+  'memories.validFrom': 'Valid from',
+  'memories.validTo': 'Valid to',
+  'memories.injection': 'Injection risk',
+  'memories.evidence': 'Evidence',
   'common.appTitle': 'RAG MCP Management',
   'common.actions': 'Actions',
   'common.name': 'Name',

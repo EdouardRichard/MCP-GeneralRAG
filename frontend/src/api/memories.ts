@@ -1,19 +1,26 @@
 import { get } from './client';
 
 export interface MemorySummary {
-  memory_id: number;
-  knowledge_scope_id: number;
+  memory_id: string;
+  knowledge_scope_id: string;
   kind: string;
   provenance: string;
   status: string;
   content_excerpt?: string;
+  title?: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
   evidence_refs?: unknown[];
   injection_flags?: Record<string, unknown>;
   projection_status?: string;
 }
 
-export async function fetchMemories(scope?: string): Promise<MemorySummary[]> {
-  const query = scope ? `?scope=${encodeURIComponent(scope)}` : '';
-  const response = await get<{ memories?: MemorySummary[] } | MemorySummary[]>(`/api/memories${query}`);
-  return Array.isArray(response) ? response : response.memories ?? [];
+export interface MemoryScope { scope_id: string; name: string; slug: string; domain_key: string }
+
+export function fetchMemoryScopes(): Promise<{ items: MemoryScope[] }> {
+  return get('/api/memories/scopes');
+}
+
+export function fetchMemories(scope: string, offset = 0): Promise<{ memories: MemorySummary[]; total: number }> {
+  return get(`/api/memories?scope_ref=${encodeURIComponent(scope)}&offset=${offset}&limit=20`);
 }

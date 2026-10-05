@@ -9,6 +9,17 @@
 import type { LocaleDict } from './en';
 
 export const zh: LocaleDict = {
+  'memories.title': '记忆',
+  'memories.scope': '知识域',
+  'memories.refresh': '刷新记忆',
+  'memories.noScope': '未选择知识域',
+  'memories.empty': '此知识域暂无记忆。',
+  'memories.id': '记忆编号',
+  'memories.projection': '投影状态',
+  'memories.validFrom': '有效期开始',
+  'memories.validTo': '有效期结束',
+  'memories.injection': '注入风险',
+  'memories.evidence': '证据',
   'common.appTitle': 'RAG MCP 管理端',
   'common.actions': '操作',
   'common.name': '名称',

@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 import { ConfigProvider, Layout, Radio } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
@@ -26,6 +26,12 @@ function AppShell() {
             alignItems: 'center',
             justifyContent: 'space-between',
             paddingInline: 24,
+            flexWrap: 'wrap',
+            gap: 12,
+            height: 'auto',
+            minHeight: 64,
+            lineHeight: '1.5',
+            paddingBlock: 12,
           }}
         >
           <span>{t('common.appTitle')}</span>
@@ -42,6 +48,11 @@ function AppShell() {
             ]}
           />
         </Header>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 24, padding: '12px 24px', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+          <Link to="/">{t('projects.title')}</Link>
+          <Link to="/domain-profiles">{t('domainProfiles.title')}</Link>
+          <Link to="/memories">{t('memories.title')}</Link>
+        </nav>
         <Content style={{ padding: 24 }}>
           <Routes>
             <Route path="/" element={<ProjectsPage />} />

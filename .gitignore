@@ -20,6 +20,8 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+playwright-report/
+test-results/
 
 # IDE and operating system
 .vscode/

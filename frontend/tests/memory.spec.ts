@@ -19,11 +19,15 @@ test('memory browser selects explicit scope and shows lifecycle and provenance o
   await expect(page.getByText('101', { exact: true })).toBeVisible();
   await expect(page.getByText('complete', { exact: true })).toBeVisible();
   await expect(page.getByText('low', { exact: true })).toBeVisible();
+  await page.getByRole('heading', { name: 'Memories', exact: true }).click();
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/memory-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Memories', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/memory-mobile.png', fullPage: true });
+  const overflow = await page.locator('body *').evaluateAll(elements => elements.filter(element => element.getBoundingClientRect().right > window.innerWidth + 1).map(element => ({ tag: element.tagName, class: element.className, width: element.getBoundingClientRect().width })));
+  expect(overflow).toEqual([]);
 });
 
 test('empty and failed scopes remain visible and can be retried', async ({ page }) => {
