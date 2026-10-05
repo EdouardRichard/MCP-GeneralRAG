@@ -172,6 +172,33 @@ python eval/run_regression_011.py
   超容差记录为 within_tolerance=false 但 no_regression=true，006 冒烟
   先例——001 口径的既有漂移源于 008 语料重入库，非 011 引入）。
 
+### 012 记忆写读闭环最终验收
+
+最终串行后端回归和真实 DSH `temp` 双实例证据登记如下；报告路径使用新文件，
+不覆盖历史评测产物：
+
+```bash
+python -m pytest -vv --tb=short --durations=30 \
+  --junitxml=eval/runs/012-20261005-final-regression-h/backend-pytest.xml
+python eval/run_memory_acceptance.py \
+  --suite eval/runs/012-20261005-final-regression-h/backend-pytest.xml \
+  --trace eval/runs/012-20261005-final-regression-h/memory-trace.json \
+  --host eval/runs/012-20261005-final-regression-h/host-evidence.json \
+  --diagnostics eval/runs/012-20261005-final-regression-h/read-diagnostics.json \
+  --output eval/runs/012-20261005-final-regression-h/final-memory-report-verified.json \
+  --regression \
+    eval/runs/012-20261005-final-regression-f/retrieval/012_regression_summary.json \
+    eval/runs/012-20261005-final-regression-f/retrieval/012_002_regression_report.json \
+    eval/runs/012-20261005-final-regression-f/retrieval/012_004_regression_report.json \
+    eval/runs/012-20261005-final-regression-f/012_generic_domain_report.json \
+    eval/runs/012-20261005-final-regression-f/012_legal_domain_report.json \
+    eval/runs/012-20261005-final-regression-f/012_multi_domain_core_report.json
+```
+
+验收目录 `eval/runs/012-20261005-final-regression-h/` 保存 JUnit、memory trace、
+read diagnostics、DSH writer/reader 原始会话日志、host evidence 和 schema 校验后的
+最终报告。最终套件为 2142 passed、0 failed、0 skipped，SC-001–SC-017 全部通过。
+
 ### 可配置开关与默认路径
 
 图增强检索是**可配置开关**，不替换 001/002 确定性默认路径：

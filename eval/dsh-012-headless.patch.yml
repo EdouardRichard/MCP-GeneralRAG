@@ -1,0 +1,17 @@
+- insert:
+    - id: preset-012-writer-headless
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory012writer
+        transport: streamable-http
+        url: http://127.0.0.1:18080/mcp
+        failOnStartupError: true
+        toolCallTimeoutMs: 60000
+    - id: preset-012-reader-headless
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory012reader
+        transport: streamable-http
+        url: http://127.0.0.1:18081/mcp
+        failOnStartupError: true
+        toolCallTimeoutMs: 60000

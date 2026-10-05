@@ -1,0 +1,9 @@
+- insert:
+    - id: mcp-012-reader
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory012reader
+        transport: streamable-http
+        url: http://127.0.0.1:18081/mcp
+        failOnStartupError: true
+        toolCallTimeoutMs: 60000

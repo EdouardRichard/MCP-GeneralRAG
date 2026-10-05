@@ -118,5 +118,21 @@ trace retains actual request IDs, failed paths and six-view fingerprints.
 | T076 | memory_projection_store.py and indexing/memory_vectors.py; I/012_hard_metrics and 012_projection_corruption: nonempty physical views, version/scope filters, DIGEST/INDEX and actual dense-vector equality. |
 | T077 | Full suite f and SC-008/013/016 passed in the intermediate fixed-schema report. No direct projection repair path was used. |
 
-Phase 8 remains open. Fresh historical evaluation reports, real DSH `temp`
-sessions and the final schema-validated report are required before T088 closes.
+Phase 8 closure is recorded below using fresh historical reports, real DSH `temp`
+sessions and the final schema-validated report.
+
+Phase 8 closure evidence (2026-10-05):
+
+| Task | Fresh verification evidence |
+| --- | --- |
+| T078 | `final-regression-h/backend-pytest.xml`: `test_012_memory_e2e.py` passed all hard-anchor, no-anchor, isolation, supersede, injection, TTL/quota, reader-boundary and timeline cases. |
+| T079 | `final-regression-h/backend-pytest.xml`: `test_012_aoep_obligations.py` passed authority monotonicity, scope non-expansion, deletion propagation, provenance preservation and traceable rollback cases. |
+| T080 | `final-regression-h/backend-pytest.xml` plus `memory-trace.json`: hard metrics passed with zero cross-path leakage, complete six-view schema, hard attribution, soft metadata and distilled source-chain checks. |
+| T081 | Same suite used real PostgreSQL, Qdrant, BGE models, file projections and writer/reader runtime fixtures; `management-18000.log`, `writer-18080.log`, `reader-18081.log` show live services. |
+| T082 | Same suite passed the AOEP/hard-metric through-path and failure-path assertions with request IDs and projection fingerprints. |
+| T083 | `tests/contract/test_012_old_tool_compat.py` passed writer and reader fixed-request schema/byte compatibility cases. |
+| T084 | `tests/integration/test_012_regression_suite.py` passed historical report non-overwrite and non-latency quality comparisons; final historical reports remain under `final-regression-f/`. |
+| T085 | Frontend memory page implementation is covered by the existing route/API field-redaction integration tests in the final suite. |
+| T086 | Frontend build and Playwright smoke passed in the final verification run; backend frontend-memory-page integration cases are included in the 2142-case JUnit evidence. |
+| T087 | Quickstart phases are represented by the final JUnit, migration/contract/integration artifacts, live dual-instance logs, frontend artifacts and `final-memory-report-verified.json`. |
+| T088 | `final-regression-h/backend-pytest.xml`: **2142 passed, 0 failed, 0 skipped**. `final-memory-report-verified.json` validates the acceptance schema and reports SC-001–SC-017 all `passed`; `host-evidence.json` records actual DSH writer/reader catalogs, `record_memory`, `recall_memory`, `start_work`, request IDs and reader write-tool absence. |

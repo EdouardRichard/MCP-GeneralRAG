@@ -1,0 +1,39 @@
+- insert:
+    - id: preset-012-writer-acceptance
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: acceptance-012-writer
+        name: 012 Writer Acceptance
+        order: 91
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: You are running a focused MCP acceptance test. Follow the explicit test request and return actual tool results.
+          - id: memory-writer
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: memory012writer
+              transport: streamable-http
+              url: http://127.0.0.1:18080/mcp
+              failOnStartupError: true
+              toolCallTimeoutMs: 60000
+    - id: preset-012-reader-acceptance
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: acceptance-012-reader
+        name: 012 Reader Acceptance
+        order: 92
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: You are running a focused MCP acceptance test. Follow the explicit test request and return actual tool results.
+          - id: memory-reader
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: memory012reader
+              transport: streamable-http
+              url: http://127.0.0.1:18081/mcp
+              failOnStartupError: true
+              toolCallTimeoutMs: 60000
