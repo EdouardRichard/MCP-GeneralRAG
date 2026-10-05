@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class ScopeBindingError(ValueError):
@@ -29,16 +31,47 @@ class ScopeBindingService:
             raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
         return os.path.normcase(str(path.resolve(strict=False))).replace("\\", "/").rstrip("/")
 
+    @staticmethod
+    def normalize_remote(value):
+        if "://" not in value:
+            match = re.fullmatch(r"(?:[^/@:]+@)?([^/:]+):(.+)", value)
+            if not match:
+                raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
+            host, path = match.groups()
+        else:
+            parsed = urlsplit(value)
+            if parsed.scheme not in {"https", "http", "ssh", "git"} or not parsed.hostname or parsed.query or parsed.fragment:
+                raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
+            host, path = parsed.hostname, parsed.path
+            if parsed.port and parsed.port not in {22, 80, 443}:
+                host += ":" + str(parsed.port)
+        path = path.strip("/").removesuffix(".git")
+        if not path or any(part in {".", ".."} for part in path.split("/")):
+            raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
+        return host.lower() + "/" + path
+
     def resolve(self, scope_ref):
         if scope_ref.startswith("path:"):
-            value = self._normalize_path(scope_ref[5:])
+            raw = scope_ref[5:]
+            remote = "://" in raw or bool(re.match(r"(?:[^/@:]+@)?[^/:]+:[^\\/].+", raw)) and not re.match(r"^[A-Za-z]:", raw)
+            value = self.normalize_remote(raw) if remote else self._normalize_path(raw)
             candidates = []
             for binding in self.bindings:
-                if binding.get("status", "active") != "active" or binding.get("binding_kind") != "workdir_prefix":
+                if binding.get("status", "active") != "active":
                     continue
-                prefix = self._normalize_path(binding["binding_value"])
-                if value == prefix or value.startswith(prefix + "/"):
-                    candidates.append((len(prefix), binding.get("priority", 0), binding["knowledge_scope_id"]))
+                kind = binding.get("binding_kind")
+                matched, specificity = False, 0
+                if remote and kind == "git_remote":
+                    matched = value == self.normalize_remote(binding["binding_value"])
+                    specificity = len(value)
+                elif not remote and kind == "workdir_prefix":
+                    prefix = self._normalize_path(binding["binding_value"])
+                    matched = value == prefix or value.startswith(prefix + "/")
+                    specificity = len(prefix)
+                elif not remote and kind == "dir_name":
+                    matched = os.path.normcase(Path(value).name) == os.path.normcase(binding["binding_value"])
+                if matched:
+                    candidates.append((specificity, binding.get("priority", 0), binding["knowledge_scope_id"]))
             if not candidates:
                 raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
             best_len = max(item[0] for item in candidates)
@@ -50,6 +83,4 @@ class ScopeBindingService:
         raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
 
     def add_binding(self, binding, *, actor):
-        if actor != "management":
-            raise PermissionError("scope bindings are management-only")
-        self.bindings.append({**binding, "status": binding.get("status", "active")})
+        raise PermissionError("scope bindings require a management grant event")
