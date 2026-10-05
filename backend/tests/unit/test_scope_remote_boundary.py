@@ -22,3 +22,10 @@ def test_management_cannot_mutate_binding_projection_without_a_grant_event():
     service = ScopeBindingService([])
     with pytest.raises(PermissionError, match="grant"):
         service.add_binding({"knowledge_scope_id": 7}, actor="management")
+
+
+def test_persisted_canonical_remote_is_idempotently_resolved():
+    canonical = ScopeBindingService.normalize_remote("ssh://git@example.org:2222/team/repo.git")
+    assert ScopeBindingService.normalize_remote(canonical) == canonical
+    service = ScopeBindingService([{"binding_kind": "git_remote", "binding_value": canonical, "knowledge_scope_id": 7}])
+    assert service.resolve("path:ssh://git@example.org:2222/team/repo.git").scope_id == 7

@@ -66,5 +66,11 @@ async def test_retire_purge_and_binding_are_derived_management_events(db_session
                            binding_kind="workdir_prefix", binding_value=str(tmp_path))
     assert (await db_session.get(MemoryEvent, binding["event_id"])).event_type == "grant"
     assert await MemoryScopeResolver(db_session).resolve(f"path:{tmp_path}") == sid
+    later = await service.record({**payload, "content": "Procedure written after a scope binding."})
+    assert (await service.recall(scope_ref=[f"path:{tmp_path}"]))["memories"][0]["memory_id"] == later["memory_id"]
+    remote = f"https://example.org/acceptance/{uuid4()}.git"
+    await govern("binding", scope_id=sid, actor="management", reason="remote association",
+                 binding_kind="git_remote", binding_value=remote)
+    assert await MemoryScopeResolver(db_session).resolve(f"path:{remote}") == sid
     with pytest.raises(PermissionError):
         await govern("binding", scope_id=sid, actor="mcp", reason="model escalation", binding_kind="workdir_prefix", binding_value=str(tmp_path / "other"))
