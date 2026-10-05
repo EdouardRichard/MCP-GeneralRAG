@@ -16,21 +16,21 @@
 
 ### 1.1 先红测试
 
-- [ ] T001 [P] [US1] 编写 12.0 migration DDL 断言，先在 `backend/tests/unit/test_migration_012_memory.py` 验证缺少 `memory_events`、六投影表、policy 列和索引时失败（FR-001–FR-005）。
-- [ ] T002 [P] [US1] 编写事件宽 CHECK、非空 scope、时间字段和 append-only 访问边界测试，在 `backend/tests/unit/test_memory_event_constraints.py` 先红（FR-002–FR-004）。
-- [ ] T003 [P] [US7] 编写四个内置域 memory_policy 默认值测试，在 `backend/tests/unit/test_memory_policy_defaults.py` 先红（FR-014a）。
-- [ ] T004 [P] [US1] 编写事件回放与在线投影等价性测试骨架，在 `backend/tests/unit/test_memory_projection_equivalence.py` 先红；建立五不变量独立断言：权威单调、范围不扩张、删除传播、provenance 保全、回滚可溯（FR-006–FR-008）。
+- [X] T001 [P] [US1] 编写 12.0 migration DDL 断言，先在 `backend/tests/unit/test_migration_012_memory.py` 验证缺少 `memory_events`、六投影表、policy 列和索引时失败（FR-001–FR-005）。
+- [X] T002 [P] [US1] 编写事件宽 CHECK、非空 scope、时间字段和 append-only 访问边界测试，在 `backend/tests/unit/test_memory_event_constraints.py` 先红（FR-002–FR-004）。
+- [X] T003 [P] [US7] 编写四个内置域 memory_policy 默认值测试，在 `backend/tests/unit/test_memory_policy_defaults.py` 先红（FR-014a）。
+- [X] T004 [P] [US1] 编写事件回放与在线投影等价性测试骨架，在 `backend/tests/unit/test_memory_projection_equivalence.py` 先红；建立五不变量独立断言：权威单调、范围不扩张、删除传播、provenance 保全、回滚可溯（FR-006–FR-008）。
 
 ### 1.2 实现
 
-- [ ] T005 [US1] 新增 `backend/alembic/versions/0080_memory_foundation.py`，创建 `memory_events`、`memory_entries`、`scope_bindings`、`sessions`、`memory_salience`、`memory_recall_runs` 和六投影元数据表，加入索引、FK、宽 CHECK 和不可变事件注释（FR-001–FR-005）。
-- [ ] T006 [US1] 在 `backend/src/rag_mcp/models/memory_event.py` 定义事件 ORM，覆盖七类事件、六轴 JSONB、时间、actor/session/request 字段和查询索引（FR-002–FR-004）。
-- [ ] T007 [P] [US1] 在 `backend/src/rag_mcp/models/memory_projection.py` 定义 `MemoryEntry`、投影状态/指纹和自引用 supersede 关系（FR-009–FR-010）。
-- [ ] T008 [P] [US2] 在 `backend/src/rag_mcp/models/scope_binding.py`、`session.py`、`memory_salience.py`、`memory_recall_run.py` 定义对应 ORM 和 append-only/TTL 字段（FR-011–FR-013、FR-032）。
-- [ ] T009 [US7] 在 `backend/src/rag_mcp/models/domain_profile.py` 增加 `memory_policy` JSONB，并在 `backend/src/rag_mcp/config/domain_profiles.py` 为 se-project/generic/personal/legal 生成同值默认策略（FR-014、FR-014a）。
-- [ ] T010 [US1] 更新 `backend/src/rag_mcp/models/__init__.py` 导出新增模型，确保 Alembic metadata 能发现全部表（FR-001–FR-014）。
-- [ ] T011 [US1] 实现 `backend/tests/unit/test_memory_projection_equivalence.py` 的最小 reducer fixture 和规范化 fingerprint 比较器，使 T004 通过并覆盖 assert/revise/retract/access（FR-006–FR-008）。
-- [ ] T012 [US1] 运行 migration helper、DDL parity 和四档案 seed 测试，修正 `backend/tests/unit/test_migrations_helper.py` 兼容点并记录 TDD 红绿证据（FR-001–FR-014）。
+- [X] T005 [US1] 新增 `backend/alembic/versions/0080_memory_foundation.py`，创建 `memory_events`、`memory_entries`、`scope_bindings`、`sessions`、`memory_salience`、`memory_recall_runs` 和六投影元数据表，加入索引、FK、宽 CHECK 和不可变事件注释（FR-001–FR-005）。
+- [X] T006 [US1] 在 `backend/src/rag_mcp/models/memory_event.py` 定义事件 ORM，覆盖七类事件、六轴 JSONB、时间、actor/session/request 字段和查询索引（FR-002–FR-004）。
+- [X] T007 [P] [US1] 在 `backend/src/rag_mcp/models/memory_projection.py` 定义 `MemoryEntry`、投影状态/指纹和自引用 supersede 关系（FR-009–FR-010）。
+- [X] T008 [P] [US2] 在 `backend/src/rag_mcp/models/scope_binding.py`、`session.py`、`memory_salience.py`、`memory_recall_run.py` 定义对应 ORM 和 append-only/TTL 字段（FR-011–FR-013、FR-032）。
+- [X] T009 [US7] 在 `backend/src/rag_mcp/models/domain_profile.py` 增加 `memory_policy` JSONB，并在 `backend/src/rag_mcp/config/domain_profiles.py` 为 se-project/generic/personal/legal 生成同值默认策略（FR-014、FR-014a）。
+- [X] T010 [US1] 更新 `backend/src/rag_mcp/models/__init__.py` 导出新增模型，确保 Alembic metadata 能发现全部表（FR-001–FR-014）。
+- [X] T011 [US1] 实现 `backend/tests/unit/test_memory_projection_equivalence.py` 的最小 reducer fixture 和规范化 fingerprint 比较器，使 T004 通过并覆盖 assert/revise/retract/access（FR-006–FR-008）。
+- [X] T012 [US1] 运行 migration helper、DDL parity 和四档案 seed 测试，修正 `backend/tests/unit/test_migrations_helper.py` 兼容点并记录 TDD 红绿证据（FR-001–FR-014）。
 
 ## Phase 2：同事务物化骨架
 
@@ -40,19 +40,19 @@
 
 ### 2.1 先红测试
 
-- [ ] T013 [P] [US1] 在 `backend/tests/unit/test_memory_transaction.py` 编写事件 INSERT 与 projection UPSERT 同事务测试，先红（FR-006）。
-- [ ] T014 [P] [US1] 在 `backend/tests/unit/test_memory_read_only.py` 编写事件仓储无 update/delete、六类业务投影仓储禁止直接写入且仅接受 reducer 产物的否定测试，先红（FR-001、FR-005）。
-- [ ] T015 [P] [US1] 在 `backend/tests/integration/test_012_memory_projection_equivalence.py` 编写在线物化/日志回放六类业务投影 fingerprint 对等测试；逐类断言非空数据、状态变更、删除传播、provenance 链和回滚 fingerprint，先红（FR-005–FR-008、SC-008）。
-- [ ] T016 [P] [US1] 在 `backend/tests/integration/test_012_memory_failure_visibility.py` 编写 PG、向量、链接、摘要、文件和显著性投影失败及未完成写入不可召回/不可进工作包的测试，先红（FR-006，SC-007）。
+- [X] T013 [P] [US1] 在 `backend/tests/unit/test_memory_transaction.py` 编写事件 INSERT 与 projection UPSERT 同事务测试，先红（FR-006）。
+- [X] T014 [P] [US1] 在 `backend/tests/unit/test_memory_read_only.py` 编写事件仓储无 update/delete、六类业务投影仓储禁止直接写入且仅接受 reducer 产物的否定测试，先红（FR-001、FR-005）。
+- [X] T015 [P] [US1] 在 `backend/tests/integration/test_012_memory_projection_equivalence.py` 编写在线物化/日志回放六类业务投影 fingerprint 对等测试；逐类断言非空数据、状态变更、删除传播、provenance 链和回滚 fingerprint，先红（FR-005–FR-008、SC-008）。
+- [X] T016 [P] [US1] 在 `backend/tests/integration/test_012_memory_failure_visibility.py` 编写 PG、向量、链接、摘要、文件和显著性投影失败及未完成写入不可召回/不可进工作包的测试，先红（FR-006，SC-007）。
 
 ### 2.2 实现
 
-- [ ] T017 [US1] 实现 `backend/src/rag_mcp/services/memory_event_store.py` 的 append-only insert/replay API，禁止提供 update/delete 方法（FR-001–FR-004）。
-- [ ] T018 [US1] 实现 `backend/src/rag_mcp/services/memory_projection_store.py` 的事务内 UPSERT、状态指纹和投影完成状态，所有写入口只接受 reducer 产物（FR-005–FR-007）。
-- [ ] T019 [US1] 在 `backend/src/rag_mcp/services/memory_service.py` 建立事务协调器，执行事件 INSERT→关系 UPSERT 并在 commit 前校验同步完成状态（FR-006）。
-- [ ] T020 [US1] 实现 `backend/src/rag_mcp/services/memory_reducer.py`，统一在线物化与 rebuild 的事件语义、supersede 状态和规范化 fingerprint（FR-006–FR-008）。
-- [ ] T021 [US1] 在 `backend/tests/unit/test_memory_read_only.py` 增加静态 grep/接口枚举和数据库权限断言，证明 memory_events、六类业务投影没有 UPDATE/DELETE 代码旁路；runtime、repository、数据库权限三层均仅允许 reducer 产物写入（FR-001、FR-005）。
-- [ ] T022 [US1] 运行 Phase 2 单测和集成测试，确认 T013–T016 由红转绿并记录失败闭合/可恢复状态（FR-006–FR-008）。
+- [X] T017 [US1] 实现 `backend/src/rag_mcp/services/memory_event_store.py` 的 append-only insert/replay API，禁止提供 update/delete 方法（FR-001–FR-004）。
+- [X] T018 [US1] 实现 `backend/src/rag_mcp/services/memory_projection_store.py` 的事务内 UPSERT、状态指纹和投影完成状态，所有写入口只接受 reducer 产物（FR-005–FR-007）。
+- [X] T019 [US1] 在 `backend/src/rag_mcp/services/memory_service.py` 建立事务协调器，执行事件 INSERT→关系 UPSERT 并在 commit 前校验同步完成状态（FR-006）。
+- [X] T020 [US1] 实现 `backend/src/rag_mcp/services/memory_reducer.py`，统一在线物化与 rebuild 的事件语义、supersede 状态和规范化 fingerprint（FR-006–FR-008）。
+- [X] T021 [US1] 在 `backend/tests/unit/test_memory_read_only.py` 增加静态 grep/接口枚举和数据库权限断言，证明 memory_events、六类业务投影没有 UPDATE/DELETE 代码旁路；runtime、repository、数据库权限三层均仅允许 reducer 产物写入（FR-001、FR-005）。
+- [X] T022 [US1] 运行 Phase 2 单测和集成测试，确认 T013–T016 由红转绿并记录失败闭合/可恢复状态（FR-006–FR-008）。
 
 ## Phase 3：scope 解析与绑定
 
@@ -62,18 +62,18 @@
 
 ### 3.1 先红测试
 
-- [ ] T023 [P] [US2] 在 `backend/tests/unit/test_scope_binding_service.py` 编写五种 scope_ref、绝对路径规范化、Git remote canonicalization、大小写、软链接、相对路径和最长前缀测试，先红（FR-015–FR-016）。
-- [ ] T024 [P] [US2] 编写同前缀同 priority、多候选、disabled binding、无命中和 candidates 错误测试，先红（FR-016）。
-- [ ] T025 [P] [US2] 在 `backend/tests/integration/test_012_binding_escalation.py` 编写 MCP/模型尝试写 scope_bindings 的提权拒绝测试，先红（FR-011）。
-- [ ] T026 [P] [US2] 在 `backend/tests/integration/test_012_memory_isolation.py` 编写 A/B scope 的 event log、relation、vector、file 四路径零泄漏测试，覆盖单域、显式多域并集、无命中和路径/remote 解析失败，先红（FR-017，SC-002）。
+- [X] T023 [P] [US2] 在 `backend/tests/unit/test_scope_binding_service.py` 编写五种 scope_ref、绝对路径规范化、Git remote canonicalization、大小写、软链接、相对路径和最长前缀测试，先红（FR-015–FR-016）。
+- [X] T024 [P] [US2] 编写同前缀同 priority、多候选、disabled binding、无命中和 candidates 错误测试，先红（FR-016）。
+- [X] T025 [P] [US2] 在 `backend/tests/integration/test_012_binding_escalation.py` 编写 MCP/模型尝试写 scope_bindings 的提权拒绝测试，先红（FR-011）。
+- [X] T026 [P] [US2] 在 `backend/tests/integration/test_012_memory_isolation.py` 编写 A/B scope 的 event log、relation、vector、file 四路径零泄漏测试，覆盖单域、显式多域并集、无命中和路径/remote 解析失败，先红（FR-017，SC-002）。
 
 ### 3.2 实现
 
-- [ ] T027 [US2] 实现 `backend/src/rag_mcp/services/scope_binding_service.py`，执行路径/remote 规范化、最长前缀、priority、唯一命中和歧义候选返回（FR-015–FR-016）。
-- [ ] T028 [US2] 扩展 `backend/src/rag_mcp/services/scope_resolver.py` 接入第五种 `path:` 形态，复用 007 双轨错误码且禁止默认 scope 回落（FR-015–FR-017）。
-- [ ] T029 [US2] 在 `backend/src/rag_mcp/api/memory.py` 预留管理面 scope binding CRUD，并在 API 层拒绝 MCP/非管理调用（FR-011、FR-035）。
-- [ ] T030 [US2] 将 scope resolver 接入 `backend/src/rag_mcp/services/memory_service.py`、`backend/src/rag_mcp/mcp/recall_memory.py`、`backend/src/rag_mcp/mcp/start_work.py` 和 projection adapters，确保事件/关系/向量/文件使用同一 scope（FR-017）。
-- [ ] T031 [US2] 增加 `backend/tests/contract/test_memory_scope_contract.py` 绑定和隔离错误码/候选契约测试，运行 T023–T026 并逐路径确认 event log、relation、vector、file 串库为 0，显式多域结果仅为请求并集（FR-015–FR-017、SC-002）。
+- [X] T027 [US2] 实现 `backend/src/rag_mcp/services/scope_binding_service.py`，执行路径/remote 规范化、最长前缀、priority、唯一命中和歧义候选返回（FR-015–FR-016）。
+- [X] T028 [US2] 扩展 `backend/src/rag_mcp/services/scope_resolver.py` 接入第五种 `path:` 形态，复用 007 双轨错误码且禁止默认 scope 回落（FR-015–FR-017）。
+- [X] T029 [US2] 在 `backend/src/rag_mcp/api/memory.py` 预留管理面 scope binding CRUD，并在 API 层拒绝 MCP/非管理调用（FR-011、FR-035）。
+- [X] T030 [US2] 将 scope resolver 接入 `backend/src/rag_mcp/services/memory_service.py`、`backend/src/rag_mcp/mcp/recall_memory.py`、`backend/src/rag_mcp/mcp/start_work.py` 和 projection adapters，确保事件/关系/向量/文件使用同一 scope（FR-017）。
+- [X] T031 [US2] 增加 `backend/tests/contract/test_memory_scope_contract.py` 绑定和隔离错误码/候选契约测试，运行 T023–T026 并逐路径确认 event log、relation、vector、file 串库为 0，显式多域结果仅为请求并集（FR-015–FR-017、SC-002）。
 
 ## Phase 4：写入管线
 
@@ -83,22 +83,22 @@
 
 ### 4.1 先红测试
 
-- [ ] T032 [P] [US3] 在 `backend/tests/unit/test_memory_validators.py` 编写 kind、hard evidence（逐条 attribution re-verification：source ID/version/position/content）、soft 五元 metadata、distilled source-chain、confidence、content length、scope 和错误码全拒绝矩阵，先红（FR-020–FR-022）。
-- [ ] T033 [P] [US3] 在 `backend/tests/unit/test_memory_redaction_injection.py` 编写凭据替换、字段名保留、高危注入 flags/quarantined 和 detector failure 测试，先红（FR-020–FR-021）。
-- [ ] T034 [P] [US3] 在 `backend/tests/unit/test_memory_supersede.py` 编写同域 active 目标、跨域/不存在/非 active 目标和 valid interval 关闭测试，先红（FR-020–FR-021）。
-- [ ] T035 [P] [US7] 在 `backend/tests/unit/test_memory_quota_ttl.py` 编写 5000 quota fail-loud、kind TTL 派生和无静默驱逐测试，先红（FR-014a、FR-033）。
-- [ ] T036 [P] [US3] 在 `backend/tests/integration/test_012_record_memory.py` 编写硬锚闭环、无锚拒写、跨域证据拒写、脱敏和注入隔离 E2E，先红（SC-003–SC-004）。
+- [X] T032 [P] [US3] 在 `backend/tests/unit/test_memory_validators.py` 编写 kind、hard evidence（逐条 attribution re-verification：source ID/version/position/content）、soft 五元 metadata、distilled source-chain、confidence、content length、scope 和错误码全拒绝矩阵，先红（FR-020–FR-022）。
+- [X] T033 [P] [US3] 在 `backend/tests/unit/test_memory_redaction_injection.py` 编写凭据替换、字段名保留、高危注入 flags/quarantined 和 detector failure 测试，先红（FR-020–FR-021）。
+- [X] T034 [P] [US3] 在 `backend/tests/unit/test_memory_supersede.py` 编写同域 active 目标、跨域/不存在/非 active 目标和 valid interval 关闭测试，先红（FR-020–FR-021）。
+- [X] T035 [P] [US7] 在 `backend/tests/unit/test_memory_quota_ttl.py` 编写 5000 quota fail-loud、kind TTL 派生和无静默驱逐测试，先红（FR-014a、FR-033）。
+- [X] T036 [P] [US3] 在 `backend/tests/integration/test_012_record_memory.py` 编写硬锚闭环、无锚拒写、跨域证据拒写、脱敏和注入隔离 E2E，先红（SC-003–SC-004）。
 
 ### 4.2 实现
 
-- [ ] T037 [US3] 实现 `backend/src/rag_mcp/services/memory_validators.py`，集中 scope、kind、provenance、evidence published/same-scope、inference metadata、confidence 和错误码校验（FR-020–FR-022）。
-- [ ] T038 [US3] 在 `backend/src/rag_mcp/services/memory_service.py` 按九步接线：scope→脱敏→provenance→注入→supersede→quota/TTL→事件+关系事务→向量 intent→session（FR-020）。
-- [ ] T039 [US3] 接入 `backend/src/rag_mcp/parsers/credential_redactor.py` 和 `backend/src/rag_mcp/agents/injection_detector.py`，保证落库前单一净化点、原凭据零出现和 quarantined 双排除（FR-020–FR-021）。
-- [ ] T040 [US3] 实现 supersede 目标校验、旧条目 valid_to/superseded_by 更新和硬记忆保护边界（FR-010、FR-021）。
-- [ ] T041 [US3] 实现同 scope 脱敏正文+规范化元数据重复提交判定、`MEMORY_CONTENT_CONFLICT` 和并发幂等锁，禁止恢复非 active 条目（FR-019a、FR-022）。
-- [ ] T042 [US7] 实现配额/TTL 派生、session 登记和 `memory_recall_runs` 审计写入，保留运行态 TTL 边界（FR-012–FR-014、FR-033）。
-- [ ] T043 [US3] 增加 `backend/tests/integration/test_012_provenance_no_bypass.py`，对所有 memory write 入口做 grep/静态注册审计，证明无例外路径且 provenance、hard anchor、hard 逐条 attribution re-verification、soft 五元 metadata、distilled source-chain 均 100%（FR-020–FR-022，SC-003、SC-008）。
-- [ ] T044 [US3] 运行 T032–T036、T043，确认九步顺序、失败闭合、脱敏字段名保留、quarantined 默认不可见和重复提交判定全部由红转绿（FR-020–FR-022）。
+- [X] T037 [US3] 实现 `backend/src/rag_mcp/services/memory_validators.py`，集中 scope、kind、provenance、evidence published/same-scope、inference metadata、confidence 和错误码校验（FR-020–FR-022）。
+- [X] T038 [US3] 在 `backend/src/rag_mcp/services/memory_service.py` 按九步接线：scope→脱敏→provenance→注入→supersede→quota/TTL→事件+关系事务→向量 intent→session（FR-020）。
+- [X] T039 [US3] 接入 `backend/src/rag_mcp/parsers/credential_redactor.py` 和 `backend/src/rag_mcp/agents/injection_detector.py`，保证落库前单一净化点、原凭据零出现和 quarantined 双排除（FR-020–FR-021）。
+- [X] T040 [US3] 实现 supersede 目标校验、旧条目 valid_to/superseded_by 更新和硬记忆保护边界（FR-010、FR-021）。
+- [X] T041 [US3] 实现同 scope 脱敏正文+规范化元数据重复提交判定、`MEMORY_CONTENT_CONFLICT` 和并发幂等锁，禁止恢复非 active 条目（FR-019a、FR-022）。
+- [X] T042 [US7] 实现配额/TTL 派生、session 登记和 `memory_recall_runs` 审计写入，保留运行态 TTL 边界（FR-012–FR-014、FR-033）。
+- [X] T043 [US3] 增加 `backend/tests/integration/test_012_provenance_no_bypass.py`，对所有 memory write 入口做 grep/静态注册审计，证明无例外路径且 provenance、hard anchor、hard 逐条 attribution re-verification、soft 五元 metadata、distilled source-chain 均 100%（FR-020–FR-022，SC-003、SC-008）。
+- [X] T044 [US3] 运行 T032–T036、T043，确认九步顺序、失败闭合、脱敏字段名保留、quarantined 默认不可见和重复提交判定全部由红转绿（FR-020–FR-022）。
 
 ## Phase 5：显著性与读路径
 
@@ -108,21 +108,21 @@
 
 ### 5.1 先红测试
 
-- [ ] T045 [P] [US7] 在 `backend/tests/unit/test_salience_service.py` 编写冷启动 0、`f(access,recency,reinforcement)`、β=0.05/day、γ=1/access、强制衰减和无衰减禁排测试，先红（FR-026a、FR-032）。
-- [ ] T046 [P] [US4] 在 `backend/tests/unit/test_rrf_memory.py` 编写 dense/recency/kind/salience 四路权重、旧 dense/sparse/graph 三路兼容和确定性 tie-break 测试，先红（FR-026）。
-- [ ] T047 [P] [US4] 在 `backend/tests/unit/test_memory_recall_modes.py` 编写 by_id/timeline/filtered/semantic 四模式、limit×4/下限40、as_of valid 矩阵和 superseded 显式可见测试，先红（FR-023–FR-028）。
-- [ ] T048 [P] [US4] 在 `backend/tests/integration/test_012_memory_status_staleness.py` 构造 Qdrant 陈旧 status payload，编写“不下推 status 无假阴性”对照实验，先红（FR-025）。
-- [ ] T049 [P] [US4] 在 `backend/tests/integration/test_012_memory_recall_observability.py` 编写 6000 字预算、300 字 excerpt、四态 completion、counts、failed_paths 和 3 秒超时测试，先红（FR-027–FR-028）。
+- [X] T045 [P] [US7] 在 `backend/tests/unit/test_salience_service.py` 编写冷启动 0、`f(access,recency,reinforcement)`、β=0.05/day、γ=1/access、强制衰减和无衰减禁排测试，先红（FR-026a、FR-032）。
+- [X] T046 [P] [US4] 在 `backend/tests/unit/test_rrf_memory.py` 编写 dense/recency/kind/salience 四路权重、旧 dense/sparse/graph 三路兼容和确定性 tie-break 测试，先红（FR-026）。
+- [X] T047 [P] [US4] 在 `backend/tests/unit/test_memory_recall_modes.py` 编写 by_id/timeline/filtered/semantic 四模式、limit×4/下限40、as_of valid 矩阵和 superseded 显式可见测试，先红（FR-023–FR-028）。
+- [X] T048 [P] [US4] 在 `backend/tests/integration/test_012_memory_status_staleness.py` 构造 Qdrant 陈旧 status payload，编写“不下推 status 无假阴性”对照实验，先红（FR-025）。
+- [X] T049 [P] [US4] 在 `backend/tests/integration/test_012_memory_recall_observability.py` 编写 6000 字预算、300 字 excerpt、四态 completion、counts、failed_paths 和 3 秒超时测试，先红（FR-027–FR-028）。
 
 ### 5.2 实现
 
-- [ ] T050 [US7] 实现 `backend/src/rag_mcp/services/salience_service.py` 纯函数、access 事件物化和强制衰减闸门，默认 salience 0/β 0.05/γ 1.0（FR-026a、FR-032）。
-- [ ] T051 [US4] 扩展 `backend/src/rag_mcp/fusion/rrf.py` 支持可选四路权重，保持既有 dense/sparse/graph 调用签名、字段和排序兼容（FR-026）。
-- [ ] T052 [US4] 扩展 `backend/src/rag_mcp/indexing/qdrant_client.py` 支持 `memories_dense_{index_version}`、scope/kind/session payload filter 和 memory point upsert；显式不加入 status filter（FR-024–FR-025）。
-- [ ] T053 [US4] 在 `backend/src/rag_mcp/services/memory_service.py` 实现四模式 recall：ID/timeline/filtered 走 PG，semantic/hybrid 走 dense→PG 后置核验→RRF（FR-023–FR-026）。
-- [ ] T054 [US4] 实现 `as_of` valid 线过滤、superseded/include_superseded、include_delivered、agent/session/time_window 和 no-filter-relaxation（FR-023、FR-027）。
-- [ ] T055 [US4] 实现召回裁剪、counts、memory_notice/gaps/error、partial/no_evidence/failed 和 memory_recall_runs 审计（FR-027–FR-028）。
-- [ ] T056 [US4] 运行 T045–T049，产出衰减/无衰减自锁对照、status 陈旧 payload 假阴性实验和召回预算报告（FR-025–FR-028，SC-006、SC-015）。
+- [X] T050 [US7] 实现 `backend/src/rag_mcp/services/salience_service.py` 纯函数、access 事件物化和强制衰减闸门，默认 salience 0/β 0.05/γ 1.0（FR-026a、FR-032）。
+- [X] T051 [US4] 扩展 `backend/src/rag_mcp/fusion/rrf.py` 支持可选四路权重，保持既有 dense/sparse/graph 调用签名、字段和排序兼容（FR-026）。
+- [X] T052 [US4] 扩展 `backend/src/rag_mcp/indexing/qdrant_client.py` 支持 `memories_dense_{index_version}`、scope/kind/session payload filter 和 memory point upsert；显式不加入 status filter（FR-024–FR-025）。
+- [X] T053 [US4] 在 `backend/src/rag_mcp/services/memory_service.py` 实现四模式 recall：ID/timeline/filtered 走 PG，semantic/hybrid 走 dense→PG 后置核验→RRF（FR-023–FR-026）。
+- [X] T054 [US4] 实现 `as_of` valid 线过滤、superseded/include_superseded、include_delivered、agent/session/time_window 和 no-filter-relaxation（FR-023、FR-027）。
+- [X] T055 [US4] 实现召回裁剪、counts、memory_notice/gaps/error、partial/no_evidence/failed 和 memory_recall_runs 审计（FR-027–FR-028）。
+- [X] T056 [US4] 运行 T045–T049，产出衰减/无衰减自锁对照、status 陈旧 payload 假阴性实验和召回预算报告（FR-025–FR-028，SC-006、SC-015）。
 
 ## Phase 6：MCP 契约
 
@@ -132,20 +132,20 @@
 
 ### 6.1 先红测试
 
-- [ ] T057 [P] [US4] 在 `backend/tests/contract/test_memory_schemas.py` 加载并验证 `contracts/` 下六个 MCP schema、memory entry/event、error-codes 和 management schema，先红（FR-018–FR-031）。
-- [ ] T058 [P] [US5] 在 `backend/tests/unit/test_memory_mcp_annotations.py` 编写三工具 ToolAnnotations、参数默认值、字段顺序和 envelope/body 分离断言，先红（FR-018、FR-023、FR-029–FR-031）。
-- [ ] T059 [P] [US6] 在 `backend/tests/unit/test_memory_mcp_registration.py` 编写 writer 六工具、reader 五工具和 reader 无 `record_memory` 测试，先红（FR-018）。
-- [ ] T060 [P] [US6] 在 `backend/tests/contract/test_memory_byte_compat.py` 编写旧三工具响应/schema 逐字节快照和错误码只增不删测试，先红（FR-022、FR-039）。
+- [X] T057 [P] [US4] 在 `backend/tests/contract/test_memory_schemas.py` 加载并验证 `contracts/` 下六个 MCP schema、memory entry/event、error-codes 和 management schema，先红（FR-018–FR-031）。
+- [X] T058 [P] [US5] 在 `backend/tests/unit/test_memory_mcp_annotations.py` 编写三工具 ToolAnnotations、参数默认值、字段顺序和 envelope/body 分离断言，先红（FR-018、FR-023、FR-029–FR-031）。
+- [X] T059 [P] [US6] 在 `backend/tests/unit/test_memory_mcp_registration.py` 编写 writer 六工具、reader 五工具和 reader 无 `record_memory` 测试，先红（FR-018）。
+- [X] T060 [P] [US6] 在 `backend/tests/contract/test_memory_byte_compat.py` 编写旧三工具响应/schema 逐字节快照和错误码只增不删测试，先红（FR-022、FR-039）。
 
 ### 6.2 实现
 
-- [ ] T061 [US3] 新增 `backend/src/rag_mcp/mcp/record_memory.py`，以 FastMCP 签名注册非只读、非破坏、非幂等工具并映射 `MemoryService.record`（FR-018–FR-022）。
-- [ ] T062 [US4] 新增 `backend/src/rag_mcp/mcp/recall_memory.py`，注册只读工具并序列化四态、memories、counts、gaps/error/request envelope（FR-023–FR-028）。
-- [ ] T063 [US5] 新增 `backend/src/rag_mcp/mcp/start_work.py`，实现 digest 优先、working_set、三档预算、read_guidance 永不裁剪、稳定包体和 fingerprint（FR-029–FR-031）。
-- [ ] T064 [US6] 扩展 `backend/src/rag_mcp/mcp/__init__.py` 与 `backend/_run_mcp.py`，增加 mode 参数和 writer/reader 工具清单，保持既有注册顺序与依赖注入（FR-018、FR-039）。
-- [ ] T065 [US5] 在 `backend/src/rag_mcp/mcp/serialization.py` 固化 structuredContent→确定性 JSON 镜像，剔除 request_id/时间等易变字段出稳定包体，禁止第二事实渲染路径（FR-031、FR-039）。
-- [ ] T066 [US6] 扩展 `backend/src/rag_mcp/errors.py` 和 `specs/012-memory-foundation-write-read-loop/contracts/error-codes.json`，确保新增枚举只增不删并保留 001–011 旧码（FR-022）。
-- [ ] T067 [US6] 运行 T057–T060、真实 FastMCP tool-list 和旧客户端快照验收，修正 schema/annotation/byte compatibility 直到全部转绿（FR-018–FR-039）。
+- [X] T061 [US3] 新增 `backend/src/rag_mcp/mcp/record_memory.py`，以 FastMCP 签名注册非只读、非破坏、非幂等工具并映射 `MemoryService.record`（FR-018–FR-022）。
+- [X] T062 [US4] 新增 `backend/src/rag_mcp/mcp/recall_memory.py`，注册只读工具并序列化四态、memories、counts、gaps/error/request envelope（FR-023–FR-028）。
+- [X] T063 [US5] 新增 `backend/src/rag_mcp/mcp/start_work.py`，实现 digest 优先、working_set、三档预算、read_guidance 永不裁剪、稳定包体和 fingerprint（FR-029–FR-031）。
+- [X] T064 [US6] 扩展 `backend/src/rag_mcp/mcp/__init__.py` 与 `backend/_run_mcp.py`，增加 mode 参数和 writer/reader 工具清单，保持既有注册顺序与依赖注入（FR-018、FR-039）。
+- [X] T065 [US5] 在 `backend/src/rag_mcp/mcp/serialization.py` 固化 structuredContent→确定性 JSON 镜像，剔除 request_id/时间等易变字段出稳定包体，禁止第二事实渲染路径（FR-031、FR-039）。
+- [X] T066 [US6] 扩展 `backend/src/rag_mcp/errors.py` 和 `specs/012-memory-foundation-write-read-loop/contracts/error-codes.json`，确保新增枚举只增不删并保留 001–011 旧码（FR-022）。
+- [X] T067 [US6] 运行 T057–T060、真实 FastMCP tool-list 和旧客户端快照验收，修正 schema/annotation/byte compatibility 直到全部转绿（FR-018–FR-039）。
 
 ## Phase 7：治理与回滚
 
