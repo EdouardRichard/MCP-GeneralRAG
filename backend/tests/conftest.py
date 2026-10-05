@@ -16,6 +16,15 @@ from rag_mcp.models import Base
 os.environ.setdefault("INGESTION_BACKGROUND", "false")
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def global_database_runtime_lifetime():
+    from rag_mcp.db import dispose_engine
+
+    yield
+    # The process-wide pool must be closed before this test's loop is closed.
+    await dispose_engine()
+
+
 @pytest_asyncio.fixture
 async def engine():
     """Create async engine connected to database."""

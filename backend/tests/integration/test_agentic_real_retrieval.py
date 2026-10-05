@@ -15,7 +15,6 @@ This test MUST FAIL before steps 4/5 are wired (TDD Red).
 from __future__ import annotations
 
 import hashlib
-import json
 
 import pytest
 import pytest_asyncio
@@ -27,37 +26,9 @@ from rag_mcp.indexing.sparse_encoder import BM25SparseEncoder
 from rag_mcp.models.chunk import Chunk
 from rag_mcp.models.knowledge_source import KnowledgeSource
 from rag_mcp.models.knowledge_version import KnowledgeVersion
-from rag_mcp.providers.base import EmbeddingProvider, RerankerProvider
+from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+from rag_mcp.providers.local_cpu_reranker import LocalCPUReranker
 from rag_mcp.utils.snowflake import generate_id
-
-
-class _FakeEmbeddingProvider(EmbeddingProvider):
-    """Deterministic fake embedding provider (same convention as 002 tests)."""
-
-    def __init__(self, dim: int = 1024) -> None:
-        self._dim = dim
-
-    async def embed_texts(self, texts):
-        return [[0.1 * (i + 1)] * self._dim for i, _ in enumerate(texts)]
-
-    async def embed_query(self, text):
-        return [0.5] * self._dim
-
-    def get_dimension(self):
-        return self._dim
-
-
-class _MockReranker(RerankerProvider):
-    """Deterministic mock reranker (same convention as 002 tests)."""
-
-    async def rerank(self, query, candidates, top_k=5):
-        results = []
-        for i, c in enumerate(candidates):
-            enriched = dict(c)
-            enriched["rerank_score"] = 0.5 - i * 0.01
-            results.append(enriched)
-        results.sort(key=lambda r: (-r.get("rerank_score", 0), str(r.get("chunk_id", ""))))
-        return results[:top_k]
 
 
 _CHUNKS = {
@@ -133,14 +104,16 @@ async def pipeline_setup(db_session: AsyncSession):
 
     store = QdrantStore()
     collection = f"chunks_hybrid_{index_version}"
-    dim = 1024
+    embedding = LocalCPUEmbeddingProvider()
+    vectors = await embedding.embed_texts(texts)
+    dim = embedding.get_dimension()
     if not store.collection_exists(collection):
         store.create_hybrid_collection(collection, dimension=dim)
 
     encoder = BM25SparseEncoder()
     encoder.fit(texts)
 
-    for (key, (path, content)) in _CHUNKS.items():
+    for (key, (path, content)), vector in zip(_CHUNKS.items(), vectors, strict=True):
         cid = chunk_ids[key]
         payload = {
             "knowledge_scope_id": str(scope_id),
@@ -154,7 +127,7 @@ async def pipeline_setup(db_session: AsyncSession):
             "index_version": index_version,
             "embedding_model": get_settings().embedding_model,
         }
-        store.upsert_hybrid(collection, cid, [0.5] * dim, encoder.encode(content), payload)
+        store.upsert_hybrid(collection, cid, vector, encoder.encode(content), payload)
 
     yield {
         "project": project,
@@ -163,6 +136,7 @@ async def pipeline_setup(db_session: AsyncSession):
         "chunk_ids": chunk_ids,
         "store": store,
         "collection": collection,
+        "embedding": embedding,
     }
 
     if store.collection_exists(collection):
@@ -190,7 +164,7 @@ def _make_pipeline(setup, reranker=None):
     return AgenticRetrievalPipeline(
         session_factory=session_factory,
         qdrant_store=setup["store"],
-        embedding_provider=_FakeEmbeddingProvider(dim=1024),
+        embedding_provider=setup["embedding"],
         reranker=reranker,
     )
 
@@ -204,7 +178,7 @@ class TestPipelineRecall:
             collection_name=pipeline_setup["collection"],
             ids=list(pipeline_setup["chunk_ids"].values()), with_vectors=True)
         assert len(points) == len(_CHUNKS)
-        assert len({json.dumps(point.vector, sort_keys=True) for point in points}) > 1, "constant dense vectors make Recall@K depend on arbitrary Qdrant ties"
+        assert len({tuple(point.vector["dense"]) for point in points}) > 1, "constant dense vectors make Recall@K depend on arbitrary Qdrant ties"
 
     @pytest.mark.asyncio
     async def test_recall_candidates_carry_metadata(self, db_session, pipeline_setup):
@@ -267,7 +241,7 @@ class TestPipelineRecall:
     @pytest.mark.asyncio
     async def test_rerank_reenters_with_scores(self, db_session, pipeline_setup):
         """Rerank participates and candidates carry rerank scores (FR-014)."""
-        pipeline = _make_pipeline(pipeline_setup, reranker=_MockReranker())
+        pipeline = _make_pipeline(pipeline_setup, reranker=LocalCPUReranker())
         result = await pipeline.retrieve_round(
             sub_problems=[{"sub_problem_id": 1, "query": "repository", "signals": ["dense", "sparse"]}],
             scope_ids=[pipeline_setup["scope_id"]],
