@@ -102,6 +102,15 @@ async def test_projection_failure_retains_journal_and_previous_visible_version(d
     assert current.payload["state"]["entries"][str(initial["memory_id"])]["status"] == "active"
     failed = await db_session.scalar(select(MemoryEntry).where(MemoryEntry.content_text == new_payload["content"]))
     assert failed is not None and failed.write_status == "failed"
+    with pytest.raises(ValueError, match="MEMORY_WRITE_UNAVAILABLE"):
+        await service.record(new_payload)
+    recover = getattr(service, "rebuild", None)
+    assert callable(recover), "failed journal entries cannot be recovered"
+    monkeypatch.undo()
+    report = await recover(payload["scope_id"], actor="management")
+    assert all(result["matches_replay"] for result in report.values())
+    await db_session.refresh(failed)
+    assert failed.write_status == "complete"
 
 
 @pytest.mark.asyncio
