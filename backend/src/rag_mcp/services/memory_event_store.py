@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_validators import MemoryProvenanceValidator, sanitize_submission
@@ -25,6 +25,7 @@ class MemoryEventStore:
             event.payload = {**payload, "provenance_validation": validation}
         elif event.event_type in {"grant", "rollback"} and event.actor != "management":
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+        await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         self.session.add(event)
         if flush:
             await self.session.flush()

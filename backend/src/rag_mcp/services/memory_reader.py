@@ -9,7 +9,7 @@ from time import monotonic
 from uuid import UUID, uuid4
 
 from qdrant_client.models import FieldCondition, Filter, MatchValue
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from rag_mcp.fusion.rrf import weighted_memory_rrf
 from rag_mcp.indexing.qdrant_client import QdrantStore
@@ -60,6 +60,7 @@ class MemoryReader:
 
     async def _views(self, scope_ids):
         # All scopes use one statement snapshot. Pending manifests cannot be consumed.
+        await self.session.execute(text("SET LOCAL ROLE rag_memory_reader"))
         records = (await self.session.execute(select(MemoryProjectionMeta).where(
             MemoryProjectionMeta.knowledge_scope_id.in_(scope_ids),
             MemoryProjectionMeta.projection_type.in_(["manifest", "pending"])))).scalars().all()
@@ -284,4 +285,5 @@ class MemoryReader:
                            "failed_paths": failed_paths,
                            "truncated_by_budget": len(digest_rows) + len(work_rows) - len(digest) - len(working_set)}}
             body["package_fingerprint"] = hashlib.sha256(canonical(body).encode()).hexdigest()
+            await self.session.commit()
             return {**body, "request_id": str(uuid4())}

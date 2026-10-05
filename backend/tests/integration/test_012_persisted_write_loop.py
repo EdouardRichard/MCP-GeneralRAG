@@ -42,10 +42,10 @@ async def test_record_persists_event_and_relation_and_validates_real_anchor(db_s
 async def test_missing_anchor_cannot_append_an_event(db_session):
     payload = await published_payload(db_session)
     payload["evidence_refs"] = ["9223372036854775806"]
-    before = await db_session.scalar(select(func.count()).select_from(MemoryEvent))
+    before = await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == payload["scope_id"]))
     with pytest.raises(ValueError, match="MEMORY_EVIDENCE_ANCHOR_REQUIRED"):
         await MemoryService(db_session).record(payload)
-    after = await db_session.scalar(select(func.count()).select_from(MemoryEvent))
+    after = await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == payload["scope_id"]))
     assert after == before
 
 
@@ -90,7 +90,7 @@ async def test_projection_failure_retains_journal_and_previous_visible_version(d
     initial = await service.record(payload)
     previous = await service.projections.current(payload["scope_id"])
     previous_revision = previous.source_event_id
-    before = await db_session.scalar(select(func.count()).select_from(MemoryEvent))
+    before = await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == payload["scope_id"]))
     async def unavailable(*args, **kwargs):
         raise OSError(f"injected {path} failure")
     monkeypatch.setattr(service.projections, f"_materialize_{path}", unavailable)
@@ -98,7 +98,7 @@ async def test_projection_failure_retains_journal_and_previous_visible_version(d
                    "supersedes_memory_id": initial["memory_id"]}
     with pytest.raises(ValueError, match="MEMORY_WRITE_UNAVAILABLE"):
         await service.record(new_payload)
-    assert await db_session.scalar(select(func.count()).select_from(MemoryEvent)) == before + 1
+    assert await db_session.scalar(select(func.count()).select_from(MemoryEvent).where(MemoryEvent.knowledge_scope_id == payload["scope_id"])) == before + 1
     current = await service.projections.current(payload["scope_id"])
     assert current.source_event_id == previous_revision
     assert current.payload["state"]["entries"][str(initial["memory_id"])]["status"] == "active"

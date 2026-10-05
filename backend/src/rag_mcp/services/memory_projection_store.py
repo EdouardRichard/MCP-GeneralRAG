@@ -67,6 +67,7 @@ class MemoryProjectionStore:
         history = await MemoryEventStore(self.session).replay(scope_id)
         if not history or history[-1]["event_id"] != event_id or projection_fingerprint(state) != projection_fingerprint(reduce_events(history)):
             raise ValueError("projection authority must match current immutable log replay")
+        await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
     async def _upsert(self, model, values, key):

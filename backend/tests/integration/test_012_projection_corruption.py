@@ -31,8 +31,10 @@ async def test_integrity_detects_real_corruption_and_event_rebuild_repairs_it(db
         from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
         from sqlalchemy import text
         async with db_session.begin_nested():
+            await db_session.execute(text("ALTER TABLE memory_salience DISABLE TRIGGER memory_salience_log_parity"))
             await db_session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(memory["memory_id"])})
             await db_session.execute(text("UPDATE memory_salience SET access_count=999 WHERE memory_id=:mid"), {"mid": memory["memory_id"]})
+            await db_session.execute(text("ALTER TABLE memory_salience ENABLE TRIGGER memory_salience_log_parity"))
             report = await service.inspect_projections(sid)
             assert not report["salience"]["matches_replay"]
         await db_session.rollback()

@@ -33,3 +33,29 @@ Evaluation model-loading errors propagate; synthetic hash vectors are removed.
 - Full backend pytest and real historical eval reruns are in progress.
 - New evaluation output: `eval/runs/012-20261005-regression/`; historical
   report paths are preserved by the rerun directory option.
+
+## Continued verification: 2026-10-05
+
+- Adapter authority TDD: forged same-scope reducer input and stale revisions
+  produced 12 failures. All six adapters now compare the supplied state with
+  the current immutable log under the scope transaction lock before IO.
+  Boundary/write/failure subset: 30 passed, 128.98 seconds (`a8d5d24`).
+- Reader/governance TDD: oversized inference metadata, historical superseded
+  permission, partial dense failure and binding audit fingerprint produced
+  four failures. The corrected real-Qdrant partial-failure test was separately
+  rerun red against the old intersection logic. Reader/governance subset:
+  13 passed, 58.81 seconds (`d233259`).
+- MCP TDD: eight coercion paths and the content-conflict error mapping failed.
+  Strict scalar parameters and preserved error codes: 16 contract and
+  compatibility tests passed, 4.08 seconds (`58052a1`).
+- Database TDD: a valid event GUC permitted four unlogged projection changes;
+  runtime roles were missing and both read/write queries used `postgres`.
+  Migration `0088_memory_db_replay` adds database log replay verification and
+  reader/reducer roles. Database authority, governance, corruption recovery,
+  persisted write/failure and live reader subset: 27 passed, 407.90 seconds.
+- The concurrent full-database event-count assertion was corrected to count
+  only its tested scope. Its interrupted pending revision was recovered using
+  `MemoryService.rebuild`, preserving all log events; subsequent verification
+  ran sequentially. No projection was repaired with an unlogged direct update.
+- T088 remains open. These focused results do not establish current full-suite
+  acceptance, all success criteria, lifecycle maintenance, or target-host acceptance.
