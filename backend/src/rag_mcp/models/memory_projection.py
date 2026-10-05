@@ -49,3 +49,4 @@ class MemoryEntry(Base):
     created_at: Mapped[Any] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()"))
     updated_at: Mapped[Any] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()"))
     source_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("memory_events.event_id"))
+    write_status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
