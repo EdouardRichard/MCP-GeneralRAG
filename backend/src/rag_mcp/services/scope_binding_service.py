@@ -41,12 +41,16 @@ class ScopeBindingService:
                 raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
             host, path = match.groups()
         else:
-            parsed = urlsplit(value)
+            try:
+                parsed = urlsplit(value)
+                port = parsed.port
+            except ValueError:
+                raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE") from None
             if parsed.scheme not in {"https", "http", "ssh", "git"} or not parsed.hostname or parsed.query or parsed.fragment:
                 raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
             host, path = parsed.hostname, parsed.path
-            if parsed.port and parsed.port not in {22, 80, 443}:
-                host += ":" + str(parsed.port)
+            if port and port not in {22, 80, 443}:
+                host += ":" + str(port)
         path = path.strip("/").removesuffix(".git")
         if not path or any(part in {".", ".."} for part in path.split("/")):
             raise ScopeBindingError("MISSING_KNOWLEDGE_SCOPE")
