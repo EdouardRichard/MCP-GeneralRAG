@@ -6,10 +6,11 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from time import monotonic
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from qdrant_client.models import FieldCondition, Filter, MatchValue
-from sqlalchemy import select, text
+from sqlalchemy import case, func, select, text
 
 from rag_mcp.fusion.rrf import weighted_memory_rrf
 from rag_mcp.indexing.qdrant_client import QdrantStore
@@ -58,26 +59,40 @@ class MemoryReader:
     def __init__(self, session, projections):
         self.session, self.projections = session, projections
 
-    async def _views(self, scope_ids):
+    async def _views(self, scope_ids, *, memory_ids=None):
         # All scopes use one statement snapshot. Pending manifests cannot be consumed.
         await self.session.execute(text("SET LOCAL ROLE rag_memory_reader"))
-        records = (await self.session.execute(select(MemoryProjectionMeta).where(
+        payload = MemoryProjectionMeta.payload
+        entries = payload["state"]["entries"]
+        if memory_ids is not None:
+            entries = func.jsonb_build_object(*(part for mid in dict.fromkeys(memory_ids)
+                                               for part in (str(mid), entries[str(mid)])))
+        records = (await self.session.execute(select(
+            MemoryProjectionMeta.knowledge_scope_id, MemoryProjectionMeta.source_event_id,
+            MemoryProjectionMeta.projection_type, MemoryProjectionMeta.status,
+            case((MemoryProjectionMeta.projection_type == "manifest", entries)).label("entries"),
+            case((MemoryProjectionMeta.projection_type == "manifest", payload["state"]["salience"])).label("salience"),
+            payload["failed_paths"].label("failed_paths"), payload["collection"].as_string().label("collection")
+        ).where(
             MemoryProjectionMeta.knowledge_scope_id.in_(scope_ids),
-            MemoryProjectionMeta.projection_type.in_(["manifest", "pending"])))).scalars().all()
+            MemoryProjectionMeta.projection_type.in_(["manifest", "pending"])))).all()
         manifests = [row for row in records if row.projection_type == "manifest" and row.status == "complete"]
         completed = {row.knowledge_scope_id: row.source_event_id for row in manifests}
         failed = sorted({path for row in records if row.projection_type == "pending" and
                          row.source_event_id > completed.get(row.knowledge_scope_id, 0)
-                         for path in row.payload.get("failed_paths", [])})
+                         for path in row.failed_paths or []})
         rows, salience = {}, {}
         for manifest in manifests:
-            state = manifest.payload["state"]
-            for identifier, row in state["entries"].items():
+            for identifier, row in (manifest.entries or {}).items():
+                if row is None:
+                    continue
                 if row["knowledge_scope_id"] != manifest.knowledge_scope_id:
                     raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
                 rows[int(identifier)] = row
-            salience.update({int(key): value for key, value in state["salience"].items()})
-        return rows, salience, manifests, failed
+            salience.update({int(key): value for key, value in (manifest.salience or {}).items()})
+        descriptors = [SimpleNamespace(knowledge_scope_id=row.knowledge_scope_id,
+                                      payload={"collection": row.collection}) for row in manifests]
+        return rows, salience, descriptors, failed
 
     async def _dense(self, manifests, query, limit, kind, session_id):
         vector = await self.projections.embedding.embed_query(query)
@@ -130,7 +145,7 @@ class MemoryReader:
         failed_paths = []
         try:
             async with asyncio.timeout(max(.001, 3 - (monotonic() - started))):
-                rows, salience, manifests, failed_paths = await self._views(scope_ids)
+                rows, salience, manifests, failed_paths = await self._views(scope_ids, memory_ids=memory_ids)
                 now = datetime.now(timezone.utc)
                 eligible = {}
                 inactive = 0
@@ -227,6 +242,8 @@ class MemoryReader:
                     result["gaps"] = [{"description": "No eligible memory matched the explicit request.",
                                        "suggested_action": "Verify filters or explicitly request include_delivered."}]
         except TimeoutError:
+            await self.session.rollback()
+            await self.session.execute(text("SET LOCAL ROLE rag_memory_reader"))
             failed_paths = ["recall_timeout"]
             result = {"completion_status": "failed", "memories": [], "counts": {"mode": mode, "returned": 0},
                       "error": {"code": "MEMORY_TIMEOUT"}, "memory_notice": {"failed_paths": failed_paths}, "request_id": request_id}

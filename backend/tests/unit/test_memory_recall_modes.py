@@ -1,8 +1,12 @@
-def test_memory_recall_modes_and_limit_floor():
-    from rag_mcp.services.memory_service import recall_memories
+from rag_mcp.services.memory_reader import public_entry
 
-    rows = [{"memory_id": 1, "knowledge_scope_id": 7, "status": "active", "valid_from": 0, "valid_to": None}]
-    assert recall_memories(rows, mode="by_id", memory_id=1, scope_ids=[7])[0]["memory_id"] == 1
-    assert len(recall_memories(rows, mode="timeline", scope_ids=[7], limit=1)) == 1
-    assert recall_memories(rows, mode="filtered", scope_ids=[8]) == []
+
+def test_public_memory_excerpt_keeps_attribution_and_truncation_metadata():
+    row = {"memory_id": 1, "knowledge_scope_id": 7, "status": "active", "content_text": "x" * 400,
+           "evidence_refs": ["123"], "provenance": "hard", "valid_from": "2026-10-05T00:00:00Z"}
+    result = public_entry(row)
+    assert result["content_excerpt"] == "x" * 300
+    assert result["content_length"] == 400 and result["truncated"]
+    assert result["evidence_refs"] == ["123"] and result["provenance"] == "hard"
+    assert result["knowledge_scope_id"] == 7 and result["valid_from"] == row["valid_from"]
 
