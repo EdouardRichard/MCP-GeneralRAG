@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acceptance-report.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_type", "generated_at", "commit", "status", "suite", "host", "success_criteria", "measurements", "regression_reports"],
+  "properties": {
+    "report_type": {"const": "012_memory_acceptance"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "commit": {"type": "string", "minLength": 7},
+    "status": {"enum": ["passed", "failed", "incomplete"]},
+    "suite": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "passed", "failed", "skipped", "evidence"],
+      "properties": {
+        "command": {"type": "string"}, "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0}, "skipped": {"type": "integer", "minimum": 0},
+        "evidence": {"type": "string"}
+      }
+    },
+    "host": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "workspace", "status", "evidence"],
+      "properties": {
+        "name": {"const": "DSH"}, "workspace": {"const": "temp"},
+        "status": {"enum": ["passed", "failed", "not_verified"]},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "success_criteria": {
+      "type": "array", "minItems": 17, "maxItems": 17,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {"pattern": "^SC-0(0[1-9]|1[0-7])$"},
+          "status": {"enum": ["passed", "failed", "not_verified"]},
+          "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+        }
+      }
+    },
+    "measurements": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["scenario", "scope_ids", "request_ids", "status", "failed_paths", "fingerprints", "paths"],
+        "properties": {
+          "scenario": {"type": "string"}, "scope_ids": {"type": "array", "items": {"type": "integer"}},
+          "request_ids": {"type": "array", "items": {"type": "string"}},
+          "status": {"type": "string"}, "failed_paths": {"type": "array", "items": {"type": "string"}},
+          "fingerprints": {"type": "object", "additionalProperties": {"type": "string"}},
+          "paths": {"type": "object"}
+        }
+      }
+    },
+    "regression_reports": {"type": "array", "items": {"type": "string"}}
+  }
+}

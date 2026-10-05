@@ -151,7 +151,7 @@ python eval/run_domain_baseline.py \
     --domain-key legal --benefit-report eval/legal_benefit_result.json
 
 # 4. 多域端到端验收记录（硬指标三件套逐条实测）
-python eval/run_multi_domain_acceptance.py
+python eval/run_multi_domain_acceptance.py --output eval/runs/011-rerun/multi_domain_core_report.json
 
 # 5. 001–006 全集回归（六组口径重跑，单侧非回归判定）
 python eval/run_regression_011.py
