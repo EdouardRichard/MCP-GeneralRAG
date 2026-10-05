@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from mcp.types import CallToolResult, TextContent
 
+from rag_mcp.errors import MEMORY_ERROR_CODES
+
 
 def memory_result(body, *, is_error=False):
     return CallToolResult(structuredContent=body,
@@ -12,15 +14,10 @@ def memory_result(body, *, is_error=False):
 
 
 def memory_error(exception):
-    known = {"MISSING_KNOWLEDGE_SCOPE", "AMBIGUOUS_DOMAIN_REF", "MEMORY_EVIDENCE_ANCHOR_REQUIRED",
-        "MEMORY_EVIDENCE_SCOPE_MISMATCH", "MEMORY_INFERENCE_META_INCOMPLETE", "MEMORY_PROVENANCE_INVALID",
-        "MEMORY_KIND_INVALID", "MEMORY_SUPERSEDE_TARGET_INVALID", "MEMORY_QUOTA_EXCEEDED",
-        "MEMORY_WRITE_UNAVAILABLE", "MEMORY_IDS_QUERY_CONFLICT", "MEMORY_ROLLBACK_FORBIDDEN", "MEMORY_TIMEOUT",
-        "MEMORY_CONTENT_CONFLICT"}
     code = str(exception).split(":", 1)[0]
     if isinstance(exception, TimeoutError):
         code = "MEMORY_TIMEOUT"
-    if code not in known:
+    if code not in MEMORY_ERROR_CODES:
         code = "MEMORY_PROVENANCE_INVALID" if isinstance(exception, ValueError) else "SYSTEM_ERROR"
     error = {"code": code, "message": code}
     if getattr(exception, "candidates", None):
