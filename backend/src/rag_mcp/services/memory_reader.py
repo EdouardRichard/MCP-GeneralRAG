@@ -48,7 +48,7 @@ def text_characters(value):
 
 def public_entry(row, *, match=None):
     content = row["content_text"]
-    keys = ("memory_id", "knowledge_scope_id", "kind", "provenance", "title", "confidence", "evidence_refs",
+    keys = ("memory_id", "knowledge_scope_id", "kind", "provenance", "title", "confidence", "evidence_refs", "retention_stage",
             "valid_from", "valid_to", "observed_at", "session_id", "agent_id", "status", "superseded_by", "inference_meta")
     return {**{key: row.get(key) for key in keys}, "content_excerpt": content[:300],
             "truncated": len(content) > 300, "content_length": len(content), "match": match}
@@ -135,7 +135,7 @@ class MemoryReader:
                 eligible = {}
                 inactive = 0
                 for mid, row in rows.items():
-                    if row["status"] == "quarantined":
+                    if row["status"] == "quarantined" or point is None and row.get("retention_stage") == "archived":
                         inactive += 1
                         continue
                     if row["status"] == "superseded" and not include_superseded:
@@ -247,13 +247,20 @@ class MemoryReader:
             scope = await self.session.get(KnowledgeScope, sid)
             profile = await self.session.get(DomainProfile, scope.domain_key)
             rows, _, _, failed_paths = await self._views([sid])
-            active = [row for row in rows.values() if row["status"] == "active"]
+            now = datetime.now(timezone.utc)
+            active = [row for row in rows.values() if row["status"] == "active" and row.get("retention_stage") != "archived"
+                      and (timestamp(row.get("expires_at")) is None or timestamp(row["expires_at"]) > now)]
             active.sort(key=lambda row: (row["observed_at"], row["memory_id"]), reverse=True)
             digest_rows = [row for row in active if row["kind"] in {"semantic", "procedural"}]
             work_rows = [row for row in active if row["kind"] == "episodic" and
                          (session_id is None or row.get("session_id") == session_id) and
                          (agent_id is None or row.get("agent_id") == agent_id)]
-            total = {"standard": 2000, "compact": 800, "minimal": 300}[budget]
+            maximum = {"standard": 2000, "compact": 800, "minimal": 300}[budget]
+            policy_budget = (profile.memory_policy or {}).get("start_work_budgets", {}).get(
+                "full" if budget == "standard" else budget, maximum)
+            if isinstance(policy_budget, bool) or not isinstance(policy_budget, int) or policy_budget < 250:
+                raise ValueError("MEMORY_PROVENANCE_INVALID: start_work_budgets")
+            total = min(maximum, policy_budget)
             description = (profile.description or "")[:max(0, total - len(READ_GUIDANCE)) // 4]
             scope_data = {"knowledge_scope_id": sid, "slug": scope.slug}
             brief = {"domain_key": scope.domain_key, "description": description,

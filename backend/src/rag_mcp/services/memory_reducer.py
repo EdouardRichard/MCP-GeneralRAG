@@ -83,6 +83,7 @@ def reduce_events(events, *, initial_state=None):
                             "status": status, "valid_from": payload.get("valid_from") or timestamp,
                             "valid_to": None, "observed_at": timestamp,
                             "superseded_by": None, "invalidated_at": None,
+                            "retention_stage": "active",
                             "source_event_id": event["event_id"]}
             salience[eid] = {"memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
                              "access_count": 0, "decay_rate": payload.get("decay_rate", .05),
@@ -91,7 +92,7 @@ def reduce_events(events, *, initial_state=None):
                              "provenance": payload.get("provenance"), "inference_meta": payload.get("inference_meta")}
         elif kind == "retract":
             target = _scoped_target(entries, eid, scope)
-            target.update(status="retired", valid_to=timestamp, invalidated_at=timestamp)
+            target.update(status="retired", retention_stage="tombstone", valid_to=timestamp, invalidated_at=timestamp)
         elif kind == "access":
             _scoped_target(entries, eid, scope)
             state = salience[eid]
@@ -116,7 +117,7 @@ def reduce_events(events, *, initial_state=None):
             for mid, row in entries.items():
                 if row["knowledge_scope_id"] == scope and mid not in restored_ids:
                     # A later identity becomes a tombstone; its immutable history remains.
-                    unaffected[mid] = {**row, "status": "retired", "valid_to": timestamp, "invalidated_at": timestamp}
+                    unaffected[mid] = {**row, "status": "retired", "retention_stage": "tombstone", "valid_to": timestamp, "invalidated_at": timestamp}
             unaffected.update({mid: row for mid, row in restored["entries"].items() if row["knowledge_scope_id"] == scope})
             entries = unaffected
             restored_bindings = {key: row for key, row in restored["bindings"].items() if row["knowledge_scope_id"] == scope}
@@ -129,21 +130,35 @@ def reduce_events(events, *, initial_state=None):
                 bindings[payload["binding_id"]] = {
                     **{key: payload[key] for key in ("binding_id", "binding_kind", "binding_value", "priority", "status")},
                     "knowledge_scope_id": scope}
+            elif "retention_stage" in payload:
+                target = _scoped_target(entries, eid, scope)
+                stage = payload["retention_stage"]
+                if target["status"] != "active" or stage != {"active": "compressed", "compressed": "archived", "archived": "tombstone"}.get(target["retention_stage"]):
+                    raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid retention transition")
+                target["retention_stage"] = stage
+                if stage == "tombstone":
+                    target.update(status="retired", valid_to=timestamp, invalidated_at=timestamp)
         else:
             raise ValueError("invalid authority event type")
     dense, links, summary, files = {}, {}, {}, {}
     for mid, row in entries.items():
         if row["status"] in {"retired", "quarantined"}:
             continue
+        branch = f"{row['knowledge_scope_id']}/{row.get('kind', 'episodic')}"
+        path = f"012-v1/{branch}/{mid}.md"
+        if row["retention_stage"] in {"compressed", "archived"}:
+            path += ".gz"
+        if row["retention_stage"] == "archived":
+            path = "archives/" + path
+        files[path] = {**row, "path": path, "body": f"# Memory {mid}\n\n" + json.dumps(row, sort_keys=True, ensure_ascii=False, default=str)}
+        if row["retention_stage"] == "archived":
+            continue
         dense[mid] = deepcopy(row)
         for ref in row.get("evidence_refs", []):
             links[f"{mid}/evidence/{ref}"] = {**row, "from_id": mid, "to_id": ref, "relation": "evidence"}
         if row.get("supersedes_memory_id"):
             links[f"{mid}/supersedes"] = {**row, "from_id": mid, "to_id": row["supersedes_memory_id"], "relation": "supersedes"}
-        branch = f"{row['knowledge_scope_id']}/{row.get('kind', 'episodic')}"
         summary.setdefault(branch, []).append(deepcopy(row))
-        path = f"012-v1/{branch}/{mid}.md"
-        files[path] = {**row, "path": path, "body": f"# Memory {mid}\n\n" + json.dumps(row, sort_keys=True, ensure_ascii=False, default=str)}
     state = {"entries": entries, "dense": dense, "links": links, "summary": summary,
              "files": files, "salience": salience, "bindings": bindings}
     return ReducerState(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str), _REDUCER_SEAL)

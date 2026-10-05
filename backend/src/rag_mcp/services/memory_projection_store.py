@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 import math
 from datetime import datetime
@@ -21,6 +22,10 @@ VIEW_KEYS = {"relation": "entries", "dense": "dense", "links": "links",
              "summary": "summary", "file": "files", "salience": "salience"}
 
 
+def file_index(state):
+    return "\n".join(sorted(key for key, row in state["files"].items() if row.get("retention_stage") != "archived"))
+
+
 class ProjectionFailure(ValueError):
     def __init__(self, path):
         self.path = path
@@ -31,24 +36,17 @@ class MemoryProjectionStore:
     """Projection state is writable only from reducer output."""
 
     def __init__(self, session=None, *, qdrant_store=None, embedding_provider=None, projection_root=None):
-        self._states = {}
         self.session = session
         self.qdrant = qdrant_store
         self.embedding = embedding_provider
         self.root = Path(projection_root or Path(get_settings().data_root) / "memory_projection").resolve()
 
     def upsert_from_reducer(self, memory_id, reducer_state):
-        from rag_mcp.services.memory_reducer import require_reducer_state
         require_reducer_state(reducer_state)
-        self._states[memory_id] = {"status": "complete", "state": reducer_state}
-        return self._states[memory_id]
+        raise PermissionError("projection mutation requires current immutable log authority")
 
     def mark_failed(self, memory_id, path):
-        self._states[memory_id] = {"status": "failed", "failed_path": path}
-        return self._states[memory_id]
-
-    def recallable(self, memory_id):
-        return self._states.get(memory_id, {}).get("status") == "complete"
+        raise PermissionError("projection mutation requires current immutable log authority")
 
     async def current(self, scope_id):
         return await self.session.get(MemoryProjectionMeta, f"current:{scope_id}", populate_existing=True)
@@ -116,7 +114,7 @@ class MemoryProjectionStore:
         directory = self.root / str(scope_id) / str(event_id)
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "DIGEST.md").write_text(json.dumps(state["summary"], sort_keys=True, ensure_ascii=False), encoding="utf-8")
-        (directory / "INDEX.md").write_text("\n".join(sorted(state["files"])), encoding="utf-8")
+        (directory / "INDEX.md").write_text(file_index(state), encoding="utf-8")
 
     async def _materialize_files(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
@@ -135,7 +133,10 @@ class MemoryProjectionStore:
             if not path.is_relative_to(directory.resolve()) or row["knowledge_scope_id"] != scope_id:
                 raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(row["body"], encoding="utf-8")
+            if key.endswith(".gz"):
+                path.write_bytes(gzip.compress(row["body"].encode("utf-8"), mtime=0))
+            else:
+                path.write_text(row["body"], encoding="utf-8")
 
     async def _materialize_salience(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
@@ -240,7 +241,7 @@ class MemoryProjectionStore:
         for key, row in state["files"].items():
             path = directory / key
             if path.is_file():
-                actual["file"][key] = {**row, "body": path.read_text(encoding="utf-8")}
+                actual["file"][key] = {**row, "body": gzip.decompress(path.read_bytes()).decode("utf-8") if key.endswith(".gz") else path.read_text(encoding="utf-8")}
         rows = (await self.session.execute(select(MemorySalience, MemoryEntry).join(MemoryEntry).where(MemoryEntry.knowledge_scope_id == scope_id))).all()
         actual["salience"] = {}
         for row, entry in rows:
@@ -261,7 +262,7 @@ class MemoryProjectionStore:
                 matches = matches and vectors_match
                 fingerprint = projection_fingerprint({"payload": actual[name], "vectors": actual_vectors})
             if name == "file":
-                matches = matches and not extra_files and (directory / "INDEX.md").read_text(encoding="utf-8") == "\n".join(sorted(state["files"]))
+                matches = matches and not extra_files and (directory / "INDEX.md").read_text(encoding="utf-8") == file_index(state)
                 fingerprint = projection_fingerprint({"files": actual[name], "unexpected": extra_files})
             if name == "summary":
                 matches = matches and (directory / "DIGEST.md").read_text(encoding="utf-8") == json.dumps(state["summary"], sort_keys=True, ensure_ascii=False)

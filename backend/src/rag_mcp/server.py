@@ -195,6 +195,7 @@ async def _ttl_cleanup_loop(interval_s: int) -> None:
     from rag_mcp.services.maintenance_service import (
         purge_expired_agentic_runs,
         purge_expired_retrieval_runs,
+        run_memory_maintenance,
     )
 
     while True:
@@ -205,6 +206,7 @@ async def _ttl_cleanup_loop(interval_s: int) -> None:
                 await purge_expired_retrieval_runs(session)
                 await purge_expired_agentic_runs(session)
                 await session.commit()
+                await run_memory_maintenance(session)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - keep the loop alive on transient errors
@@ -306,6 +308,12 @@ def create_app() -> FastAPI:
     # Mount frontend static files if build exists
     frontend_dist = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
     if frontend_dist.exists():
+        from fastapi.responses import FileResponse
+
+        @app.get("/memories", include_in_schema=False)
+        async def memory_page():
+            return FileResponse(frontend_dist / "index.html")
+
         app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
 
     return app

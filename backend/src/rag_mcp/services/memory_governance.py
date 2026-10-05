@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy import select, text
 
 from rag_mcp.models.knowledge_scope import KnowledgeScope
+from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.services.memory_event_store import MemoryEventStore
@@ -21,8 +22,8 @@ class MemoryGovernance:
 
     async def execute(self, action, *, scope_id, actor, reason, memory_id=None, event_point=None,
                       time_point=None, binding_id=None, binding_kind=None, binding_value=None,
-                      priority=0, status="active"):
-        if actor != "management" or not isinstance(scope_id, int) or isinstance(scope_id, bool) or action not in {"access", "retire", "purge", "rollback", "binding"}:
+                      priority=0, status="active", retention_stage=None, policy=None):
+        if actor != "management" or not isinstance(scope_id, int) or isinstance(scope_id, bool) or action not in {"access", "retire", "purge", "rollback", "binding", "lifecycle", "policy"}:
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("MEMORY_PROVENANCE_INVALID: reason required")
@@ -47,12 +48,29 @@ class MemoryGovernance:
             aggregate_id = memory_id
             if action == "purge":
                 payload["purge"] = True
+        elif action == "lifecycle":
+            if target is None or target["status"] != "active" or retention_stage != {"active": "compressed", "compressed": "archived", "archived": "tombstone"}.get(target["retention_stage"]):
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid retention transition")
+            event_type, aggregate_id = "grant", memory_id
+            payload["retention_stage"] = retention_stage
         elif action == "rollback":
             from rag_mcp.services.rollback_service import RollbackService
             plan = RollbackService().rollback(history, scope_id=scope_id, actor=actor, event_point=event_point, time_point=time_point)
             event_point = plan["event_point"]
             event_type, aggregate_id = "rollback", event_id
             payload["event_point"] = event_point
+        elif action == "policy":
+            from rag_mcp.services.domain_profile_service import assert_not_builtin
+            from rag_mcp.services.memory_policy import MemoryPolicy
+            assert_not_builtin(scope.domain_key)
+            profile = await self.session.scalar(select(DomainProfile).where(
+                DomainProfile.domain_key == scope.domain_key).with_for_update())
+            if profile is None or profile.is_builtin:
+                raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+            before_policy = profile.memory_policy or {}
+            after_policy = MemoryPolicy.model_validate({**before_policy, **(policy or {})}).model_dump()
+            payload.update(domain_key=scope.domain_key, policy_before=before_policy, policy_after=after_policy)
+            event_type, aggregate_id = "grant", event_id
         else:
             if binding_kind not in {"workdir_prefix", "git_remote", "dir_name"} or status not in {"active", "disabled"}:
                 raise ValueError("MEMORY_PROVENANCE_INVALID: binding")
@@ -95,6 +113,9 @@ class MemoryGovernance:
         self.service._ensure_vector_store()
         try:
             async with self.session.begin_nested():
+                if action == "policy":
+                    profile.memory_policy = after_policy
+                    await self.session.flush()
                 await MemoryEventStore(self.session).append(event)
                 after = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
                 await self.service.projections.materialize(after, scope_id, event_id)
@@ -103,7 +124,7 @@ class MemoryGovernance:
                     raise ProjectionFailure("integrity")
             await self.session.commit()
         except ProjectionFailure as failure:
-            if failure.path == "relation":
+            if failure.path == "relation" or action == "policy":
                 await self.session.rollback()
                 raise
             await MemoryEventStore(self.session).append(MemoryEvent(**fields))

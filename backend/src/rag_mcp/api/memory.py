@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rag_mcp.config import get_settings
 from rag_mcp.db import get_session
 from rag_mcp.models.knowledge_scope import KnowledgeScope
+from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.runtime import WriterLease
 from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.services.memory_reader import public_entry
 from rag_mcp.services.memory_service import MemoryService
 from rag_mcp.services.scope_resolver import MemoryScopeResolver
+from rag_mcp.services.memory_policy import MemoryPolicy
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
 _embedding_provider = None
@@ -58,6 +60,10 @@ class ScopeCommand(BaseModel):
 
 class MemoryCommand(ScopeCommand):
     memory_id: int = Field(gt=0)
+
+
+class PolicyCommand(ScopeCommand):
+    policy: MemoryPolicy
 
 
 class RollbackCommand(ScopeCommand):
@@ -113,6 +119,26 @@ async def browse_bindings(scope_ref: str = Query(min_length=1), session: AsyncSe
             "binding_kind": row.binding_kind, "binding_value": row.binding_value,
             "priority": row.priority, "status": row.status} for row in rows]}
     except ValueError as exception:
+        raise _http_error(exception) from None
+
+
+@router.get("/policy")
+async def browse_policy(scope_ref: str = Query(min_length=1), session: AsyncSession = Depends(get_session)):
+    try:
+        sid = await MemoryScopeResolver(session).resolve(scope_ref)
+        scope = await session.get(KnowledgeScope, sid)
+        profile = await session.get(DomainProfile, scope.domain_key)
+        return {"scope_id": str(sid), "domain_key": scope.domain_key, "policy": profile.memory_policy}
+    except ValueError as exception:
+        raise _http_error(exception) from None
+
+
+@router.post("/policy", dependencies=[Depends(require_writer)])
+async def update_policy(data: PolicyCommand, session: AsyncSession = Depends(get_session)):
+    try:
+        return await _service(session).govern("policy", actor="management", scope_id=data.scope_id,
+            reason=data.reason, policy=data.policy.model_dump(exclude_unset=True))
+    except (ValueError, PermissionError) as exception:
         raise _http_error(exception) from None
 
 

@@ -61,13 +61,15 @@ async def test_builtin_policy_is_seeded_in_the_database(db_session):
 async def test_direct_projection_insert_is_rejected_by_postgres(db_session):
     from rag_mcp.models.knowledge_scope import KnowledgeScope
     scope = await db_session.scalar(select(KnowledgeScope.scope_id).limit(1))
-    with pytest.raises(DBAPIError, match="reducer"):
+    identifier = generate_id()
+    with pytest.raises(DBAPIError, match="projection authority requires latest immutable log replay"):
         async with db_session.begin_nested():
             await db_session.execute(text("""
                 INSERT INTO memory_entries(memory_id,knowledge_scope_id,kind,provenance,
                     content_text,content_hash,evidence_refs,status)
                 VALUES (:id,:scope,'semantic','hard','bypass',:hash,'[]','active')
-            """), {"id": generate_id(), "scope": scope, "hash": "f" * 64})
+            """), {"id": identifier, "scope": scope, "hash": "f" * 64})
+    assert await db_session.scalar(text("SELECT memory_id FROM memory_entries WHERE memory_id=:id"), {"id": identifier}) is None
 
 
 @pytest.mark.asyncio

@@ -212,3 +212,48 @@ class MaintenanceService:
         counts = await purge_expired_agentic_runs(self._session, now=now)
         await self._session.commit()
         return counts
+
+
+async def purge_expired_memory_runtime(session, now=None):
+    from rag_mcp.models.memory_recall_run import MemoryRecallRun
+    from rag_mcp.models.session import MemorySession
+    if get_settings().instance_mode != "writer":
+        raise PermissionError("MEMORY_WRITE_UNAVAILABLE")
+    reference = now or datetime.now(timezone.utc)
+    audits = await session.execute(delete(MemoryRecallRun).where(MemoryRecallRun.expires_at < reference))
+    sessions = await session.execute(delete(MemorySession).where(MemorySession.expires_at < reference))
+    return {"audits": audits.rowcount or 0, "sessions": sessions.rowcount or 0}
+
+
+async def run_memory_maintenance(session, *, scope_ids=None, now=None, service=None):
+    from rag_mcp.models.memory_projection import MemoryEntry
+    from rag_mcp.services.memory_service import MemoryService
+    from rag_mcp.runtime.projection_rebuild import MemoryHistory
+    if get_settings().instance_mode != "writer":
+        raise PermissionError("MEMORY_WRITE_UNAVAILABLE")
+    if scope_ids is not None and (not scope_ids or any(not isinstance(sid, int) or isinstance(sid, bool) or sid <= 0 for sid in scope_ids)):
+        raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+    reference = now or datetime.now(timezone.utc)
+    service = service or MemoryService(session)
+    statement = select(MemoryEntry.knowledge_scope_id).where(MemoryEntry.write_status == "complete").distinct()
+    if scope_ids is not None:
+        statement = statement.where(MemoryEntry.knowledge_scope_id.in_(scope_ids))
+    scopes = (await session.execute(statement)).scalars().all()
+    result = {"compressed": 0, "archived": 0, "tombstone": 0, "snapshots": 0, "archived_access": 0}
+    for sid in scopes:
+        rows = (await session.execute(select(MemoryEntry).where(MemoryEntry.knowledge_scope_id == sid,
+            MemoryEntry.write_status == "complete", MemoryEntry.status == "active", MemoryEntry.expires_at <= reference))).scalars().all()
+        transitions = [(row.memory_id, {"active": "compressed", "compressed": "archived", "archived": "tombstone"}[row.retention_stage]) for row in rows]
+        for mid, stage in transitions:
+            await service.govern("lifecycle", scope_id=sid, actor="management", memory_id=mid,
+                                 retention_stage=stage, reason="Expired memory retention maintenance")
+            result[stage] += 1
+        history = MemoryHistory(service)
+        if await history.capture(sid, now=reference):
+            result["snapshots"] += 1
+        archive = await history.archive(sid, now=reference)
+        result["archived_access"] += archive["access_count"]
+    await session.commit()
+    result.update(await purge_expired_memory_runtime(session, now=reference))
+    await session.commit()
+    return result
