@@ -48,6 +48,15 @@ def test_failed_suite_never_becomes_passed(tmp_path):
     assert report["suite"]["failed"] == 1
 
 
+def test_report_records_the_actual_suite_command(tmp_path):
+    module = report_module()
+    suite, trace, host = inputs(tmp_path)
+    command = "python -m pytest -vv -p memory_pytest_evidence --memory-evidence=memory-trace.json --junitxml=suite.xml"
+    report = module.build_report(suite=suite, trace=trace, host=host, regression=[],
+                                 diagnostics=None, suite_command=command)
+    assert report["suite"]["command"] == command
+
+
 def test_report_rejects_host_claim_without_actual_calls(tmp_path):
     module = report_module()
     suite, trace, host = inputs(tmp_path)

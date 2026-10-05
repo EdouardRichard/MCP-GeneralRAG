@@ -102,6 +102,27 @@ async def test_24_hour_snapshot_and_archive_preserve_correction_dependencies(db_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("reference_form", ["numeric", "prefixed"])
+async def test_archive_preserves_every_accepted_distilled_source_reference(db_session, reference_form):
+    from rag_mcp.runtime.projection_rebuild import MemoryHistory
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    source = await service.record(payload)
+    reference = str(source["memory_id"])
+    if reference_form == "prefixed":
+        reference = "memory:" + reference
+    distilled = await service.record({**payload, "content": "A distilled procedure with a retained source.",
+        "provenance": "distilled", "inference_meta": {**payload["inference_meta"], "supporting_evidence": [reference]}})
+    assert distilled["provenance_validation"]["attributions"][0]["source_chain"]["validated"]
+    history = MemoryHistory(service)
+    await history.capture(sid, force=True)
+    await history.archive(sid, now=datetime.now(timezone.utc) + timedelta(days=91))
+    online = await MemoryEventStore(db_session).replay_online(sid)
+    assert any(event["event_id"] == source["memory_id"] for event in online), "an accepted distilled source reference was truncated"
+    assert all(row["matches_replay"] for row in (await service.rebuild(sid, actor="management")).values())
+
+
+@pytest.mark.asyncio
 async def test_management_rebuild_uses_verified_snapshot(db_session):
     from rag_mcp.runtime.projection_rebuild import MemoryHistory
     sid, payload = await scope_and_payload(db_session)
