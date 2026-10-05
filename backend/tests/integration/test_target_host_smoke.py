@@ -258,9 +258,9 @@ class TestSmokeGuardT051:
         finally:
             srv.close()
 
-    def test_ensure_mcp_server_skips_when_unreachable(self):
+    def test_ensure_mcp_server_fails_when_unreachable(self):
         port = self._free_port()
-        with pytest.raises(pytest.skip.Exception):
+        with pytest.raises(pytest.fail.Exception):
             _ensure_mcp_server(f'http://127.0.0.1:{port}/mcp', timeout=0.5)
 
     def test_raw_dir_resolves_under_settings_data_root(self):
