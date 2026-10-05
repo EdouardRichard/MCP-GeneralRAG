@@ -172,11 +172,19 @@ def sanitize_memory(content):
     return SanitizedMemory(redacted, flags, "quarantined" if report.risk_level == "high" else "active")
 
 
-def sanitize_submission(payload):
-    clean = _redact_tree(payload)
+def redact_submission(payload):
+    return _redact_tree(payload)
+
+
+def detect_submission(clean):
     untrusted = {key: clean.get(key) for key in ("content", "title", "tags", "agent_id", "task_context", "inference_meta")}
     checked = sanitize_memory(json.dumps(untrusted, ensure_ascii=False))
-    return clean, SanitizedMemory(clean.get("content", ""), checked.injection_flags, checked.status)
+    return SanitizedMemory(clean.get("content", ""), checked.injection_flags, checked.status)
+
+
+def sanitize_submission(payload):
+    clean = redact_submission(payload)
+    return clean, detect_submission(clean)
 
 
 def validate_supersede(payload):

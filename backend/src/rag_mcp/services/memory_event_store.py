@@ -12,7 +12,7 @@ class MemoryEventStore:
     def __init__(self, session):
         self.session = session
 
-    async def append(self, event, *, flush=True):
+    async def _validate(self, event):
         if event.event_type in {"assert", "revise", "consolidate"}:
             payload = event.payload
             validation = await MemoryProvenanceValidator(self.session).validate({
@@ -25,6 +25,9 @@ class MemoryEventStore:
             event.payload = {**payload, "provenance_validation": validation}
         elif event.event_type in {"grant", "rollback"} and event.actor != "management":
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+
+    async def append(self, event, *, flush=True):
+        await self._validate(event)
         await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         self.session.add(event)
         if flush:
@@ -32,9 +35,13 @@ class MemoryEventStore:
         return event
 
     async def append_many(self, events):
+        events = list(events)
         async with self.session.begin_nested():
             for event in events:
-                await self.append(event, flush=False)
+                await self._validate(event)
+            if events:
+                await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
+                self.session.add_all(events)
             await self.session.flush()
 
     async def replay_online(self, scope_id):
