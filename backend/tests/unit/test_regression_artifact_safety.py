@@ -50,3 +50,15 @@ def test_missing_metric_cannot_pass_non_regression(runner, tmp_path):
 def test_eval_has_no_synthetic_vector_implementation():
     path = Path(__file__).resolve().parents[3] / "eval/run_eval.py"
     assert "def _hash_vector" not in path.read_text(encoding="utf-8")
+
+
+def test_historical_quickstart_test_does_not_rewrite_its_baseline(tmp_path, monkeypatch):
+    path = Path(__file__).resolve().parents[1] / "integration/test_quickstart_001_report.py"
+    spec = importlib.util.spec_from_file_location("quickstart_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    historical = tmp_path / "historical.json"
+    historical.write_text('{"generated_at":"historical"}')
+    monkeypatch.setattr(module, "_REPORT_PATH", historical)
+    module.TestQuickstart001Report().test_report_written_and_all_pass()
+    assert historical.read_bytes() == b'{"generated_at":"historical"}'
