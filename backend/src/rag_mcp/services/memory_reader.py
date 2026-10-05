@@ -14,6 +14,7 @@ from sqlalchemy import case, func, select, text
 
 from rag_mcp.fusion.rrf import weighted_memory_rrf
 from rag_mcp.indexing.qdrant_client import QdrantStore
+from rag_mcp.indexing.memory_vectors import revision_filter
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
@@ -72,7 +73,8 @@ class MemoryReader:
             MemoryProjectionMeta.projection_type, MemoryProjectionMeta.status,
             case((MemoryProjectionMeta.projection_type == "manifest", entries)).label("entries"),
             case((MemoryProjectionMeta.projection_type == "manifest", payload["state"]["salience"])).label("salience"),
-            payload["failed_paths"].label("failed_paths"), payload["collection"].as_string().label("collection")
+            payload["failed_paths"].label("failed_paths"), payload["collection"].as_string().label("collection"),
+            payload["dense_revision"].label("dense_revision")
         ).where(
             MemoryProjectionMeta.knowledge_scope_id.in_(scope_ids),
             MemoryProjectionMeta.projection_type.in_(["manifest", "pending"])))).all()
@@ -91,7 +93,7 @@ class MemoryReader:
                 rows[int(identifier)] = row
             salience.update({int(key): value for key, value in (manifest.salience or {}).items()})
         descriptors = [SimpleNamespace(knowledge_scope_id=row.knowledge_scope_id,
-                                      payload={"collection": row.collection}) for row in manifests]
+                                      payload={"collection": row.collection, "dense_revision": row.dense_revision}) for row in manifests]
         return rows, salience, descriptors, failed
 
     async def _dense(self, manifests, query, limit, kind, session_id):
@@ -99,14 +101,14 @@ class MemoryReader:
         if self.projections.qdrant is None:
             self.projections.qdrant = await asyncio.to_thread(QdrantStore)
         async def search(manifest):
-            conditions = [FieldCondition(key="knowledge_scope_id", match=MatchValue(value=str(manifest.knowledge_scope_id)))]
+            conditions = revision_filter(manifest.knowledge_scope_id, manifest.payload.get("dense_revision")).must
             for key, value in (("kind", kind), ("session_id", session_id)):
                 if value is not None:
                     conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
             result = await asyncio.to_thread(self.projections.qdrant._client.query_points,
                 collection_name=manifest.payload["collection"], query=vector,
-                query_filter=Filter(must=conditions), limit=max(40, limit * 4), with_payload=False)
-            return [(int(point.id), float(point.score)) for point in result.points]
+                query_filter=Filter(must=conditions), limit=max(40, limit * 4), with_payload=["memory_id"])
+            return [(int(point.payload["memory_id"]), float(point.score)) for point in result.points]
         results = await asyncio.gather(*(search(manifest) for manifest in manifests), return_exceptions=True)
         scores, failures, failed_scopes = {}, [], []
         for manifest, result in zip(manifests, results, strict=True):

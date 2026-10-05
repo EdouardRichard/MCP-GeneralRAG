@@ -15,6 +15,7 @@ from jsonschema import Draft202012Validator
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_service import MemoryService
+from rag_mcp.indexing.memory_vectors import revision_filter
 from tests.integration.test_012_live_reader import scope_and_payload
 from tests.integration.test_012_persisted_write_loop import published_payload
 
@@ -43,7 +44,8 @@ async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session):
         events = await MemoryEventStore(db_session).replay(sid)
         relations = (await db_session.execute(select(MemoryEntry).where(MemoryEntry.knowledge_scope_id == sid))).scalars().all()
         points, _ = await asyncio.to_thread(service.projections.qdrant._client.scroll,
-            collection_name=manifest.payload["collection"], limit=100, with_payload=True)
+            collection_name=manifest.payload["collection"], scroll_filter=revision_filter(sid, manifest.source_event_id),
+            limit=100, with_payload=True)
         files = list(manifest.payload["state"]["files"].values())
         assert events and relations and points and files
         assert all(event["knowledge_scope_id"] == sid for event in events)
@@ -51,7 +53,7 @@ async def test_four_actual_paths_scope_union_and_quarantine_leakage(db_session):
         assert all(point.payload["knowledge_scope_id"] == str(sid) for point in points)
         assert all(row["knowledge_scope_id"] == sid for row in files)
         for point in points:
-            assert point.id != quarantined["memory_id"]
+            assert point.payload["memory_id"] != quarantined["memory_id"]
             assert "acceptancesecret" not in json.dumps(point.payload)
         directory = Path(manifest.payload["root"]) / str(sid) / str(manifest.source_event_id)
         for file in directory.rglob("*.md"):

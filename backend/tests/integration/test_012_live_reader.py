@@ -11,6 +11,7 @@ from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_recall_run import MemoryRecallRun
 from rag_mcp.models.session import MemorySession
+from rag_mcp.indexing.memory_vectors import revision_point_id
 from rag_mcp.services.memory_service import MemoryService
 from rag_mcp.utils.snowflake import generate_id
 
@@ -80,7 +81,7 @@ async def test_real_semantic_status_staleness_and_filter_intersection(db_session
     memory = await service.record(payload)
     manifest = await service.projections.current(sid)
     await asyncio.to_thread(service.projections.qdrant._client.set_payload,
-        collection_name=manifest.payload["collection"], points=[memory["memory_id"]], payload={"status": "retired"})
+        collection_name=manifest.payload["collection"], points=[revision_point_id(sid, manifest.source_event_id, memory["memory_id"])], payload={"status": "retired"})
     original = service.projections.qdrant._client.query_points
     calls = []
     def observed(**kwargs):

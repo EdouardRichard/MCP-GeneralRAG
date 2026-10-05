@@ -6,6 +6,7 @@ from qdrant_client.models import PointStruct
 from sqlalchemy import select
 
 from rag_mcp.services.memory_service import MemoryService
+from rag_mcp.indexing.memory_vectors import revision_point_id
 from tests.integration.test_012_live_reader import scope_and_payload
 
 
@@ -18,7 +19,8 @@ async def test_integrity_detects_real_corruption_and_event_rebuild_repairs_it(db
     manifest = await service.projections.current(sid)
     if path == "dense":
         client = service.projections.qdrant._client
-        point = (await asyncio.to_thread(client.retrieve, collection_name=manifest.payload["collection"], ids=[memory["memory_id"]], with_vectors=True))[0]
+        point = (await asyncio.to_thread(client.retrieve, collection_name=manifest.payload["collection"],
+            ids=[revision_point_id(sid, manifest.source_event_id, memory["memory_id"])], with_vectors=True))[0]
         vector = [0.] * len(point.vector)
         vector[0] = 1.
         await asyncio.to_thread(client.upsert, collection_name=manifest.payload["collection"], points=[PointStruct(id=point.id, vector=vector, payload=point.payload)], wait=True)

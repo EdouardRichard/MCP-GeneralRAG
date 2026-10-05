@@ -15,6 +15,7 @@ from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.memory_salience import MemorySalience
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode
 from rag_mcp.models.scope_binding import ScopeBinding
+from rag_mcp.indexing.memory_vectors import revision_filter, revision_point_id
 from rag_mcp.services.memory_reducer import projection_fingerprint, require_reducer_state
 
 
@@ -88,14 +89,14 @@ class MemoryProjectionStore:
     async def _materialize_dense(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
         model = get_settings().embedding_model.replace("/", "_").replace("-", "_")
-        collection = f"memories_dense_{model}_012_v1_s{scope_id}_e{event_id}"
+        collection = f"memories_dense_{model}_012_v2"
         if not await asyncio.to_thread(self.qdrant.collection_exists, collection):
             await asyncio.to_thread(self.qdrant.create_collection, collection, self.embedding.get_dimension())
         rows = list(state["dense"].values())
         if rows:
             vectors = await self.embedding.embed_texts([row["content_text"] for row in rows])
-            points = [PointStruct(id=row["memory_id"], vector=vector,
-                                  payload={**row, "knowledge_scope_id": str(scope_id)})
+            points = [PointStruct(id=revision_point_id(scope_id, event_id, row["memory_id"]), vector=vector,
+                                  payload={**row, "knowledge_scope_id": str(scope_id), "projection_revision": str(event_id)})
                       for row, vector in zip(rows, vectors, strict=True)]
             await asyncio.to_thread(self.qdrant._client.upsert, collection_name=collection, points=points, wait=True)
         return collection
@@ -174,13 +175,13 @@ class MemoryProjectionStore:
                 "projection_id": f"{scope_id}:{event_id}:{name}", "projection_type": name,
                 "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
                 "fingerprint": projection_fingerprint(state[key]),
-                "payload": {"state": state[key], "collection": collection, "root": str(self.root)},
+                "payload": {"state": state[key], "collection": collection, "root": str(self.root), "dense_revision": event_id},
             }, "projection_id")
         await self._upsert(MemoryProjectionMeta, {
             "projection_id": f"current:{scope_id}", "projection_type": "manifest",
             "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
             "fingerprint": projection_fingerprint(state),
-            "payload": {"state": state.export(), "collection": collection, "root": str(self.root)},
+            "payload": {"state": state.export(), "collection": collection, "root": str(self.root), "dense_revision": event_id},
         }, "projection_id")
         await self.session.flush()
 
@@ -219,12 +220,15 @@ class MemoryProjectionStore:
         expected_relation = {mid: {key: value for key, value in row.items() if key in MemoryEntry.__table__.columns}
                              for mid, row in expected.items()}
         points, _ = await asyncio.to_thread(self.qdrant._client.scroll,
-            collection_name=current.payload["collection"], limit=10000, with_payload=True, with_vectors=True)
-        actual["dense"] = {int(point.id): {**point.payload, "knowledge_scope_id": int(point.payload["knowledge_scope_id"])} for point in points}
+            collection_name=current.payload["collection"], scroll_filter=revision_filter(scope_id, current.payload.get("dense_revision")),
+            limit=10000, with_payload=True, with_vectors=True)
+        actual["dense"] = {int(point.payload["memory_id"]): {
+            **{key: value for key, value in point.payload.items() if key != "projection_revision"},
+            "knowledge_scope_id": int(point.payload["knowledge_scope_id"])} for point in points}
         expected_ids = sorted(state["dense"])
         vectors = await self.embedding.embed_texts([state["dense"][mid]["content_text"] for mid in expected_ids])
         expected_vectors = dict(zip(expected_ids, vectors, strict=True))
-        actual_vectors = {int(point.id): point.vector for point in points}
+        actual_vectors = {int(point.payload["memory_id"]): point.vector for point in points}
         vectors_match = set(actual_vectors) == set(expected_vectors) and all(
             isinstance(actual_vectors[mid], list) and len(actual_vectors[mid]) == len(vector)
             and all(math.isclose(actual, expected, abs_tol=1e-6, rel_tol=1e-5)

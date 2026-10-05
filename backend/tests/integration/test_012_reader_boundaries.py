@@ -51,7 +51,7 @@ async def test_partial_dense_failure_preserves_successful_scope_intersection(db_
     first_manifest = await service.projections.current(sid)
     original = service.projections.qdrant._client.query_points
     def partially_available(**kwargs):
-        if kwargs["collection_name"] == first_manifest.payload["collection"]:
+        if str(sid) in kwargs["query_filter"].model_dump_json():
             return original(**kwargs, score_threshold=1.1)
         raise OSError("one scope failed")
     monkeypatch.setattr(service.projections.qdrant._client, "query_points", partially_available)
