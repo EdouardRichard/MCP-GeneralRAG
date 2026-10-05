@@ -53,7 +53,8 @@ def write_rates(measurements):
             "fingerprints": {}, "paths": rates}
 
 
-def build_report(*, suite, trace, host, regression, diagnostics):
+def build_report(*, suite, trace, host, regression, diagnostics,
+                 suite_command="python -m pytest -vv --tb=short --durations=30"):
     cases = list(ET.parse(suite).getroot().iter("testcase"))
     outcomes = {}
     for case in cases:
@@ -97,7 +98,7 @@ def build_report(*, suite, trace, host, regression, diagnostics):
     report = {
         "report_type": "012_memory_acceptance", "generated_at": datetime.now(timezone.utc).isoformat(),
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "status": status, "suite": {"command": "python -m pytest -vv --tb=short --durations=30",
+        "status": status, "suite": {"command": suite_command,
             "passed": sum(value == "passed" for value in outcomes.values()), "failed": failed,
             "skipped": sum(value == "skipped" for value in outcomes.values()), "evidence": str(suite)},
         "host": {key: host_data[key] for key in ("name", "workspace", "status", "evidence")},
@@ -113,11 +114,12 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--regression", nargs="+", type=Path, default=[])
     parser.add_argument("--diagnostics", type=Path)
+    parser.add_argument("--suite-command", default="python -m pytest -vv --tb=short --durations=30")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output already exists; historical evidence must not be overwritten")
     report = build_report(suite=args.suite, trace=args.trace, host=args.host,
-                          regression=args.regression, diagnostics=args.diagnostics)
+                          regression=args.regression, diagnostics=args.diagnostics, suite_command=args.suite_command)
     write_report(args.output, report)
     print(json.dumps({"status": report["status"], "suite": report["suite"], "criteria": {row["id"]: row["status"] for row in report["success_criteria"]}}))
     return 0 if report["status"] == "passed" else 1

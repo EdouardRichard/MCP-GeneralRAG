@@ -127,8 +127,9 @@ class MemoryHistory:
                 protected.add(event["payload"].get("event_point"))
                 protected.update(event["payload"].get("impact", {}).get("memory_ids", []))
             for ref in (event["payload"].get("inference_meta") or {}).get("supporting_evidence", []):
-                if ref.startswith("memory:") and ref[7:].isdecimal():
-                    protected.add(int(ref[7:]))
+                identifier = ref.removeprefix("memory:")
+                if identifier.isdecimal():
+                    protected.add(int(identifier))
         eligible = [event for event in online if
             event["event_type"] == "access" and datetime.fromisoformat(event["occurred_at"]) < reference - timedelta(days=90)
             or event["event_type"] == "assert" and latest is not None and event["event_id"] <= latest.covered_through_event_id
