@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from mcp.types import CallToolResult, ToolAnnotations
-from pydantic import Field
+from pydantic import Field, StrictFloat, StrictInt
 
 from rag_mcp.mcp.serialization import close_input_schema, memory_error, memory_result
 from rag_mcp.services.memory_service import MemoryService
@@ -18,9 +18,9 @@ def register_record_memory_tool(server, session_factory, embedding_provider, qdr
         content: Annotated[str, Field(min_length=1, max_length=4000)],
         provenance: Literal["hard", "soft", "distilled"],
         evidence_refs: list[str] | None = None, inference_meta: dict | None = None,
-        confidence: Annotated[float | None, Field(ge=0, le=1)] = None,
+        confidence: Annotated[StrictFloat | None, Field(ge=0, le=1)] = None,
         title: str | None = None, tags: list[str] | None = None, session_id: UUID | None = None,
-        agent_id: str | None = None, task_context: dict | None = None, supersedes_memory_id: int | None = None,
+        agent_id: str | None = None, task_context: dict | None = None, supersedes_memory_id: StrictInt | None = None,
     ) -> CallToolResult:
         """Record scoped, sanitized memory with validated provenance and synchronous projections."""
         try:

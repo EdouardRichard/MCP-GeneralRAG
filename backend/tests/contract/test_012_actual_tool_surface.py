@@ -3,6 +3,7 @@ import pytest
 
 from rag_mcp.mcp import create_mcp_server
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+from pydantic import ValidationError
 
 
 @pytest.mark.asyncio
@@ -45,3 +46,27 @@ async def test_generated_memory_schema_exposes_contract_inputs_only():
 def test_unknown_mode_does_not_silently_become_reader():
     with pytest.raises(ValueError, match="mode"):
         create_mcp_server(embedding_provider=LocalCPUEmbeddingProvider(), mode="typo")
+
+
+@pytest.mark.parametrize("tool,field,value", [
+    ("record_memory", "confidence", True),
+    ("record_memory", "confidence", "0.8"),
+    ("record_memory", "supersedes_memory_id", True),
+    ("record_memory", "supersedes_memory_id", "123"),
+    ("recall_memory", "limit", True),
+    ("recall_memory", "limit", "10"),
+    ("recall_memory", "memory_ids", [True]),
+    ("recall_memory", "include_superseded", "false"),
+])
+def test_actual_mcp_argument_models_reject_scalar_coercion(tool, field, value):
+    server = create_mcp_server(embedding_provider=LocalCPUEmbeddingProvider(), mode="writer")
+    arguments = {"scope_ref": "1", "kind": "semantic", "content": "fact", "provenance": "hard"} if tool == "record_memory" else {"scope_ref": ["1"]}
+    arguments[field] = value
+    with pytest.raises(ValidationError):
+        server._tool_manager.get_tool(tool).fn_metadata.arg_model.model_validate(arguments)
+
+
+def test_content_conflict_keeps_its_contract_error_code():
+    from rag_mcp.mcp.serialization import memory_error
+    result = memory_error(ValueError("MEMORY_CONTENT_CONFLICT:123"))
+    assert result.structuredContent["error"]["code"] == "MEMORY_CONTENT_CONFLICT"

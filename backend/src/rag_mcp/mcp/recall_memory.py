@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from mcp.types import CallToolResult, ToolAnnotations
-from pydantic import Field
+from pydantic import Field, StrictBool, StrictInt
 
 from rag_mcp.mcp.serialization import close_input_schema, memory_error, memory_result
 from rag_mcp.services.memory_service import MemoryService
@@ -14,11 +14,11 @@ def register_recall_memory_tool(server, session_factory, embedding_provider, qdr
         readOnlyHint=True, destructiveHint=False, idempotentHint=True))
     async def recall_memory(
         scope_ref: Annotated[list[str], Field(min_length=1)],
-        query: Annotated[str | None, Field(max_length=2000)] = None, memory_ids: list[int] | None = None,
+        query: Annotated[str | None, Field(max_length=2000)] = None, memory_ids: list[StrictInt] | None = None,
         kind: Literal["episodic", "semantic", "procedural"] | None = None,
         session_id: UUID | None = None, agent_id: str | None = None, time_window: dict | None = None,
-        as_of: datetime | None = None, include_superseded: bool = False, include_delivered: bool = False,
-        limit: Annotated[int, Field(ge=1, le=50)] = 10,
+        as_of: datetime | None = None, include_superseded: StrictBool = False, include_delivered: StrictBool = False,
+        limit: Annotated[StrictInt, Field(ge=1, le=50)] = 10,
     ) -> CallToolResult:
         """Recall only explicitly scoped completed memory; semantic status is verified in PG."""
         try:
