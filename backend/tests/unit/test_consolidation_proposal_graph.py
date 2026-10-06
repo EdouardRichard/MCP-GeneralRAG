@@ -333,6 +333,136 @@ def test_different_attachments_share_one_derive_event_on_same_aggregate():
     assert set(result.groups[0].event_plan[-1]['value']) == {'links', 'context'}
 
 
+@pytest.mark.parametrize('change', [
+    {'context': {'context_digest': 'context', 'keywords': [{'proposal_ref': {'x': 1}}]}},
+    {'context': {'context_digest': 'context', 'keywords': [{'proposal_ref': ['a']}]}},
+    {'context': {'context_digest': 'context', 'keywords': [{'proposal_ref': 'rule'}]}},
+    {'context': {'context_digest': {'proposal_ref': 'a'}, 'keywords': []}},
+    {'context': {'context_digest': 'context', 'keywords': [['nested']]}},
+    {'context': {'context_digest': 'context', 'keywords': [None]}},
+    {'context': {'context_digest': 'context', 'keywords': [], 'extra': {'proposal_ref': 'rule'}}},
+    {'content': {'proposal_ref': 'a'}},
+    {'title': {'proposal_ref': {'x': 1}}},
+    {'justification': {'proposal_ref': 'rule'}},
+    {'confidence': {'proposal_ref': {'x': 1}}},
+    {'evidence_refs': [{'proposal_ref': 'a'}]},
+    {'source_refs': [{**ref(row(1)), 'proposal_ref': {'x': 1}}]},
+    {'source_refs': [{'proposal_ref': 'a'}]},
+    {'unknown': {'proposal_ref': {'x': 1}}},
+    {1: 'non-string top-level key'},
+    {'context': {'context_digest': 'context', 'keywords': [], 1: 'non-string context key'}},
+    {'unknown': {'ordinary': 'value', None: 'non-string nested key'}},
+    {'unknown': {('tuple', 1): 'tuple key', 'ordinary': 'value'}},
+    {'action': 'merge_duplicate', 'survivor_ref': {'local': 'output'},
+     'duplicate_refs': [ref(row(3))], 'equivalence_basis': 'exact'},
+    {'action': 'invalidate_contradiction', 'target_ref': ref(row(2)),
+     'correcting_ref': {'proposal_ref': {'x': 1}}, 'contradiction_basis': 'correction'},
+])
+def test_malformed_nested_packet_preserves_rule_only_results_and_audit_identity(change):
+    rule, creator = trusted_merge(), proposal('a')
+    malformed = {**proposal('bad'), **change}
+    if malformed['action'] in ('merge_duplicate', 'invalidate_contradiction'):
+        malformed.pop('kind')
+        malformed.pop('content')
+    current, context = setup(rule, creator)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([creator, malformed], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert result.groups[0].event_plan == baseline.groups[0].event_plan
+    assert result.groups[0].source_outcomes == baseline.groups[0].source_outcomes
+    for decision in result.decisions[1:]:
+        rejected(decision, 'PROPOSAL_INVALID')
+    assert result.decisions[1].decision_id != result.decisions[2].decision_id
+    assert batch([creator, malformed], current=current, context=context, deterministic=[rule]) == result
+    renamed = [{**malformed, 'proposal_id': 'renamed_bad'}, {**creator, 'proposal_id': 'renamed_a'}]
+    retry = batch(renamed, current=current, context=context, deterministic=[rule])
+    assert retry.groups == baseline.groups
+    assert {d.decision_id for d in retry.decisions[1:]} == {d.decision_id for d in result.decisions[1:]}
+
+
+@pytest.mark.parametrize('field,value', [
+    ('from_ref', {'proposal_ref': {'x': 1}}), ('to_ref', {'proposal_ref': ['a']}),
+    ('from_ref', {'proposal_ref': None}), ('to_ref', {'proposal_ref': 'Invalid label'}),
+    ('from_ref', {**ref(row(2)), 'proposal_ref': 'a'}),
+    ('description', {'proposal_ref': 'rule'}), ('relation_type', {'proposal_ref': 'a'}),
+    ('confidence', {'proposal_ref': {'x': 1}}), ('extra', {'proposal_ref': 'rule'}),
+    (1, 'non-string link key'),
+])
+def test_malformed_link_packet_preserves_rule_only_results(field, value):
+    rule, model = trusted_merge(), linked('model', 'a')
+    model['link_suggestions'][0][field] = value
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([model], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert result.groups[0].event_plan == baseline.groups[0].event_plan
+    assert result.groups[0].source_outcomes == baseline.groups[0].source_outcomes
+    rejected(result.decisions[1], 'PROPOSAL_INVALID')
+    assert batch([model], current=current, context=context, deterministic=[rule]) == result
+
+
+def test_legal_nested_model_graph_keeps_text_literal_and_rule_results(monkeypatch):
+    import builtins
+    import socket
+
+    from tests.contract.test_consolidation_schemas import validator
+
+    literal = '{"proposal_ref":"rule"}'
+    rule, creator, dependent = trusted_merge(), proposal('a'), linked('b', 'a')
+    dependent.update(title=literal, justification=literal,
+                     context={'context_digest': literal, 'keywords': [literal]})
+    dependent['link_suggestions'][0]['description'] = literal
+    validator('distiller-output.schema.json').validate({'proposals': [dependent, creator, rule]})
+    current, context = setup(rule, creator, dependent)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('unexpected I/O')
+
+    monkeypatch.setattr(builtins, 'open', forbidden)
+    monkeypatch.setattr(socket, 'socket', forbidden)
+    result = batch([dependent, creator], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert baseline.groups[0] in result.groups
+    assert all(d.decision == 'accept' for d in result.decisions)
+    assert all(d.proof['origin'] == 'llm_self' for d in result.decisions[1:])
+    group = next(g for g in result.groups if g != baseline.groups[0])
+    assert [event['operation'] for event in group.event_plan] == ['create', 'create', 'derive']
+    derived = group.event_plan[-1]['value']
+    assert derived['context']['keywords'] == (literal,)
+    assert derived['context']['context_digest'] == literal
+    assert derived['links'][0]['description'] == literal
+    assert derived['links'][0]['to_ref'] == group.event_plan[0]['aggregate_id']
+    malformed = {**dependent, 'context': {'context_digest': literal, 'keywords': [{'proposal_ref': {'x': 1}}]}}
+    invalid = batch([malformed, creator], current=current, context=context, deterministic=[rule])
+    assert invalid.decisions[0] == baseline.decisions[0]
+    assert invalid.groups == baseline.groups
+    for decision in invalid.decisions[1:]:
+        rejected(decision, 'PROPOSAL_INVALID')
+
+
+def test_malformed_nested_keys_and_misplaced_references_remain_distinct_audit_values():
+    models = [proposal(f'p{index}', unknown=value) for index, value in enumerate([
+        {1: 'value'}, {'1': 'value'}, {None: 'value'}, {'None': 'value'},
+        {('key', 1): 'value'}, {'proposal_ref': 'a'}, {'proposal_ref': 'b'},
+    ])]
+    rule = trusted_merge()
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch(models, current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert len({decision.decision_id for decision in result.decisions[1:]}) == len(models)
+    for decision in result.decisions[1:]:
+        rejected(decision, 'PROPOSAL_INVALID')
+    renamed = [{**model, 'proposal_id': f'renamed{index}'} for index, model in enumerate(reversed(models))]
+    repeated = batch(renamed, current=current, context=context, deterministic=[rule])
+    assert repeated.groups == baseline.groups
+    assert {d.decision_id for d in repeated.decisions[1:]} == {d.decision_id for d in result.decisions[1:]}
+
+
 def test_disjoint_proposal_shuffle_keeps_stable_group_keys():
     proposals = [proposal('a', content='a'), proposal('b', source=row(2), content='b')]
     assert batch(proposals).groups == batch(list(reversed(proposals))).groups

@@ -51,6 +51,9 @@ def proposal(identifier='p0', source=None, **changes):
              'confidence': .8, 'justification': 'observed fact', 'evidence_refs': [],
              'kind': 'semantic', 'content': 'a conclusion'}
     value.update(changes)
+    if value['action'] in ('merge_duplicate', 'invalidate_contradiction'):
+        value.pop('kind', None)
+        value.pop('content', None)
     return value
 
 

@@ -60,18 +60,25 @@ def reject(reason, *, key=None):
 
 def _rejection_value(value, references=None):
     """Typed audit encoding keeps invalid numbers distinct from JSON values."""
-    if isinstance(value, Mapping):
-        if set(value) == {'proposal_ref'}:
-            label = value['proposal_ref']
-            return ['proposal_ref', (references or {}).get(label, 'unresolved')
-                    if isinstance(label, str) else _rejection_value(label)]
-        return ['object', [[key, _rejection_value(item, references)] for key, item in sorted(value.items())
-                           if key not in {'proposal_id', 'run_id', 'request_id'}]]
-    if isinstance(value, (tuple, list)):
-        return ['array', [_rejection_value(item, references) for item in value]]
-    if isinstance(value, float) and not math.isfinite(value):
-        return ['nonfinite', str(value)]
-    return ['scalar', value]
+    endpoints = set(_endpoint_paths(value)) if isinstance(value, Mapping) else set()
+
+    def encode(item, path=()):
+        if isinstance(item, Mapping):
+            if path in endpoints and set(item) == {'proposal_ref'}:
+                label = item['proposal_ref']
+                if isinstance(label, str):
+                    return ['proposal_ref', (references or {}).get(label, 'unresolved')]
+            pairs = [[key if isinstance(key, str) else encode(key), encode(child, (*path, key))]
+                     for key, child in item.items() if key not in {'proposal_id', 'run_id', 'request_id'}]
+            pairs.sort(key=lambda pair: (0, pair[0]) if isinstance(pair[0], str) else (1, stable_key(pair[0])))
+            return ['object', pairs]
+        if isinstance(item, (tuple, list)):
+            return ['array', [encode(child, (*path, index)) for index, child in enumerate(item)]]
+        if isinstance(item, float) and not math.isfinite(item):
+            return ['nonfinite', str(item)]
+        return ['scalar', item]
+
+    return encode(value)
 
 
 def _rejection_facts(proposal, current):
@@ -713,25 +720,44 @@ class BatchDecision:
     groups: tuple
 
 
-def _references(value):
-    if isinstance(value, Mapping):
-        if 'proposal_ref' in value:
+def _endpoint_paths(proposal):
+    """Only contract-defined targets and link endpoints can reference batch outputs."""
+    action = proposal.get('action')
+    if action == 'merge_duplicate':
+        yield ('survivor_ref',)
+        duplicates = proposal.get('duplicate_refs', ())
+        if isinstance(duplicates, (tuple, list)):
+            for index in range(len(duplicates)):
+                yield ('duplicate_refs', index)
+    elif action == 'invalidate_contradiction':
+        yield ('target_ref',)
+        yield ('correcting_ref',)
+    links = proposal.get('link_suggestions', ())
+    if isinstance(links, (tuple, list)):
+        for index in range(len(links)):
+            yield ('link_suggestions', index, 'from_ref')
+            yield ('link_suggestions', index, 'to_ref')
+
+
+def _references(proposal):
+    for path in _endpoint_paths(proposal):
+        value = proposal
+        for key in path:
+            value = value[key]
+        if isinstance(value, Mapping) and set(value) == {'proposal_ref'} and isinstance(value['proposal_ref'], str):
             yield value['proposal_ref']
-        for item in value.values():
-            yield from _references(item)
-    elif isinstance(value, (tuple, list)):
-        for item in value:
-            yield from _references(item)
 
 
-def _resolve_outputs(value, outputs):
-    if isinstance(value, Mapping):
-        if 'proposal_ref' in value:
-            return {'output_key': outputs[value['proposal_ref']]}
-        return {k: _resolve_outputs(v, outputs) for k, v in value.items()}
-    if isinstance(value, (tuple, list)):
-        return [_resolve_outputs(v, outputs) for v in value]
-    return value
+def _resolve_outputs(proposal, outputs):
+    resolved = thaw(proposal)
+    for path in _endpoint_paths(proposal):
+        parent = resolved
+        for key in path[:-1]:
+            parent = parent[key]
+        value = parent[path[-1]]
+        if isinstance(value, Mapping) and set(value) == {'proposal_ref'}:
+            parent[path[-1]] = {'output_key': outputs[value['proposal_ref']]}
+    return resolved
 
 
 def _proposal_order(value):
@@ -775,14 +801,14 @@ def _model_structure_valid(proposal):
     def sequence(value):
         return isinstance(value, (tuple, list))
 
-    def reference(value, *, source=False):
+    def reference(value, *, source=False, local=False):
         if not isinstance(value, Mapping):
             return False
         if not source and set(value) == {'proposal_ref'}:
-            return isinstance(value['proposal_ref'], str)
-        if not source and set(value) == {'local'}:
+            return isinstance(value['proposal_ref'], str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}', value['proposal_ref']) is not None
+        if local and set(value) == {'local'}:
             return value['local'] == 'output'
-        return (set(VERSION_FIELDS) <= value.keys()
+        return (set(VERSION_FIELDS) == value.keys()
                 and all(isinstance(value[key], int) and not isinstance(value[key], bool)
                         for key in VERSION_FIELDS[:3]) and isinstance(value['content_hash'], str))
 
@@ -792,6 +818,18 @@ def _model_structure_valid(proposal):
         return False
     action = proposal.get('action')
     if not isinstance(action, str):
+        return False
+    common = {'proposal_id', 'action', 'source_refs', 'confidence', 'justification', 'evidence_refs',
+              'link_suggestions', 'context', 'run_id', 'request_id'}
+    fields = {'extract_fact': {'kind', 'content', 'title'}, 'distill_procedure': {'kind', 'content', 'title'},
+              'merge_duplicate': {'survivor_ref', 'duplicate_refs', 'equivalence_basis'},
+              'invalidate_contradiction': {'target_ref', 'correcting_ref', 'contradiction_basis'}}
+    if not proposal.keys() <= common | fields.get(action, {'kind', 'content', 'title'}):
+        return False
+    if any(not isinstance(proposal[key], str) for key in (
+        'title', 'justification', 'equivalence_basis', 'contradiction_basis', 'run_id', 'request_id') if key in proposal):
+        return False
+    if isinstance(proposal.get('confidence'), (Mapping, tuple, list)):
         return False
     if action in CREATES and not all(isinstance(proposal.get(key), str) for key in ('kind', 'content')):
         return False
@@ -805,12 +843,16 @@ def _model_structure_valid(proposal):
         return False
     links = proposal.get('link_suggestions', ())
     if not sequence(links) or any(not isinstance(link, Mapping)
-        or not {'from_ref', 'to_ref', 'relation_type', 'confidence', 'description'} <= link.keys()
-        or not reference(link['from_ref']) or not reference(link['to_ref']) for link in links):
+        or {'from_ref', 'to_ref', 'relation_type', 'confidence', 'description'} != link.keys()
+        or not reference(link['from_ref'], local=True) or not reference(link['to_ref'], local=True)
+        or not isinstance(link['relation_type'], str) or not isinstance(link['description'], str)
+        or isinstance(link['confidence'], (Mapping, tuple, list)) for link in links):
         return False
     if 'context' in proposal:
         context = proposal['context']
-        if not isinstance(context, Mapping) or not isinstance(context.get('context_digest'), str) or not sequence(context.get('keywords')):
+        if (not isinstance(context, Mapping) or set(context) != {'context_digest', 'keywords'}
+            or not isinstance(context.get('context_digest'), str) or not sequence(context.get('keywords'))
+            or not all(isinstance(keyword, str) for keyword in context['keywords'])):
             return False
     return True
 
