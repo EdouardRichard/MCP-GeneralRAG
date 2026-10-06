@@ -188,3 +188,62 @@ async def test_trusted_database_window_guard_rejects_malformed_control(db_sessio
     finally:
         await db_session.rollback()
     assert await runtime.release(token)
+
+
+@pytest.mark.asyncio
+async def test_first_publication_failure_requires_recovery_instead_of_empty_window(db_session, memory_writer_owner, monkeypatch):
+    from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
+    from rag_mcp.services.consolidation_runtime import ConsolidationRuntime, ConsolidationRuntimeError
+    from rag_mcp.services.memory_service import MemoryService
+
+    scope = await create_scope(db_session)
+    service = MemoryService(db_session, embedding_provider=StableEmbedding())
+    async def unavailable(*args, **kwargs):
+        raise OSError('controlled first publication failure')
+    monkeypatch.setattr(service.projections, '_materialize_dense', unavailable)
+    with pytest.raises(ValueError, match='MEMORY_WRITE_UNAVAILABLE'):
+        await recorded_episode(service, scope, 'First unpublished episode')
+    assert await db_session.get(MemoryProjectionMeta, f'current:{scope}') is None
+    await db_session.rollback()
+    runtime = ConsolidationRuntime(db_session, owner=memory_writer_owner, memory_service=service)
+    token = await runtime.admit(scope, trigger='manual')
+    with pytest.raises(ConsolidationRuntimeError, match='CONSOLIDATION_COMPLETE_MANIFEST_REQUIRED'):
+        await runtime.select_and_seal(token)
+    assert (await runtime.latest_observation(token.run_id)).status == 'admitted'
+    await db_session.rollback()
+    assert await runtime.release(token)
+
+
+@pytest.mark.asyncio
+async def test_budget_exclusion_is_reported_separately_from_empty_window(db_session, memory_writer_owner):
+    from rag_mcp.models.domain_profile import DomainProfile
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.services.consolidation_runtime import ConsolidationRuntime
+    from rag_mcp.services.memory_service import MemoryService
+
+    scope = await create_scope(db_session)
+    profile = await db_session.get(DomainProfile, (await db_session.get(KnowledgeScope, scope)).domain_key)
+    profile.memory_policy = {'consolidation_enabled': True, 'consolidation': {'max_input_chars': 4000}}
+    await db_session.commit()
+    service = MemoryService(db_session, embedding_provider=StableEmbedding())
+    oversized = await recorded_episode(service, scope, 'x' * 4000)
+    runtime = ConsolidationRuntime(db_session, owner=memory_writer_owner, memory_service=service)
+    token = await runtime.admit(scope, trigger='manual')
+    window = await runtime.select_and_seal(token)
+    assert window.input_episode_refs == () and window.truncated and window.window_id is None
+    assert (await runtime.latest_observation(token.run_id)).degradation_reasons == ['input_budget_excluded']
+    current = await runtime.read_snapshot(scope)
+    assert current.entries[oversized['memory_id']]['status'] == 'active'
+    assert current.consolidation_state['potential_source_outcomes'] == {}
+    await db_session.rollback()
+    assert await runtime.release(token)
+    fitting = await recorded_episode(service, scope, 'A later fitting episode')
+    token = await runtime.admit(scope, trigger='manual')
+    window = await runtime.select_and_seal(token)
+    assert [ref.memory_id for ref in window.input_episode_refs] == [fitting['memory_id']]
+    assert window.truncated and window.window_id is not None
+    current = await runtime.read_snapshot(scope)
+    assert current.entries[oversized['memory_id']]['status'] == 'active'
+    assert current.consolidation_state['potential_source_outcomes'] == {}
+    await db_session.rollback()
+    assert await runtime.release(token)

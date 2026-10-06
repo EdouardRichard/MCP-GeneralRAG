@@ -125,3 +125,25 @@ def test_unconsumed_sources_before_checkpoint_remain_eligible():
     window = select_window(snapshot, policy=MemoryPolicy.model_validate({'consolidation': {}}), now=NOW)
     assert [ref.memory_id for ref in window.input_episode_refs] == [1, 2]
     assert window.start == NOW - timedelta(seconds=10)
+
+
+def test_oversized_oldest_episode_does_not_block_fitting_later_input():
+    oldest = event(1)
+    oldest['payload']['content_text'] = 'x' * 4000
+    events = [oldest, event(2, offset=-5), event(3, offset=-1)]
+    before = reduce_events(events)
+    window = select(events, policy={'max_input_chars': 4000, 'batch_size': 1})
+    assert [ref.memory_id for ref in window.input_episode_refs] == [2]
+    assert window.truncated
+    assert window == select(events, policy={'max_input_chars': 4000, 'batch_size': 1})
+    assert before['consolidation_state']['potential_source_outcomes'] == {}
+    assert before['entries'][1]['status'] == 'active'
+
+
+def test_oversized_reference_does_not_block_fitting_later_reference():
+    oversized = event(2, kind='semantic')
+    oversized['payload']['content_text'] = 'x' * 4000
+    window = select([event(1), oversized, event(3, kind='procedural')],
+                    policy={'max_input_chars': 4000, 'reference_limit': 1})
+    assert [ref.memory_id for ref in window.input_episode_refs] == [1]
+    assert [ref.memory_id for ref in window.reference_refs] == [3]

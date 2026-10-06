@@ -331,11 +331,26 @@ class ConsolidationRuntime:
         profile = await self.session.get(DomainProfile, scope.domain_key, populate_existing=True)
         vocabulary = validate_memory_link_vocabulary(profile.memory_link_vocabulary or [])
         manifest = await self.session.get(MemoryProjectionMeta, f'current:{scope_id}', populate_existing=True)
+        if manifest is None and await self.session.scalar(select(MemoryEvent.event_id).where(
+                MemoryEvent.knowledge_scope_id == scope_id).limit(1)) is not None:
+            raise ConsolidationRuntimeError('CONSOLIDATION_COMPLETE_MANIFEST_REQUIRED')
         high_water = manifest.source_event_id if manifest and manifest.status == 'complete' else 0
         state = reduce_events(await MemoryEventStore(self.session).replay(scope_id, through_event_id=high_water))
-        if manifest and (manifest.status != 'complete' or projection_fingerprint(state) != manifest.fingerprint
-                         or projection_fingerprint(state) != projection_fingerprint(manifest.payload.get('state'))):
-            raise ConsolidationRuntimeError('CONSOLIDATION_COMPLETE_MANIFEST_REQUIRED')
+        if manifest:
+            replay = state.export()
+            saved = (manifest.payload or {}).get('state')
+            if isinstance(saved, dict) and 'consolidation_state' not in saved:
+                # 0094 published this exact version without the empty 013 control registry.
+                legacy_keys = {'entries', 'dense', 'links', 'summary', 'files', 'salience', 'bindings'}
+                empty_controls = reduce_events([])['consolidation_state']
+                if (manifest.projection_version != '012-v1' or manifest.payload.get('verification_version') != 1
+                    or set(saved) != legacy_keys or replay['consolidation_state'] != empty_controls):
+                    raise ConsolidationRuntimeError('CONSOLIDATION_COMPLETE_MANIFEST_REQUIRED')
+                del replay['consolidation_state']
+            if (manifest.status != 'complete' or high_water <= 0
+                or projection_fingerprint(replay) != manifest.fingerprint
+                or projection_fingerprint(replay) != projection_fingerprint(saved)):
+                raise ConsolidationRuntimeError('CONSOLIDATION_COMPLETE_MANIFEST_REQUIRED')
         return CurrentSnapshot.from_verified_state(state, scope_id=scope_id, high_water_mark=high_water,
                                                    verified_complete=True, vocabulary=vocabulary)
 
@@ -386,7 +401,7 @@ class ConsolidationRuntime:
             window = select_window(current, policy=policy, now=now, token=token)
             if not window.input_episode_refs:
                 await self._observe_locked(token, status='no_change', window=None, input_event_ids=[],
-                                           degradation_reasons=['empty_window'])
+                    degradation_reasons=['input_budget_excluded' if window.truncated else 'empty_window'])
                 return window
             latest_event = await self.session.scalar(select(func.max(MemoryEvent.event_id)).where(
                 MemoryEvent.knowledge_scope_id == token.scope_id))

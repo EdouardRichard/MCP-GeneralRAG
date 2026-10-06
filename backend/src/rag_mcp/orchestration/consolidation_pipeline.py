@@ -245,18 +245,22 @@ def select_window(current: CurrentSnapshot, *, policy, now, start=None, token=No
                            if start <= ref.observed_at < end and ref.source_event_id <= high_water),
                           key=lambda pair: (pair[0].observed_at, pair[0].source_event_id))
     reference_rows = sorted(((ref, row) for ref, row in eligible if row.get('kind') in ('semantic', 'procedural')),
-                            key=lambda pair: pair[0].memory_id)[:config.reference_limit]
+                            key=lambda pair: pair[0].memory_id)
     inputs, references, chars = [], [], 0
-    for pair in episode_rows[:config.batch_size]:
+    for pair in episode_rows:
+        if len(inputs) >= config.batch_size:
+            break
         size = len(json.dumps(pair[1], sort_keys=True, ensure_ascii=False, allow_nan=False))
         if chars + size > config.max_input_chars:
-            break
+            continue
         inputs.append(pair)
         chars += size
     for pair in reference_rows:
+        if len(references) >= config.reference_limit:
+            break
         size = len(json.dumps(pair[1], sort_keys=True, ensure_ascii=False, allow_nan=False))
         if chars + size > config.max_input_chars:
-            break
+            continue
         references.append(pair)
         chars += size
     return WindowSnapshot(current.scope_id, start, end, now, high_water,
