@@ -1,4 +1,6 @@
 import pytest
+import json
+from types import SimpleNamespace
 
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.services.memory_service import MemoryService
@@ -6,11 +8,108 @@ from tests.integration.test_012_live_reader import scope_and_payload
 
 
 def visible_characters(value):
-    if isinstance(value, dict):
-        return sum(visible_characters(item) for item in value.values())
-    if isinstance(value, list):
-        return sum(visible_characters(item) for item in value)
-    return len(value) if isinstance(value, str) else 0
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+
+@pytest.mark.asyncio
+async def test_complete_recall_and_work_bodies_include_envelope_text_in_budget(monkeypatch):
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.services.memory_reader import MemoryReader, public_entry
+    from rag_mcp.services.scope_resolver import MemoryScopeResolver
+
+    row = {"memory_id": 1, "knowledge_scope_id": 7, "kind": "procedural", "provenance": "soft",
+           "content_text": "C" * 4000, "evidence_refs": [], "inference_meta": {"source": ""},
+           "status": "active", "observed_at": "2020-01-01T00:00:00+00:00",
+           "valid_from": "2020-01-01T00:00:00+00:00", "valid_to": None, "expires_at": None}
+    row["inference_meta"]["source"] = "M" * (6000 - visible_characters(public_entry(row)))
+
+    class Session:
+        async def execute(self, *args):
+            return None
+
+        async def commit(self):
+            return None
+
+        def add(self, audit):
+            return None
+
+        async def get(self, model, key):
+            if model is KnowledgeScope:
+                return SimpleNamespace(slug="scope-" + "s" * 50, domain_key="custom-" + "k" * 40)
+            return SimpleNamespace(description="D" * 4000, memory_policy={})
+
+    async def resolve_many(self, reference):
+        return [7]
+
+    async def resolve(self, reference):
+        return 7
+
+    async def views(self, *args, **kwargs):
+        return {index: {**row, "memory_id": index} for index in range(1, 21)}, {}, [], []
+
+    monkeypatch.setattr(MemoryScopeResolver, "resolve_many", resolve_many)
+    monkeypatch.setattr(MemoryScopeResolver, "resolve", resolve)
+    monkeypatch.setattr(MemoryReader, "_views", views)
+    reader = MemoryReader(Session(), None)
+    result = await reader.recall(scope_ref=["7"])
+    assert visible_characters(result) <= 6000
+    assert result["counts"]["characters"] == visible_characters(result)
+    row["inference_meta"] = None
+    for budget, maximum in (("standard", 2000), ("compact", 800), ("minimal", 300)):
+        result = await reader.start_work(scope_ref="7", budget=budget)
+        body = {key: value for key, value in result.items() if key != "request_id"}
+        assert visible_characters(body) <= maximum
+        assert body["counts"]["characters"] == visible_characters(body)
+        assert len(body["package_fingerprint"]) == 64
+        assert body["read_guidance"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("boundary", ["valid_from", "valid_to", "expires_at"])
+async def test_stable_package_omits_time_sensitive_entries_across_clock_boundaries(monkeypatch, boundary):
+    from datetime import datetime, timedelta, timezone
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    import rag_mcp.services.memory_reader as module
+    from rag_mcp.services.scope_resolver import MemoryScopeResolver
+
+    pivot = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    rows = {1: {"memory_id": 1, "knowledge_scope_id": 7, "kind": "episodic", "provenance": "soft",
+                "content_text": "Temporally limited fact.", "status": "active", "evidence_refs": [], "inference_meta": None,
+                "observed_at": (pivot - timedelta(days=1)).isoformat(),
+                "valid_from": (pivot - timedelta(days=1)).isoformat(), "valid_to": None, "expires_at": None}}
+    rows[1][boundary] = pivot.isoformat()
+    rows[2] = {**rows[1], "memory_id": 2, "content_text": "Stable current fact.",
+               "valid_from": (pivot - timedelta(days=1)).isoformat(), "valid_to": None, "expires_at": None}
+
+    class Session:
+        async def get(self, model, key):
+            return SimpleNamespace(slug="scope", domain_key="generic") if model is KnowledgeScope else SimpleNamespace(description="", memory_policy={})
+
+        async def commit(self):
+            return None
+
+    async def resolve(self, reference):
+        return 7
+
+    async def views(self, *args, **kwargs):
+        return rows, {}, [], []
+
+    clock = pivot - timedelta(seconds=1)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock
+
+    monkeypatch.setattr(module, "datetime", Clock)
+    monkeypatch.setattr(MemoryScopeResolver, "resolve", resolve)
+    monkeypatch.setattr(module.MemoryReader, "_views", views)
+    reader = module.MemoryReader(Session(), None)
+    before = await reader.start_work(scope_ref="7")
+    clock = pivot + timedelta(seconds=1)
+    after = await reader.start_work(scope_ref="7")
+    assert {key: value for key, value in before.items() if key != "request_id"} == {key: value for key, value in after.items() if key != "request_id"}
+    assert [item["memory_id"] for item in after["working_set"]["memories"]] == [2]
+    assert "Temporally limited fact." not in str(after)
 
 
 @pytest.mark.asyncio

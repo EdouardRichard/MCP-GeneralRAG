@@ -79,3 +79,41 @@ def test_shared_memory_error_keeps_existing_json_bytes(monkeypatch):
     assert set(result.structuredContent) == {"error", "request_id"}
     assert json.loads(result.content[0].text) == result.structuredContent
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["session_enter", "session_exit"])
+async def test_recall_mcp_deadline_includes_session_lifetime(monkeypatch, stage):
+    import asyncio
+    from time import monotonic
+    from mcp.server.fastmcp import FastMCP
+    from rag_mcp.mcp.recall_memory import register_recall_memory_tool
+    from rag_mcp.services.memory_service import MemoryService
+
+    @asynccontextmanager
+    async def sessions():
+        if stage == "session_enter":
+            await asyncio.sleep(3.2)
+        yield None
+        if stage == "session_exit":
+            await asyncio.sleep(3.2)
+
+    async def recalled(self, **kwargs):
+        return {"completion_status": "no_evidence", "memories": [], "counts": {"returned": 0}, "request_id": "read"}
+
+    monkeypatch.setattr(MemoryService, "recall", recalled)
+    server = FastMCP("recall-deadline")
+    register_recall_memory_tool(server, sessions, None, None)
+    started = monotonic()
+    result = await server.call_tool("recall_memory", {"scope_ref": ["7"]})
+    assert monotonic() - started < 3.1
+    if stage == "session_enter":
+        assert result.isError
+        assert result.structuredContent["completion_status"] == "failed"
+        assert result.structuredContent["error"]["code"] == "MEMORY_TIMEOUT"
+        assert "recall_timeout" in result.structuredContent["memory_notice"]["failed_paths"]
+    else:
+        # The reader has already committed the audit before context cleanup;
+        # cancellation of a slow close must not replace that result.
+        assert not result.isError
+        assert result.structuredContent["completion_status"] == "no_evidence"
+

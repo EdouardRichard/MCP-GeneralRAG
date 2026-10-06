@@ -1,4 +1,7 @@
+import asyncio
+import sys
 from datetime import datetime
+from time import monotonic
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -21,13 +24,31 @@ def register_recall_memory_tool(server, session_factory, embedding_provider, qdr
         limit: Annotated[StrictInt, Field(ge=1, le=50)] = 10,
     ) -> CallToolResult:
         """Recall only explicitly scoped completed memory; semantic status is verified in PG."""
+        context = session_factory()
+        session = None
+        result = None
+        started = monotonic()
         try:
-            async with session_factory() as session:
+            async with asyncio.timeout(3):
+                session = await context.__aenter__()
                 result = await MemoryService(session, embedding_provider=embedding_provider, qdrant_store=qdrant_store).recall(
                     scope_ref=scope_ref, query=query, memory_ids=memory_ids, kind=kind,
                     session_id=str(session_id) if session_id else None, agent_id=agent_id, time_window=time_window,
                     as_of=as_of, include_superseded=include_superseded, include_delivered=include_delivered, limit=limit)
-                return memory_result(result, is_error=result["completion_status"] == "failed")
         except Exception as exception:
-            return memory_error(exception, recall=True)
+            if result is None:
+                result = memory_error(exception, recall=True)
+            else:
+                return memory_result(result, is_error=result["completion_status"] == "failed")
+        finally:
+            if session is not None:
+                close_task = asyncio.create_task(context.__aexit__(*sys.exc_info()))
+                remaining = max(0.0, 3.0 - (monotonic() - started))
+                try:
+                    await asyncio.wait_for(asyncio.shield(close_task), timeout=remaining)
+                except (asyncio.TimeoutError, Exception):
+                    close_task.cancel()
+        if isinstance(result, CallToolResult):
+            return result
+        return memory_result(result, is_error=result["completion_status"] == "failed")
     close_input_schema(server, "recall_memory")

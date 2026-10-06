@@ -1,6 +1,7 @@
 """Archive/truncation and rollback must remain one reproducible trajectory."""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import hashlib
 
 import pytest
 from sqlalchemy import select
@@ -11,6 +12,38 @@ from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_reducer import projection_fingerprint, reduce_events
 from rag_mcp.services.memory_service import MemoryService
 from tests.integration.test_012_live_reader import scope_and_payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("damage", ["empty_source", "wrong_source", "wrong_covered"])
+async def test_correct_checksum_semantically_invalid_snapshot_uses_independent_full_log(db_session, damage):
+    from rag_mcp.runtime.projection_rebuild import encoded
+    from rag_mcp.utils.snowflake import generate_id
+
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    await service.record({**payload, "evidence_refs": ["123"]})
+    history = MemoryHistory(service)
+    valid = await history.capture(sid, force=True)
+    await service.record({**payload, "content": "A subsequent complete fact.", "evidence_refs": ["123"]})
+    events = await MemoryEventStore(db_session).replay(sid)
+    damaged = {**valid, "covered_through_event_id": events[-1]["event_id"]}
+    if damage == "empty_source":
+        damaged["source_events"] = []
+    elif damage == "wrong_source":
+        damaged["source_events"] = [{**event, "payload": {**event["payload"], "content_text": "Snapshot forgery."}} for event in events]
+    else:
+        damaged["source_events"] = events
+        damaged["covered_through_event_id"] += 1
+    db_session.add(MemorySnapshot(snapshot_id=generate_id(), knowledge_scope_id=sid,
+        covered_through_event_id=events[-1]["event_id"], payload=damaged,
+        fingerprint=hashlib.sha256(encoded(damaged)).hexdigest()))
+    await db_session.commit()
+    recovered = await history.load(sid)
+    assert recovered.source == "full_log"
+    assert recovered.fingerprint == projection_fingerprint(reduce_events(events))
+    report = await service.rebuild(sid, actor="management")
+    assert all(row["matches_replay"] and row["recovery_source"] == "full_log" and row["projection_version"] for row in report.values())
 
 
 @pytest.mark.asyncio
@@ -41,6 +74,13 @@ async def test_archived_assert_then_correction_and_repeated_rollback_preserve_si
         assert projection_fingerprint(restored[key]) == projection_fingerprint(full[key]), name
     report = await service.rebuild(sid, actor="management")
     assert all(row["matches_replay"] for row in report.values())
+    incremental = await service.rebuild(sid, actor="management", since_event_id=correction["memory_id"])
+    for name, row in incremental.items():
+        assert row["recovery_source"] == "full_log", "rollback needs the archived prefix, not only a reducer checkpoint"
+        assert row["fingerprint"] == report[name]["fingerprint"]
+        assert row["count"] == report[name]["count"]
+        assert row["range"]["event_count"] == len(events)
+        assert row["cross_scope_check"] == {"passed": True, "foreign_scope_count": 0, "scope_ids": [sid]}
     twice = await service.govern("rollback", scope_id=sid, event_point=correction["memory_id"], actor="management", reason="restore pre-rollback correction")
     current = await service.recall(scope_ref=[str(sid)])
     assert [row["memory_id"] for row in current["memories"]] == [correction["memory_id"]]

@@ -4,6 +4,7 @@ import json
 import math
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from qdrant_client.models import PointStruct
 from sqlalchemy import func, select, text
@@ -17,7 +18,7 @@ from rag_mcp.models.memory_salience import MemorySalience
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode
 from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.indexing.memory_vectors import revision_filter, revision_point_id
-from rag_mcp.services.memory_reducer import projection_fingerprint, require_reducer_state
+from rag_mcp.services.memory_reducer import GOVERNANCE_AXES, projection_fingerprint, require_reducer_state
 
 
 VIEW_KEYS = {"relation": "entries", "dense": "dense", "links": "links",
@@ -43,6 +44,8 @@ class MemoryProjectionStore:
         self.embedding = embedding_provider
         self.root = Path(projection_root or Path(get_settings().data_root) / "memory_projection").resolve()
         self._verified_authority = None
+        self._publication_capability = None
+        self._candidate_revision = None
 
     def upsert_from_reducer(self, memory_id, reducer_state):
         require_reducer_state(reducer_state)
@@ -97,14 +100,17 @@ class MemoryProjectionStore:
         await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
         await self.session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(event_id)})
 
-    async def _upsert(self, state, scope_id, event_id, model, values, key):
+    async def _upsert(self, state, scope_id, event_id, model, values, key, *, publication=None):
+        if values.get("write_status") == "complete" or model is MemoryProjectionMeta and values.get("status") == "complete":
+            if publication is None or publication is not self._publication_capability:
+                raise PermissionError("completion publication requires six-projection verification")
         await self._authorize(state, scope_id, event_id)
         statement = insert(model).values(**values)
         await self.session.execute(statement.on_conflict_do_update(
             index_elements=[key], set_={name: getattr(statement.excluded, name) for name in values if name != key}
         ))
 
-    async def _materialize_relation(self, state, scope_id, event_id, *, write_status="complete"):
+    async def _materialize_relation(self, state, scope_id, event_id, *, write_status="failed", publication=None):
         await self._authorize(state, scope_id, event_id)
         columns = {column.name: column for column in MemoryEntry.__table__.columns}
         for row in state["entries"].values():
@@ -113,7 +119,7 @@ class MemoryProjectionStore:
                 if value is not None and isinstance(value, str) and name.endswith("_at") or value is not None and isinstance(value, str) and name in {"valid_from", "valid_to"}:
                     values[name] = datetime.fromisoformat(value)
             values["write_status"] = write_status
-            await self._upsert(state, scope_id, event_id, MemoryEntry, values, "memory_id")
+            await self._upsert(state, scope_id, event_id, MemoryEntry, values, "memory_id", publication=publication)
 
     async def _materialize_dense(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
@@ -199,20 +205,47 @@ class MemoryProjectionStore:
                 raise ProjectionFailure(path) from error
         await self._authorize(state, scope_id, event_id)
         await self._materialize_bindings(state, scope_id, event_id)
+        metadata = []
         for name, key in VIEW_KEYS.items():
-            await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
+            values = {
                 "projection_id": f"{scope_id}:{event_id}:{name}", "projection_type": name,
-                "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
+                "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "staging",
                 "fingerprint": projection_fingerprint(state[key]),
-                "payload": {"state": state[key], "collection": collection, "root": str(self.root), "dense_revision": event_id},
-            }, "projection_id")
-        await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
-            "projection_id": f"current:{scope_id}", "projection_type": "manifest",
-            "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
-            "fingerprint": projection_fingerprint(state),
-            "payload": {"state": state.export(), "collection": collection, "root": str(self.root), "dense_revision": event_id},
-        }, "projection_id")
-        await self.session.flush()
+                "payload": {"state": state[key], "collection": collection, "root": str(self.root), "dense_revision": event_id, "verification_version": 1},
+            }
+            metadata.append(values)
+            await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, values, "projection_id")
+        descriptor = {"collection": collection, "root": str(self.root), "dense_revision": event_id, "verification_version": 1}
+        self._candidate_revision = SimpleNamespace(knowledge_scope_id=scope_id, source_event_id=event_id,
+            payload=descriptor, state_fingerprint=projection_fingerprint(state))
+        try:
+            report = await self.inspect(state, scope_id)
+            if set(report) != set(VIEW_KEYS) or not all(row["matches_replay"] for row in report.values()):
+                raise ProjectionFailure("integrity")
+            await self.session.execute(text("SET LOCAL ROLE rag_memory_publisher"))
+            await self.session.execute(text("INSERT INTO memory_projection_receipts "
+                "(knowledge_scope_id,source_event_id,transaction_id,state_fingerprint,fingerprints,collection,root,dense_revision,report) "
+                "VALUES (:scope,:event,txid_current(),:fingerprint,CAST(:fingerprints AS jsonb),:collection,:root,:event,CAST(:report AS jsonb))"),
+                {"scope": scope_id, "event": event_id, "fingerprint": projection_fingerprint(state),
+                 "fingerprints": json.dumps({name: values["fingerprint"] for name, values in zip(VIEW_KEYS, metadata, strict=True)}),
+                 **descriptor, "report": json.dumps(report)})
+            await self.session.execute(text("SET LOCAL ROLE rag_memory_reducer"))
+            self._publication_capability = object()
+            await self._materialize_relation(state, scope_id, event_id, write_status="complete", publication=self._publication_capability)
+            for values in metadata:
+                await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {**values, "status": "complete"},
+                                   "projection_id", publication=self._publication_capability)
+            await self._upsert(state, scope_id, event_id, MemoryProjectionMeta, {
+                "projection_id": f"current:{scope_id}", "projection_type": "manifest",
+                "knowledge_scope_id": scope_id, "source_event_id": event_id, "status": "complete",
+                "fingerprint": projection_fingerprint(state), "payload": {"state": state.export(), **descriptor},
+            }, "projection_id", publication=self._publication_capability)
+            await self.session.flush()
+        except Exception as error:
+            raise ProjectionFailure("integrity") from error
+        finally:
+            self._publication_capability = None
+            self._candidate_revision = None
 
     async def retain_failure(self, state, scope_id, event_id, path):
         await self._materialize_relation(state, scope_id, event_id, write_status="failed")
@@ -225,14 +258,17 @@ class MemoryProjectionStore:
 
     async def inspect(self, state, scope_id):
         require_reducer_state(state)
-        current = await self.current(scope_id)
-        if not current or current.status != "complete":
+        candidate = self._candidate_revision
+        staging = candidate is not None and candidate.knowledge_scope_id == scope_id and candidate.state_fingerprint == projection_fingerprint(state)
+        current = candidate if staging else await self.current(scope_id)
+        if not current or not staging and current.status != "complete":
             raise ValueError("MEMORY_WRITE_UNAVAILABLE")
         revision = current.source_event_id
         actual = {}
-        rows = (await self.session.execute(select(MemoryEntry).where(
-            MemoryEntry.knowledge_scope_id == scope_id, MemoryEntry.write_status == "complete"
-        ).execution_options(populate_existing=True))).scalars().all()
+        relation_query = select(MemoryEntry).where(MemoryEntry.knowledge_scope_id == scope_id)
+        if not staging:
+            relation_query = relation_query.where(MemoryEntry.write_status == "complete")
+        rows = (await self.session.execute(relation_query.execution_options(populate_existing=True))).scalars().all()
         expected = state["entries"]
         actual["relation"] = {}
         for row in rows:
@@ -275,12 +311,14 @@ class MemoryProjectionStore:
             path = directory / key
             if path.is_file():
                 actual["file"][key] = {**row, "body": gzip.decompress(path.read_bytes()).decode("utf-8") if key.endswith(".gz") else path.read_text(encoding="utf-8")}
-        rows = (await self.session.execute(select(MemorySalience, MemoryEntry).join(MemoryEntry).where(MemoryEntry.knowledge_scope_id == scope_id))).all()
+        rows = (await self.session.execute(select(MemorySalience, MemoryEntry).join(MemoryEntry).where(
+            MemoryEntry.knowledge_scope_id == scope_id).execution_options(populate_existing=True))).all()
         actual["salience"] = {}
         for row, entry in rows:
             expected_row = state["salience"].get(row.memory_id)
             if expected_row:
                 actual["salience"][row.memory_id] = {"memory_id": row.memory_id,
+                    **{axis: getattr(row, axis) for axis in GOVERNANCE_AXES},
                     "knowledge_scope_id": entry.knowledge_scope_id, "evidence_refs": entry.evidence_refs,
                     "provenance": entry.provenance, "inference_meta": entry.inference_meta, "salience": row.salience,
                     "access_count": row.access_count, "decay_rate": row.decay_rate,

@@ -7,9 +7,10 @@ def test_memory_foundation_tables_are_declared():
     expected = {
         "memory_events", "memory_entries", "scope_bindings", "sessions",
         "memory_salience", "memory_recall_runs", "memory_projection_meta",
+        "memory_management_audits",
     }
     # Importing the package must register every 012 table for Alembic.
-    from rag_mcp.models import MemoryEvent, MemoryEntry, ScopeBinding, MemorySession, MemorySalience, MemoryRecallRun
+    from rag_mcp.models import MemoryEvent, MemoryEntry, ScopeBinding, MemorySession, MemorySalience, MemoryRecallRun, MemoryManagementAudit
     assert expected.issubset(set(Base.metadata.tables))
 
 

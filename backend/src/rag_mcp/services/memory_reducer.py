@@ -9,6 +9,23 @@ from dataclasses import dataclass
 
 _REDUCER_SEAL = object()
 PROJECTION_NAMES = ("entries", "dense", "links", "summary", "files", "salience")
+GOVERNANCE_AXES = ("authority", "scope_meta", "mutability", "provenance_meta", "recoverability", "actionability")
+
+
+def _governance_axes(event, payload):
+    # Legacy fixtures lack event metadata; defaults describe their log context,
+    # never claim evidence validation or permission to act.
+    defaults = {
+        "authority": {"source": "event_log", "event_id": event["event_id"]},
+        "scope_meta": {"knowledge_scope_id": event["knowledge_scope_id"]},
+        "mutability": {"correction": "supersede"},
+        "provenance_meta": {"provenance": payload.get("provenance"),
+                            "evidence_refs": payload.get("evidence_refs", []),
+                            "inference_meta": payload.get("inference_meta")},
+        "recoverability": {"source": "event_log"},
+        "actionability": None,
+    }
+    return {axis: deepcopy(event.get(axis, defaults[axis])) for axis in GOVERNANCE_AXES}
 
 
 @dataclass(frozen=True)
@@ -68,6 +85,7 @@ def reduce_events(events, *, initial_state=None):
         if hasattr(timestamp, "isoformat"):
             timestamp = timestamp.isoformat()
         if kind in {"assert", "revise", "consolidate"}:
+            governance = _governance_axes(event, payload)
             if eid in entries:
                 raise ValueError("memory identity is immutable; revision requires supersede")
             if kind == "revise":
@@ -79,13 +97,13 @@ def reduce_events(events, *, initial_state=None):
             status = payload.get("status", "active")
             if status not in {"active", "quarantined"}:
                 raise ValueError("invalid assert status")
-            entries[eid] = {**payload, "memory_id": eid, "knowledge_scope_id": scope,
+            entries[eid] = {**payload, **governance, "memory_id": eid, "knowledge_scope_id": scope,
                             "status": status, "valid_from": payload.get("valid_from") or timestamp,
                             "valid_to": None, "observed_at": timestamp,
                             "superseded_by": None, "invalidated_at": None,
                             "retention_stage": "active",
                             "source_event_id": event["event_id"]}
-            salience[eid] = {"memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
+            salience[eid] = {**governance, "memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
                              "access_count": 0, "decay_rate": payload.get("decay_rate", .05),
                              "last_access_at": None, "evidence_refs": payload.get("evidence_refs", []),
                              "reinforced_at": None,
@@ -96,6 +114,8 @@ def reduce_events(events, *, initial_state=None):
         elif kind == "access":
             _scoped_target(entries, eid, scope)
             state = salience[eid]
+            # Captured policy makes replay stable; legacy access retains its prior rate.
+            state["decay_rate"] = payload.get("decay_rate", state["decay_rate"])
             state["access_count"] += 1
             from rag_mcp.services.salience_service import SalienceService
             from datetime import datetime

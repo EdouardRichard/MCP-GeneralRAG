@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy import select, text
 
 from rag_mcp.models.memory_history import MemorySnapshot, MemoryArchive, MemoryArchivedEvent
+from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_reducer import reduce_events, projection_fingerprint, ReducerState
 from rag_mcp.utils.snowflake import generate_id
@@ -29,22 +30,36 @@ class RebuildResult:
 class ProjectionRebuilder:
     projection_types = ("relation", "vector", "links", "summary", "file", "salience")
 
-    def rebuild(self, events, snapshot=None):
-        events = list(events)
+    def rebuild(self, events, snapshot=None, *, since_event_id=None):
+        events = sorted(list(events), key=lambda event: event["event_id"])
+        if since_event_id is not None:
+            if (not isinstance(since_event_id, int) or isinstance(since_event_id, bool)
+                    or not any(event["event_id"] == since_event_id for event in events)):
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid rebuild event point")
         if snapshot is not None:
-            covered = snapshot.get("covered_through_event_id", 0)
+            covered = snapshot.get("covered_through_event_id", 0) if isinstance(snapshot, dict) else 0
+            if not isinstance(covered, int) or isinstance(covered, bool):
+                covered = 0
             return self.restore(snapshot=snapshot, delta=[event for event in events if event["event_id"] > covered], full_events=events)
+        if since_event_id is not None:
+            prefix = [event for event in events if event["event_id"] <= since_event_id]
+            delta = [event for event in events if event["event_id"] > since_event_id]
+            if not any(event["event_type"] == "rollback" for event in delta):
+                state = reduce_events(delta, initial_state=reduce_events(prefix))
+                return RebuildResult(projection_fingerprint(state), state=state, source="prefix_delta")
         state = reduce_events(events)
         return RebuildResult(projection_fingerprint(state), state=state)
 
     def restore(self, *, snapshot, delta, full_events=None):
         try:
-            if not snapshot or snapshot.get("status") != "complete" or snapshot.get("schema_version") != 1:
+            if not isinstance(snapshot, dict) or snapshot.get("status") != "complete" or snapshot.get("schema_version") != 1:
                 raise ValueError("SNAPSHOT_INVALID")
             prefix = snapshot["source_events"]
             scope_id = snapshot["scope_id"]
             covered = snapshot["covered_through_event_id"]
-            if not prefix or prefix[-1]["event_id"] != covered or any(event["knowledge_scope_id"] != scope_id for event in prefix):
+            if (not isinstance(prefix, list) or not prefix or not isinstance(covered, int)
+                or isinstance(covered, bool) or prefix[-1]["event_id"] != covered
+                or any(event["knowledge_scope_id"] != scope_id for event in prefix)):
                 raise ValueError("SNAPSHOT_INVALID")
             base = reduce_events(prefix)
             fingerprints = {name: projection_fingerprint(base[key]) for name, key in SNAPSHOT_VIEWS.items()}
@@ -122,17 +137,23 @@ class MemoryHistory:
             except (OSError, ValueError, TypeError) as error:
                 raise ValueError("MEMORY_WRITE_UNAVAILABLE: archive integrity failed") from error
 
-    async def load(self, scope_id):
+    async def load(self, scope_id, *, since_event_id=None):
         events = await MemoryEventStore(self.session).replay(scope_id)
+        # Snapshot contents cannot establish that replay included every authority row.
+        authority_ids = (await self.session.execute(select(MemoryEvent.event_id).where(
+            MemoryEvent.knowledge_scope_id == scope_id).order_by(MemoryEvent.event_id))).scalars().all()
+        if [event["event_id"] for event in events] != list(authority_ids):
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: incomplete immutable checkpoint log")
+        if any(event["knowledge_scope_id"] != scope_id for event in events):
+            raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
         await self._verify_archives(scope_id, events)
         latest = await self._latest(scope_id)
         snapshot = latest.payload if latest and hashlib.sha256(encoded(latest.payload)).hexdigest() == latest.fingerprint else None
-        if snapshot is not None:
-            prefix = [event for event in events if event["event_id"] <= latest.covered_through_event_id]
-            if snapshot.get("source_events") != prefix:
-                raise ValueError("MEMORY_WRITE_UNAVAILABLE: incomplete immutable checkpoint log")
-            return ProjectionRebuilder().rebuild(events, snapshot=snapshot)
-        return ProjectionRebuilder().rebuild(events)
+        if latest is not None and (snapshot is None or not isinstance(snapshot, dict)
+            or snapshot.get("scope_id") != scope_id
+            or snapshot.get("covered_through_event_id") != latest.covered_through_event_id):
+            return ProjectionRebuilder().rebuild(events)
+        return ProjectionRebuilder().rebuild(events, snapshot=snapshot, since_event_id=since_event_id)
 
     async def archive(self, scope_id, *, now=None):
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
@@ -142,6 +163,8 @@ class MemoryHistory:
         online = await MemoryEventStore(self.session).replay_online(scope_id)
         latest = await self._latest(scope_id)
         if latest is not None and (hashlib.sha256(encoded(latest.payload)).hexdigest() != latest.fingerprint
+            or not isinstance(latest.payload, dict) or latest.payload.get("scope_id") != scope_id
+            or latest.payload.get("covered_through_event_id") != latest.covered_through_event_id
             or ProjectionRebuilder().rebuild(events, snapshot=latest.payload).source != "snapshot_delta"):
             latest = None
         protected = set()

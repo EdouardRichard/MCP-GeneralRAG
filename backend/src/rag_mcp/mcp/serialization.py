@@ -27,6 +27,8 @@ def memory_error(exception, *, recall=False):
     body = {"error": error, "request_id": str(uuid4())}
     if recall:
         body.update(completion_status="failed", memories=[], counts={"returned": 0})
+        if isinstance(exception, TimeoutError):
+            body["memory_notice"] = {"failed_paths": ["recall_timeout", "audit_unavailable"]}
     return memory_result(body, is_error=True)
 
 

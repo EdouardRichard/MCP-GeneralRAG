@@ -31,6 +31,7 @@ from rag_mcp.models.memory_recall_run import MemoryRecallRun  # noqa: E402, F401
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta  # noqa: E402, F401
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode  # noqa: E402, F401
 from rag_mcp.models.memory_history import MemorySnapshot, MemoryArchive, MemoryArchivedEvent  # noqa: E402, F401
+from rag_mcp.models.memory_management_audit import MemoryManagementAudit  # noqa: E402, F401
 from rag_mcp.models.runtime import (  # noqa: E402, F401
     InstanceRegistry,
     WriterLease,
@@ -54,7 +55,7 @@ __all__ = [
     "ProcessingRun",
     "RetrievalRun",
     "DomainProfile",
-    "MemoryEvent", "MemoryEntry", "ScopeBinding", "MemorySession", "MemorySalience", "MemoryRecallRun", "MemoryProjectionMeta",
+    "MemoryEvent", "MemoryEntry", "ScopeBinding", "MemorySession", "MemorySalience", "MemoryRecallRun", "MemoryProjectionMeta", "MemoryManagementAudit",
     "InstanceRegistry",
     "WriterLease",
     "RuntimeMaintenanceLog",

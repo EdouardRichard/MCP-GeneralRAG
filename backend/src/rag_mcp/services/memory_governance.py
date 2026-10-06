@@ -44,6 +44,12 @@ class MemoryGovernance:
                 raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
             if action == "access" and target["status"] != "active":
                 raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+            if action == "access":
+                from rag_mcp.services.memory_policy import MemoryPolicy
+                profile = await self.session.get(DomainProfile, scope.domain_key, populate_existing=True)
+                if profile is None:
+                    raise ValueError("MEMORY_WRITE_UNAVAILABLE")
+                payload["decay_rate"] = MemoryPolicy.model_validate(profile.memory_policy or {}).decay_rate
             event_type = "access" if action == "access" else "retract"
             aggregate_id = memory_id
             if action == "purge":
@@ -118,13 +124,18 @@ class MemoryGovernance:
                     await self.session.flush()
                 await MemoryEventStore(self.session).append(event)
                 after = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
-                await self.service.projections.materialize(after, scope_id, event_id)
-                integrity = await self.service.projections.inspect(after, scope_id)
+                try:
+                    await self.service.projections.materialize(after, scope_id, event_id)
+                    integrity = await self.service.projections.inspect(after, scope_id)
+                except ProjectionFailure:
+                    raise
+                except Exception as error:
+                    raise ProjectionFailure("integrity") from error
                 if not all(item["matches_replay"] for item in integrity.values()):
                     raise ProjectionFailure("integrity")
             await self.session.commit()
         except ProjectionFailure as failure:
-            if failure.path == "relation" or action == "policy":
+            if failure.path == "relation":
                 await self.session.rollback()
                 raise
             await MemoryEventStore(self.session).append(MemoryEvent(**fields))

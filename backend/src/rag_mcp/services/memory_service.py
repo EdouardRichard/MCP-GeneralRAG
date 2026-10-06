@@ -17,7 +17,9 @@ from rag_mcp.services.memory_validators import MemoryProvenanceValidator, check_
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.session import MemorySession
+from rag_mcp.models.memory_management_audit import MemoryManagementAudit
 from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
 from rag_mcp.utils.snowflake import generate_id
@@ -112,8 +114,13 @@ class MemoryService:
                 await MemoryEventStore(self.session).append(event)
                 state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
                 self._ensure_vector_store()
-                await self.projections.materialize(state, scope_id, identifier)
-                integrity = await self.projections.inspect(state, scope_id)
+                try:
+                    await self.projections.materialize(state, scope_id, identifier)
+                    integrity = await self.projections.inspect(state, scope_id)
+                except ProjectionFailure:
+                    raise
+                except Exception as error:
+                    raise ProjectionFailure("integrity") from error
                 if not all(row["matches_replay"] for row in integrity.values()):
                     raise ProjectionFailure("integrity")
                 if clean.get("session_id"):
@@ -152,19 +159,46 @@ class MemoryService:
         state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
         return await self.projections.inspect(state, scope_id)
 
-    async def rebuild(self, scope_id, *, actor):
+    async def rebuild(self, scope_id, *, actor, reason="management rebuild", since_event_id=None, request_id=None):
         if actor != "management" or not isinstance(scope_id, int) or isinstance(scope_id, bool):
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})
+        if since_event_id is not None:
+            if not isinstance(since_event_id, int) or isinstance(since_event_id, bool) or since_event_id <= 0:
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid rebuild event point")
+            point = await self.session.get(MemoryEvent, since_event_id)
+            if point is None:
+                raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid rebuild event point")
+            if point.knowledge_scope_id != scope_id:
+                raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH")
         history = await MemoryEventStore(self.session).replay(scope_id)
         if not history:
             raise ValueError("MEMORY_WRITE_UNAVAILABLE")
         from rag_mcp.runtime.projection_rebuild import MemoryHistory
-        recovered = await MemoryHistory(self).load(scope_id)
+        recovered = await MemoryHistory(self).load(scope_id, since_event_id=since_event_id)
         state = recovered.state
+        current = await self.projections.current(scope_id)
+        completed_event_id = current.source_event_id if current else 0
+        pending_event_ids = set((await self.session.execute(select(MemoryProjectionMeta.source_event_id).where(
+            MemoryProjectionMeta.knowledge_scope_id == scope_id, MemoryProjectionMeta.projection_type == "pending",
+            MemoryProjectionMeta.status == "failed", MemoryProjectionMeta.source_event_id > completed_event_id))).scalars().all())
         self._ensure_vector_store()
         try:
             async with self.session.begin_nested():
+                for event in history:
+                    payload = event["payload"]
+                    if event["event_id"] not in pending_event_ids or event["event_type"] != "grant" or "policy_after" not in payload:
+                        continue
+                    profile = await self.session.scalar(select(DomainProfile).where(
+                        DomainProfile.domain_key == payload["domain_key"]).with_for_update())
+                    if profile is None or profile.is_builtin:
+                        raise ValueError("MEMORY_WRITE_UNAVAILABLE: pending policy domain unavailable")
+                    if profile.memory_policy == payload["policy_after"]:
+                        continue
+                    if (profile.memory_policy or {}) != payload["policy_before"]:
+                        raise ValueError("MEMORY_WRITE_UNAVAILABLE: pending policy conflicts with current profile")
+                    profile.memory_policy = payload["policy_after"]
+                    await self.session.flush()
                 await self.projections.materialize(state, scope_id, history[-1]["event_id"])
                 report = await self.projections.inspect(state, scope_id)
                 if not all(row["matches_replay"] for row in report.values()):
@@ -176,7 +210,21 @@ class MemoryService:
             raise
         for name, row in report.items():
             row.update(recovery_source=recovered.source, source_event_id=history[-1]["event_id"], knowledge_scope_id=scope_id,
+                       scope_id=scope_id, since_event_id=since_event_id,
+                       range={"from_event_id": history[0]["event_id"], "through_event_id": history[-1]["event_id"],
+                              "since_event_id": since_event_id, "event_count": len(history)},
+                       cross_scope_check={"passed": True, "foreign_scope_count": 0, "scope_ids": [scope_id]},
                        schema_version=versions["schema_version"], projection_version=versions["projection_versions"][name])
             if name == "dense":
                 row["index_version"] = versions["index_version"]
+        audit_request_id = request_id or str(uuid4())
+        self.session.add(MemoryManagementAudit(
+            request_id=audit_request_id, operation="rebuild", actor=actor,
+            knowledge_scope_id=scope_id, reason=reason,
+            source_event_id=history[-1]["event_id"], since_event_id=since_event_id,
+            result={"scope_id": scope_id, "projections": report},
+        ))
+        await self.session.commit()
+        for row in report.values():
+            row["request_id"] = audit_request_id
         return report

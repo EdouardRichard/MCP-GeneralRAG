@@ -8,6 +8,126 @@ from tests.integration.test_012_live_reader import scope_and_payload
 
 
 @pytest.mark.asyncio
+async def test_browse_pages_only_completed_state_during_failed_correction(db_session, monkeypatch):
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    first = await service.record(payload)
+
+    async def failed(*args):
+        raise OSError("external projection unavailable")
+
+    monkeypatch.setattr(service.projections, "_materialize_dense", failed)
+    with pytest.raises(ValueError, match="MEMORY_WRITE_UNAVAILABLE"):
+        await service.record({**payload, "content": "Uncompleted private correction.", "supersedes_memory_id": first["memory_id"]})
+    app = create_app()
+
+    async def sessions():
+        yield db_session
+
+    app.dependency_overrides[get_session] = sessions
+    async with AsyncClient(transport=ASGITransport(app), base_url="http://test") as client:
+        response = await client.get("/api/memories", params={"scope_ref": str(sid), "limit": 1})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["memories"][0]["memory_id"] == str(first["memory_id"])
+        assert body["memories"][0]["status"] == "active"
+        assert body["memories"][0]["superseded_by"] is None
+        assert "Uncompleted private correction." not in response.text
+        assert (await client.get("/api/memories", params={"scope_ref": str(sid), "offset": 1})).json()["memories"] == []
+        monkeypatch.undo()
+        await service.rebuild(sid, actor="management")
+        restored = (await client.get("/api/memories", params={"scope_ref": str(sid)})).json()
+        assert restored["total"] == 2
+        assert {item["status"] for item in restored["memories"]} == {"active", "superseded"}
+
+
+@pytest.mark.asyncio
+async def test_rest_incremental_rebuild_preserves_prefix_rollback_and_scope_checks(db_session, engine):
+    from sqlalchemy import func, select
+    from rag_mcp.models.memory_event import MemoryEvent
+    from rag_mcp.runtime.projection_rebuild import MemoryHistory
+    from tests.integration.memory_acceptance import writer_owner
+
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    first = await service.record({**payload, "evidence_refs": ["123"]})
+    await MemoryHistory(service).capture(sid, force=True)
+    second = await service.record({**payload, "content": "Corrected fact.", "supersedes_memory_id": first["memory_id"]})
+    await service.govern("access", scope_id=sid, memory_id=second["memory_id"], actor="management", reason="access dependency")
+    await service.govern("rollback", scope_id=sid, event_point=first["memory_id"], actor="management", reason="prefix dependency")
+    other, other_payload = await scope_and_payload(db_session)
+    foreign = await service.record(other_payload)
+    before = await db_session.scalar(select(func.count()).select_from(MemoryEvent))
+    await db_session.commit()
+    app = create_app()
+
+    async def sessions():
+        try:
+            yield db_session
+        finally:
+            await db_session.rollback()
+
+    app.dependency_overrides[get_session] = sessions
+    async with writer_owner(engine) as owner:
+        app.state.writer_lease = owner
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://test") as client:
+            command = {"scope_id": sid, "reason": "Incremental integrity", "since_event_id": first["memory_id"]}
+            response = await client.post("/api/memories/rebuild", json=command)
+            assert response.status_code == 200, response.text
+            incremental = response.json()["projections"]
+            full = await service.rebuild(sid, actor="management")
+            for name, row in incremental.items():
+                assert row["fingerprint"] == full[name]["fingerprint"]
+                assert row["count"] == full[name]["count"]
+                assert row["since_event_id"] == first["memory_id"]
+                assert row["scope_id"] == sid and row["knowledge_scope_id"] == sid
+                assert row["range"] == {"from_event_id": first["memory_id"], "through_event_id": row["source_event_id"],
+                                         "since_event_id": first["memory_id"], "event_count": 4}
+                assert row["schema_version"] == 1
+                assert row["cross_scope_check"] == {"passed": True, "foreign_scope_count": 0, "scope_ids": [sid]}
+                assert row["matches_replay"] and row["projection_version"]
+            refused = await client.post("/api/memories/rebuild", json={**command, "since_event_id": foreign["memory_id"]})
+            assert refused.status_code == 400
+            assert refused.json()["detail"]["code"] == "MEMORY_EVIDENCE_SCOPE_MISMATCH"
+            missing = await client.post("/api/memories/rebuild", json={**command, "since_event_id": 1})
+            assert missing.status_code == 400
+    assert await db_session.scalar(select(func.count()).select_from(MemoryEvent)) == before
+
+
+@pytest.mark.asyncio
+async def test_rest_rebuild_returns_persisted_management_audit(db_session, engine):
+    from rag_mcp.models.memory_management_audit import MemoryManagementAudit
+    from tests.integration.memory_acceptance import writer_owner
+    sid, payload = await scope_and_payload(db_session)
+    service = MemoryService(db_session)
+    await service.record(payload)
+    app = create_app()
+
+    async def sessions():
+        try:
+            yield db_session
+        finally:
+            await db_session.rollback()
+
+    app.dependency_overrides[get_session] = sessions
+    async with writer_owner(engine) as owner:
+        app.state.writer_lease = owner
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://test") as client:
+            response = await client.post("/api/memories/rebuild", json={
+                "scope_id": sid, "reason": "Persist rebuild evidence"})
+            assert response.status_code == 200, response.text
+            request_id = response.json()["request_id"]
+            audit = await db_session.get(MemoryManagementAudit, request_id)
+            assert audit is not None and audit.reason == "Persist rebuild evidence"
+            assert audit.actor == "management" and audit.source_event_id
+            queried = await client.get("/api/memories/rebuild/audit", params={"request_id": request_id})
+            assert queried.status_code == 200, queried.text
+            assert queried.json()["request_id"] == request_id
+            assert queried.json()["result"]["projections"]
+
+
+@pytest.mark.asyncio
 async def test_custom_policy_rest_update_is_audited_and_lease_loss_refuses_mutation(db_session, engine):
     from uuid import uuid4
     from sqlalchemy import select, func

@@ -1,10 +1,12 @@
 """Memory management lives exclusively on the writer management application."""
 from datetime import datetime
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import BigInteger, cast, func, select, true
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_mcp.config import get_settings
@@ -12,6 +14,8 @@ from rag_mcp.db import get_session
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
+from rag_mcp.models.memory_management_audit import MemoryManagementAudit
 from rag_mcp.models.runtime import WriterLease
 from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.services.memory_reader import public_entry
@@ -62,6 +66,10 @@ class MemoryCommand(ScopeCommand):
     memory_id: int = Field(gt=0)
 
 
+class RebuildCommand(ScopeCommand):
+    since_event_id: int | None = Field(default=None, gt=0)
+
+
 class PolicyCommand(ScopeCommand):
     policy: MemoryPolicy
 
@@ -94,18 +102,21 @@ async def browse_memories(scope_ref: str = Query(min_length=1), limit: int = Que
         sid = await MemoryScopeResolver(session).resolve(scope_ref)
     except ValueError as exception:
         raise _http_error(exception) from None
-    rows = (await session.execute(select(MemoryEntry).where(MemoryEntry.knowledge_scope_id == sid)
-        .order_by(MemoryEntry.observed_at.desc(), MemoryEntry.memory_id.desc()).offset(offset).limit(limit))).scalars().all()
-    total = await session.scalar(select(func.count()).select_from(MemoryEntry).where(MemoryEntry.knowledge_scope_id == sid))
+    entries = func.jsonb_each(MemoryProjectionMeta.payload["state"]["entries"]).table_valued("key", "value").lateral()
+    data = cast(entries.c.value, JSONB)
+    conditions = (MemoryProjectionMeta.knowledge_scope_id == sid, MemoryProjectionMeta.projection_type == "manifest",
+                  MemoryProjectionMeta.status == "complete", MemoryProjectionMeta.payload["verification_version"].as_integer() == 1)
+    rows = (await session.execute(select(data).select_from(MemoryProjectionMeta).join(entries, true()).where(*conditions)
+        .order_by(data["observed_at"].as_string().desc(), cast(data["memory_id"].as_string(), BigInteger).desc())
+        .offset(offset).limit(limit))).scalars().all()
+    total = await session.scalar(select(func.count()).select_from(MemoryProjectionMeta).join(entries, true()).where(*conditions))
     memories = []
     for row in rows:
-        data = {column.name: (getattr(row, column.name).isoformat() if isinstance(getattr(row, column.name), datetime)
-                             else getattr(row, column.name)) for column in MemoryEntry.__table__.columns}
-        item = public_entry(data)
+        item = public_entry(row)
         for key in ("memory_id", "knowledge_scope_id", "superseded_by"):
             if item.get(key) is not None:
                 item[key] = str(item[key])
-        item.update(injection_flags=row.injection_flags, projection_status=row.write_status)
+        item.update(injection_flags=row.get("injection_flags", []), projection_status="complete")
         memories.append(item)
     return {"memories": memories, "total": total, "scope_id": str(sid)}
 
@@ -175,8 +186,24 @@ async def grant_binding(data: BindingCommand, session: AsyncSession = Depends(ge
 
 
 @router.post("/rebuild", dependencies=[Depends(require_writer)])
-async def rebuild_memory(data: ScopeCommand, session: AsyncSession = Depends(get_session)):
+async def rebuild_memory(data: RebuildCommand, session: AsyncSession = Depends(get_session)):
     try:
-        return {"scope_id": data.scope_id, "projections": await _service(session).rebuild(data.scope_id, actor="management")}
+        request_id = str(uuid4())
+        return {"scope_id": data.scope_id, "request_id": request_id, "projections": await _service(session).rebuild(
+            data.scope_id, actor="management", reason=data.reason, since_event_id=data.since_event_id,
+            request_id=request_id)}
     except (ValueError, PermissionError) as exception:
         raise _http_error(exception) from None
+
+
+@router.get("/rebuild/audit")
+async def rebuild_audit(request_id: str = Query(min_length=1, max_length=128),
+                       scope_id: int | None = Query(default=None, gt=0),
+                       session: AsyncSession = Depends(get_session)):
+    audit = await session.get(MemoryManagementAudit, request_id)
+    if audit is None or (scope_id is not None and audit.knowledge_scope_id != scope_id):
+        raise HTTPException(404, detail={"code": "MEMORY_AUDIT_NOT_FOUND"})
+    return {"request_id": audit.request_id, "operation": audit.operation, "actor": audit.actor,
+            "scope_id": audit.knowledge_scope_id, "reason": audit.reason,
+            "source_event_id": audit.source_event_id, "since_event_id": audit.since_event_id,
+            "result": audit.result, "created_at": audit.created_at.isoformat()}
