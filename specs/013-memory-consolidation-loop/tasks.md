@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；T053-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；T065-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–4的52项已勾选，52项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–5的64项已勾选，40项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -139,21 +139,21 @@
 
 ### US5 测试先行
 
-- [ ] T053 [P] [US5] 在 `backend/tests/unit/test_consolidation_links.py` 先写裸键宽模式+当前独立记忆词表、kind/方向/category/proof、非法自环/跨域/重复边、llm_proposed不升权及012 evidence/supersedes空词表兼容测试，依赖 T052。
-- [ ] T054 [P] [US5] 在 `backend/tests/integration/test_013_consolidation_dependencies.py` 先写必要支持撤销/live逆向传播、历史episode正常merge/TTL/purge不误伤、普通关联不传播、环/高扇出32深128节点frontier恢复、无新episode/null-window纯invalidate与hard被保护且有审计测试；主开关关闭/普通配置缺失时仅可信必要支持维护可取得同一scope资格，普通触发仍拒绝、REST/模型伪造上下文无效、create/merge/link/context/candidate与源消费均0、Distiller调用0；竞争busy、lease/token失效及支持proof变更仍拒绝提交，依赖 T052。
-- [ ] T055 [P] [US5] 在 `backend/tests/contract/test_consolidation_recall_extensions.py`、`backend/tests/unit/test_consolidation_link_expansion.py` 与 `backend/tests/unit/test_consolidation_gate.py` 先写 StrictBool flags缺省/单独/组合、旧响应字段/排序兼容、客户opt-in+域策略+版本绑定三闸、端点过滤/预算/降级及只读reader测试；按gate-proof契约覆盖登记缺省/撤销/同mtime篡改、固定hash/过期/错scope/错variant/旧绑定、非法路径/JSON/超限与100ms IO预算，原直接结果仍可用；指纹覆盖013产出/rebuild不自失效、普通源/治理/rollback/promotion及published证据变化失效、reader不导入eval/无写句柄，依赖 T052。
+- [X] T053 [P] [US5] 在 `backend/tests/unit/test_consolidation_links.py` 先写裸键宽模式+当前独立记忆词表、kind/方向/category/proof、非法自环/跨域/重复边、llm_proposed不升权及012 evidence/supersedes空词表兼容测试，依赖 T052。
+- [X] T054 [P] [US5] 在 `backend/tests/integration/test_013_consolidation_dependencies.py` 先写必要支持撤销/live逆向传播、历史episode正常merge/TTL/purge不误伤、普通关联不传播、环/高扇出32深128节点frontier恢复、无新episode/null-window纯invalidate与hard被保护且有审计测试；主开关关闭/普通配置缺失时仅可信必要支持维护可取得同一scope资格，普通触发仍拒绝、REST/模型伪造上下文无效、create/merge/link/context/candidate与源消费均0、Distiller调用0；竞争busy、lease/token失效及支持proof变更仍拒绝提交，依赖 T052。
+- [X] T055 [P] [US5] 在 `backend/tests/contract/test_consolidation_recall_extensions.py`、`backend/tests/unit/test_consolidation_link_expansion.py` 与 `backend/tests/unit/test_consolidation_gate.py` 先写 StrictBool flags缺省/单独/组合、旧响应字段/排序兼容、客户opt-in+域策略+版本绑定三闸、端点过滤/预算/降级及只读reader测试；按gate-proof契约覆盖登记缺省/撤销/同mtime篡改、固定hash/过期/错scope/错variant/旧绑定、非法路径/JSON/超限与100ms IO预算，原直接结果仍可用；指纹覆盖013产出/rebuild不自失效、普通源/治理/rollback/promotion及published证据变化失效、reader不导入eval/无写句柄，依赖 T052。
 
 ### US5 实现
 
-- [ ] T056 [US5] 在 `backend/src/rag_mcp/models/memory_link.py` 完善T011已建立的typed映射与高级字段约束，`backend/src/rag_mcp/models/memory_views.py` 保持re-export；在 `backend/alembic/versions/0095_memory_consolidation_loop.py` 验证回填/to_kind及物理 UNIQUE(scope,revision,from,to,relation_type)，基础evidence指chunk不能全加memory FK、created_by_run无审计cascade，依赖 T011、T053。
-- [ ] T057 [US5] 在 `backend/src/rag_mcp/models/domain_profile.py`、`backend/src/rag_mcp/config/domain_profiles.py` 与 `backend/src/rag_mcp/services/domain_profile_service.py` 接齐词表校验/版本化与合法管理边界，空默认、基础边保留、文档图不自动启用，依赖 T009、T053、T056。
-- [ ] T058 [US5] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py`、`backend/src/rag_mcp/services/memory_projection_store.py` 与新迁移完善高级link逐附件裁决/typed-data-authority parity guards，提交复验当前成员/方向/语义，两端合法同域、模型关系永久llm_proposed、deterministic须代码proof，依赖 T025、T043、T053、T057。
-- [ ] T059 [US5] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立 deterministic_propagation：无新episode也可用永久historical lineage、可信trigger/proof、window=null，仅invalidate且不调用Distiller/不消费新源；禁止create/merge/link/context/candidate，维护身份/历史来源与新提炼输入分开审计；固定captured语义、visited/depth/frontier/continuation_key，依赖 T054、T058。
-- [ ] T060 [US5] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_validators.py` 与新迁移实现 required_support、传播registry与 `consolidation_propagation` 控制grant；在 `backend/src/rag_mcp/services/consolidation_runtime.py` 与 `backend/src/rag_mcp/services/memory_service.py` 接入仅可信writer维护/治理支持钩子和当前必要支持proof可授权的admission/commit上下文，关闭主开关/缺普通配置仍取得同一scope资格并完整lease/token fence，仅invalidate、禁止create/merge/link/context/candidate/源消费，不放宽普通触发门控；无effect frontier永久继续，状态变化仍同裁决/event/六投影发布，读取先过滤失效支持，依赖 T025、T054、T059。
-- [ ] T061 [US5] 在 `backend/src/rag_mcp/config/__init__.py` 接入默认None的CONSOLIDATION_GATE_REGISTRY_PATH，在 `backend/src/rag_mcp/services/consolidation_gate.py` 实现gate-proof只读登记加载、共享纯报告/绑定校验与源材料data_hash/代码/配置指纹；在 `backend/src/rag_mcp/services/memory_reader.py` 实现默认关扩展，验证部署路径/报告字节hash/有效期、entry-report-current全绑定与candidate_expansion三闸、客户opt-in与域许可；缓存不保留授权，坏证明/撤销/旧绑定立即不授权、IO有界非阻塞且≤100ms计入原预算；合法节点逐项同域/active/complete/valid/support复验，失效支持立即过滤、增强失败保留合法直接结果且不增旧3秒/50条/内容预算，backend不导入eval，依赖 T055、T058、T060。
-- [ ] T062 [US5] 在 `backend/src/rag_mcp/mcp/recall_memory.py` 与 `backend/src/rag_mcp/services/memory_service.py` 发布 additive v2 flags/透传和可选enhancement响应，旧调用不添字段；不改三历史知识工具schema、不加检索节点，依赖 T055、T061。
-- [ ] T063 [US5] 在 `backend/src/rag_mcp/services/memory_reader.py` 实现 include_context 仅最终selected后按剩余预算展示，不能挤掉已选记忆，不进embedding/改写/候选/过滤/排序/RRF；无合法版本省略并返回明确状态，读取不现场调用LLM，依赖 T041、T046、T062。
-- [ ] T064 [US5] 串行运行link/dependency/recall/context与非空rebuild/rollback测试，在 `backend/tests/integration/test_013_consolidation_projection_rebuild.py` 补高级typed边迁移历史revision/审计TTL后恢复证据，验证旧基础边和默认关旧客户端行为，依赖 T047、T056、T060、T063。
+- [X] T056 [US5] 在 `backend/src/rag_mcp/models/memory_link.py` 完善T011已建立的typed映射与高级字段约束，`backend/src/rag_mcp/models/memory_views.py` 保持re-export；在 `backend/alembic/versions/0095_memory_consolidation_loop.py` 验证回填/to_kind及物理 UNIQUE(scope,revision,from,to,relation_type)，基础evidence指chunk不能全加memory FK、created_by_run无审计cascade，依赖 T011、T053。
+- [X] T057 [US5] 在 `backend/src/rag_mcp/models/domain_profile.py`、`backend/src/rag_mcp/config/domain_profiles.py` 与 `backend/src/rag_mcp/services/domain_profile_service.py` 接齐词表校验/版本化与合法管理边界，空默认、基础边保留、文档图不自动启用，依赖 T009、T053、T056。
+- [X] T058 [US5] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py`、`backend/src/rag_mcp/services/memory_projection_store.py` 与新迁移完善高级link逐附件裁决/typed-data-authority parity guards，提交复验当前成员/方向/语义，两端合法同域、模型关系永久llm_proposed、deterministic须代码proof，依赖 T025、T043、T053、T057。
+- [X] T059 [US5] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立 deterministic_propagation：无新episode也可用永久historical lineage、可信trigger/proof、window=null，仅invalidate且不调用Distiller/不消费新源；禁止create/merge/link/context/candidate，维护身份/历史来源与新提炼输入分开审计；固定captured语义、visited/depth/frontier/continuation_key，依赖 T054、T058。
+- [X] T060 [US5] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_validators.py` 与新迁移实现 required_support、传播registry与 `consolidation_propagation` 控制grant；在 `backend/src/rag_mcp/services/consolidation_runtime.py` 与 `backend/src/rag_mcp/services/memory_service.py` 接入仅可信writer维护/治理支持钩子和当前必要支持proof可授权的admission/commit上下文，关闭主开关/缺普通配置仍取得同一scope资格并完整lease/token fence，仅invalidate、禁止create/merge/link/context/candidate/源消费，不放宽普通触发门控；无effect frontier永久继续，状态变化仍同裁决/event/六投影发布，读取先过滤失效支持，依赖 T025、T054、T059。
+- [X] T061 [US5] 在 `backend/src/rag_mcp/config/__init__.py` 接入默认None的CONSOLIDATION_GATE_REGISTRY_PATH，在 `backend/src/rag_mcp/services/consolidation_gate.py` 实现gate-proof只读登记加载、共享纯报告/绑定校验与源材料data_hash/代码/配置指纹；在 `backend/src/rag_mcp/services/memory_reader.py` 实现默认关扩展，验证部署路径/报告字节hash/有效期、entry-report-current全绑定与candidate_expansion三闸、客户opt-in与域许可；缓存不保留授权，坏证明/撤销/旧绑定立即不授权、IO有界非阻塞且≤100ms计入原预算；合法节点逐项同域/active/complete/valid/support复验，失效支持立即过滤、增强失败保留合法直接结果且不增旧3秒/50条/内容预算，backend不导入eval，依赖 T055、T058、T060。
+- [X] T062 [US5] 在 `backend/src/rag_mcp/mcp/recall_memory.py` 与 `backend/src/rag_mcp/services/memory_service.py` 发布 additive v2 flags/透传和可选enhancement响应，旧调用不添字段；不改三历史知识工具schema、不加检索节点，依赖 T055、T061。
+- [X] T063 [US5] 在 `backend/src/rag_mcp/services/memory_reader.py` 实现 include_context 仅最终selected后按剩余预算展示，不能挤掉已选记忆，不进embedding/改写/候选/过滤/排序/RRF；无合法版本省略并返回明确状态，读取不现场调用LLM，依赖 T041、T046、T062。
+- [X] T064 [US5] 串行运行link/dependency/recall/context与非空rebuild/rollback测试，在 `backend/tests/integration/test_013_consolidation_projection_rebuild.py` 补高级typed边迁移历史revision/审计TTL后恢复证据，验证旧基础边和默认关旧客户端行为，依赖 T047、T056、T060、T063。
 
 **Checkpoint**: 只有live/必要支持边参与生命周期传播；正式增强仍需后续真实三闸证据，隔离评测可明确启用候选扩展。
 

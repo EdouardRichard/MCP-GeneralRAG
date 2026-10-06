@@ -343,6 +343,10 @@ class Settings:
     retrieval_ttl_days: int = field(
         default_factory=lambda: int(os.getenv("RETRIEVAL_TTL_DAYS", "7"))
     )
+    # 013 gate proof: deployer-installed read-only registry path; None = no proof.
+    consolidation_gate_registry_path: str | None = field(
+        default_factory=lambda: os.getenv("CONSOLIDATION_GATE_REGISTRY_PATH") or None
+    )
     # Unified trace-body switch for all retrieval modes (FR-018)
     trace_body_enabled: bool = field(default_factory=_env_trace_body)
     # Provider runtime configuration (embedding/reranker/llm, FR-008~FR-015)

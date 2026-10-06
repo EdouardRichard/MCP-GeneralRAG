@@ -172,11 +172,14 @@ class AdjudicationContext(TrustedContext):
     support_facts: Mapping = field(default_factory=dict)
     support_versions: Mapping = field(default_factory=dict)
     provisional: Mapping = field(default_factory=dict)
+    invalidated: frozenset = frozenset()
+    propagation_material: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
         super().__post_init__()
-        for key in ('inferences', 'support_facts', 'support_versions', 'provisional'):
+        for key in ('inferences', 'support_facts', 'support_versions', 'provisional', 'propagation_material'):
             object.__setattr__(self, key, freeze(getattr(self, key)))
+        object.__setattr__(self, 'invalidated', frozenset(self.invalidated))
 
 
 @dataclass(frozen=True)
@@ -605,11 +608,12 @@ def _endpoint_ref(row):
     return {'output_key': row['output_key']} if row.get('output_key') else memory_ref(row)
 
 
-def _attachments(p, core, current, policy, vocabulary, context, now):
+def _attachments(p, core, current, policy, vocabulary, context, now, *, deterministic=False):
     config = policy.consolidation
     created = next((e for e in core.approved_effects if e['operation'] == 'create'), None)
     output = ({**created['value'], 'memory_id': created['aggregate_id'],
                'output_key': created['aggregate_id']['output_key']} if created else None)
+    seen_edges = set()
     for index, link in enumerate(p.get('link_suggestions', ())):
         try:
             if config is None or not policy.consolidation_enabled:
@@ -631,16 +635,18 @@ def _attachments(p, core, current, policy, vocabulary, context, now):
             if left['memory_id'] == right['memory_id'] or relation.get('recall_direction') not in ('both', 'from_to_to', 'to_to_from'):
                 raise Rejection('LINK_DIRECTION_INVALID')
             _confidence(link.get('confidence'), config.min_confidence)
-            if (relation['category'] == 'live_dependency'
-                and not any(r.get('memory_id') == right['memory_id'] for r in left.get('required_support', ()))):
-                raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+            edge_key = stable_key((_endpoint_ref(left), _endpoint_ref(right), link['relation_type']))
+            if edge_key in seen_edges:
+                raise Rejection('LINK_DUPLICATE')
+            seen_edges.add(edge_key)
             _safe(link['description'])
             value = {**link, 'from_ref': _endpoint_ref(left), 'to_ref': _endpoint_ref(right),
-                     'origin': 'llm_proposed', 'category': relation['category'],
-                     'propagation': relation['propagation']}
+                     'origin': 'deterministic' if deterministic else 'llm_proposed',
+                     'category': relation['category'], 'propagation': relation['propagation']}
             yield accept(({'operation': 'derive', 'aggregate_id': left['memory_id'], 'value': {'links': [value]}},),
                          versions=versions, support_versions=support_versions,
-                         proof={'origin': 'llm_self', 'confidence': link['confidence'], 'rule_id': 'link'})
+                         proof={'origin': 'deterministic_rule' if deterministic else 'llm_self',
+                                'confidence': 1. if deterministic else link['confidence'], 'rule_id': 'link'})
         except Rejection as error:
             yield reject(str(error))
     if 'context' in p:
@@ -669,7 +675,7 @@ def _attachments(p, core, current, policy, vocabulary, context, now):
             yield reject('CANDIDATE_NOT_ELIGIBLE')
 
 
-def adjudicate(proposal, current, policy, vocabulary, quota, context, now):
+def adjudicate(proposal, current, policy, vocabulary, quota, context, now, *, deterministic=False):
     """Adjudicate core and attachments independently; expose approved values only."""
     if now.tzinfo is None:
         raise ValueError('timezone-aware clock required')
@@ -681,7 +687,8 @@ def adjudicate(proposal, current, policy, vocabulary, quota, context, now):
         core = _core(proposal, current, policy, quota, context, now)
     except Rejection as error:
         core = reject(str(error))
-    children = (core, *_attachments(proposal, core, current, policy, vocabulary, context, now))
+    children = (core, *_attachments(proposal, core, current, policy, vocabulary, context, now,
+                                    deterministic=deterministic))
     effects = tuple(e for child in children for e in child.approved_effects)
     if not effects:
         return _bind_rejections(replace(core, children=children), proposal, current)
@@ -690,6 +697,86 @@ def adjudicate(proposal, current, policy, vocabulary, quota, context, now):
     decision = accept(effects, versions=versions, outcomes=core.source_outcomes, proof=core.proof,
                       support_versions=support_versions)
     return _bind_rejections(replace(decision, children=children), proposal, current)
+
+
+def _memory_supports(row):
+    """Declared live-dependency out-edges of one captured entry."""
+    return sorted((link.get('to_id'), link.get('relation_type'))
+                  for link in (row or {}).get('approved_links', {}).values()
+                  if link.get('category') == 'live_dependency' and link.get('propagation') == 'to_to_from')
+
+
+def _is_denied(row, now):
+    if row is None:
+        return True
+    try:
+        return (row.get('status') != 'active'
+                or bool(row.get('expires_at') and _date(row['expires_at']) <= now)
+                or bool(row.get('valid_to') and _date(row['valid_to']) <= now))
+    except (ValueError, TypeError):
+        return True
+
+
+def _root_denied(current, context, trigger, now):
+    """A wave is anchored only while the trigger's own denial is provable now."""
+    root = (trigger.get('target_ref') or {}).get('memory_id')
+    row = current.entries.get(root)
+    if row is None:
+        return False
+    proof = dict(trigger.get('proof') or {})
+    if proof.get('kind') == 'live_dependency':
+        anchor, relation = proof.get('cause_memory_id'), proof.get('relation_type')
+        return (_is_denied(current.entries.get(anchor), now)
+                and (anchor, relation) in _memory_supports(row))
+    if trigger.get('evidence_id') is None:
+        return False
+    try:
+        _correction(row, None, current, context)
+    except Rejection:
+        # An already-effective denial of the root is itself the proof.
+        return _is_denied(row, now)
+    return True
+
+
+def _cause_denied(cause, current, context, trigger, now):
+    """Order-independent: a cause is denied in-batch, already, or via the proven root."""
+    from rag_mcp.orchestration.consolidation_pipeline import PROPAGATION_MAX_DEPTH
+
+    if cause in context.invalidated:
+        return True
+    root = (trigger.get('target_ref') or {}).get('memory_id')
+    node_id = cause
+    for _ in range(PROPAGATION_MAX_DEPTH + 1):
+        if node_id == root:
+            return _root_denied(current, context, trigger, now)
+        row = current.entries.get(node_id)
+        if row is None or _is_denied(row, now):
+            return True
+        supports = _memory_supports(row)
+        if len(supports) != 1:
+            return False
+        node_id = supports[0][0]
+    return False
+
+
+def _live_edge_proof(row, claim, current, context, now):
+    """A declared live edge plus a currently denied/expired support endpoint."""
+    if (not isinstance(claim, Mapping) or claim.get('kind') != 'live_dependency'
+        or isinstance(claim.get('cause_memory_id'), bool)
+        or not isinstance(claim.get('cause_memory_id'), int)
+        or not isinstance(claim.get('relation_type'), str)):
+        raise Rejection('CONTRADICTION_NOT_PROVEN')
+    cause = claim['cause_memory_id']
+    edge = next((link for link in row.get('approved_links', {}).values()
+                 if link.get('to_id') == cause and link.get('relation_type') == claim['relation_type']
+                 and link.get('category') == 'live_dependency'
+                 and link.get('propagation') == 'to_to_from'), None)
+    if edge is None:
+        raise Rejection('CONTRADICTION_NOT_PROVEN')
+    if not _cause_denied(cause, current, context, context.propagation_trigger, now):
+        raise Rejection('CONTRADICTION_NOT_PROVEN')
+    return {'rule_id': 'live_dependency_propagation', 'cause_memory_id': cause,
+            'relation_type': claim['relation_type'], 'replacement_id': None}
 
 
 def _maintenance(proposal, current, context, now):
@@ -701,17 +788,26 @@ def _maintenance(proposal, current, context, now):
         return reject('MAINTENANCE_EFFECT_FORBIDDEN')
     trigger = context.propagation_trigger
     reference = proposal.get('target_ref', {})
-    if trigger.get('target_ref') != reference:
-        return reject('CONTRADICTION_NOT_PROVEN')
     row = current.entries.get(reference.get('memory_id'))
     if row is None or memory_ref(row) != reference:
         return reject('TARGET_VERSION_CHANGED')
     try:
         _current(row, current.scope_id, now)
-        proof = _correction(row, None, current, context)
-        if (proof['support'].get('evidence_id') != trigger.get('evidence_id')
-            or proof['support'].get('version_id') != trigger.get('version_id')):
-            raise Rejection('CONTRADICTION_NOT_PROVEN')
+        claim = proposal.get('propagation_proof')
+        if claim is not None and isinstance(claim, Mapping) and claim.get('kind') == 'authority_denial':
+            claim = None  # planner marker: the trigger itself proofs the root
+        if claim is None:
+            if trigger.get('target_ref') != reference:
+                raise Rejection('CONTRADICTION_NOT_PROVEN')
+            if trigger.get('evidence_id') is not None:
+                proof = _correction(row, None, current, context)
+                if (proof['support'].get('evidence_id') != trigger.get('evidence_id')
+                    or proof['support'].get('version_id') != trigger.get('version_id')):
+                    raise Rejection('CONTRADICTION_NOT_PROVEN')
+            else:
+                proof = _live_edge_proof(row, trigger.get('proof'), current, context, now)
+        else:
+            proof = _live_edge_proof(row, claim, current, context, now)
         effect = {'operation': 'invalidate', 'aggregate_id': row['memory_id'],
                   'value': {'replacement_id': None}}
         if guard_effect(effect, row).decision == 'reject':
@@ -880,6 +976,37 @@ def _model_structure_valid(proposal):
 
 def adjudicate_batch(batch, current, policy, vocabulary, quota, context, now):
     models, rules = tuple(batch.proposals), tuple(batch.deterministic_proposals)
+    if context.execution_context == 'deterministic_propagation':
+        # Trusted maintenance: batch order is the captured BFS order; a committed
+        # invalidate provisionally invalidates its dependents within this wave.
+        if models:
+            return BatchDecision(_bind_rejected_members(
+                tuple(reject('MAINTENANCE_EFFECT_FORBIDDEN') for _ in (*rules, *models)),
+                (*rules, *models), current), ())
+        invalidated, decisions_list = set(), []
+        for proposal in rules:
+            decision = adjudicate(proposal, current, policy, vocabulary, quota,
+                                  replace(context, invalidated=frozenset(invalidated)), now,
+                                  deterministic=True)
+            if decision.decision == 'accept':
+                invalidated.update(effect['aggregate_id'] for effect in decision.approved_effects
+                                   if effect['operation'] == 'invalidate')
+            decisions_list.append(decision)
+        # A propagation wave is one atomic group: it shares the trigger, the
+        # captured material and the in-batch provisional invalidation order.
+        accepted = [decision for decision in decisions_list if decision.decision == 'accept']
+        groups = []
+        if accepted:
+            planned = lower_events(accepted)
+            if len(planned) <= 128:
+                groups.append(AtomicGroup(stable_key({'scope': current.scope_id,
+                    'versions': [d.expected_versions for d in accepted], 'plan': planned,
+                    'rule': RULE_VERSION}), tuple(d.decision_id for d in accepted), planned,
+                    tuple(outcome for d in accepted for outcome in d.source_outcomes)))
+            else:
+                decisions_list = [reject('GROUP_BUDGET_EXCEEDED', key=d.decision_id)
+                                  if d.decision == 'accept' else d for d in decisions_list]
+        return BatchDecision(_bind_rejected_members(tuple(decisions_list), rules, current), tuple(groups))
     model_fault = None
     if any(not isinstance(p, Mapping) for p in models):
         model_fault = 'PROPOSAL_INVALID'
@@ -930,7 +1057,8 @@ def adjudicate_batch(batch, current, policy, vocabulary, quota, context, now):
                 continue
             resolved = _resolve_outputs(by_id[label], outputs)
             decision = adjudicate(resolved, current, policy, vocabulary, quota,
-                                  replace(context, provisional=provisional), now)
+                                  replace(context, provisional=provisional), now,
+                                  deterministic=label in rule_ids)
             decisions[label] = decision
             creation = next((e for e in decision.approved_effects if e['operation'] == 'create'), None)
             if creation:
@@ -975,7 +1103,8 @@ def adjudicate_batch(batch, current, policy, vocabulary, quota, context, now):
                 mutations.setdefault(stable_key(event['aggregate_id']), []).append(event['operation'])
         if any(len(operations) > 1 for operations in mutations.values()):
             reason = 'EFFECT_CONFLICT'
-        if len(planned) > min(128, policy.consolidation.max_events_per_group):
+        if len(planned) > (128 if policy.consolidation is None
+                           else min(128, policy.consolidation.max_events_per_group)):
             reason = 'GROUP_BUDGET_EXCEEDED'
         elif quota['count'] + reserved + creates > quota['limit']:
             reason = 'QUOTA_EXCEEDED'

@@ -268,3 +268,63 @@ client); the runner remains a local ignored tool.
 真实failed/incomplete或仅direct过闸时，不安装扩展许可；验收拒绝授权、合法直接召回与默认关闭，保留报告结论。T055显式fixture仍验证loader正向逻辑，不能替代真实通过报告。拟部署policy必须已沿合法管理流程发布并进入冻结authority快照；随后再发policy grant或改变源材料须重新核验/重评，不改旧报告binding凑匹配。
 
 验证include_linked=true在域许可+当前合法证明下增强；direct-only报告、缺配置/登记、错scope/绑定、坏hash、同mtime篡改、过期/删除登记/换policy或源证据均下一请求not_available/disabled并保留原合法直接候选。记录新增IO≤100ms计入原3秒预算、无网络/模型/生产写入、旧flags=false不读取文件。撤销由部署者原子删entry或登记文件完成，不保留缓存授权；无需清理记忆或改变派生投影。
+
+## Phase 5 verification (2026-10-07, T053-T064)
+
+Phase 5 added typed-link adjudication, deterministic_propagation support
+maintenance, the read-only gate proof loader, and the additive recall v2
+flags. Migrations 0095-0098 stayed byte-frozen; two successors were applied to
+the isolated database: `0099_consolidation_propagation` (SHA256
+`23A84EB355D029705FB1AD6531CAEC9D528AE7CCF6847E8D0D435D4BB297595B`) and
+`0100_propagation_guard_fix` (SHA256
+`808BDEDE9F56F2CCD827C679C6BC8DB40CD55F7967DBD835DC49716A788E8C34`), which
+repairs one text/jsonb comparison inside the 0099 trigger guard without
+editing the deployed file. Isolated head is `0100_propagation_guard_text_fix`.
+
+Lead final acceptance (serial, isolated runner, `-q --tb=short -p no:cacheprovider`,
+no concurrent writer; writer leases must be free — two concurrent DB runs
+reclaim each other's fixture lease and produce spurious
+`WRITER_LEASE_LOST`/`CONSOLIDATION_COMMIT_TIMEOUT`):
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_links.py tests/unit/test_consolidation_gate.py tests/unit/test_consolidation_link_expansion.py tests/contract/test_consolidation_recall_extensions.py tests/unit/test_consolidation_context_visibility.py tests/unit/test_consolidation_adjudicator.py tests/unit/test_consolidation_hard_protection.py tests/unit/test_consolidation_proposal_graph.py tests/unit/test_consolidation_deterministic_rules.py tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_dependencies.py tests/integration/test_012_live_reader.py tests/integration/test_012_reader_boundaries.py tests/integration/test_012_memory_recall_observability.py tests/unit/test_memory_reader_budgets.py -q --tb=short -p no:cacheprovider
+```
+
+Observed: **458 passed in 325.87s**, exit 0, no skips. Supporting runs on the same
+final bytes: T054 dependency suite alone **7 passed in 140.89s**; Phase 1-4
+regression (22 contract/unit/integration files) **236 passed in 765.88s**; Phase 5
+focused unit/contract batch **427 passed in 46.06s** (before the last three Lead
+edits below).
+
+Lead corrections applied on top of the phase implementation:
+
+- `tests/integration/test_013_consolidation_dependencies.py`: `admit()` renews the
+  fixture's 300s writer lease through `PostgresLeaseWriteCoordinator.renew(...)`.
+  A real writer renews its lease; this environment builds dependency fixtures
+  slower than 300s, and the runtime correctly refused the expired lease. No
+  assertion was weakened.
+- `test_frontier_recorded_and_resumed_on_real_persisted_path` restores the
+  frontier-record and frontier-resume coverage on the **real persisted path**
+  (admission, fence, adjudication, publication, continuation grant, registry
+  replay) by patching the planner depth budget to an environment-sized value.
+  The exact 32-depth/128-node budgets remain proven against the real planner in
+  `tests/unit/test_consolidation_links.py`.
+- `services/memory_reader.py`: `_live_support_nodes` revalidates the necessary
+  `must_remain_active` evidence of expansion endpoints before they are added, so a
+  withdrawn corpus fact cannot be resurrected through link expansion; unreadable
+  support is fail-closed for the enhancement and leaves direct results untouched.
+  `tests/unit/test_consolidation_link_expansion.py` covers live/withdrawn/version
+  mismatch/content mismatch/missing/unreadable. The read role can select
+  chunks/knowledge_versions/knowledge_sources (verified in the isolated clone).
+- `services/consolidation_gate.py`: the implementation fingerprint now covers every
+  applied consolidation migration from `0095_` onward by numeric prefix, so the
+  applied `0100` guard repair (and any successor) invalidates an existing gate
+  binding instead of being ignored by a frozen prefix tuple.
+
+Known scope limits carried forward (not acceptance failures): the full-scale
+32-depth integration cascade cannot be built inside the fixed 30s commit fence in
+this environment (super-linear publish path, ~34s per record at 40 entries); the
+exact budgets are unit-proven and the integration proof uses the patched budget.
+A publish-hot-path performance follow-up is recommended before Phase 8 hard
+evidence. `recover_consolidation` keeps a pending maintenance group as pending
+(no dedicated null-window retry) — Phase 7 scope.

@@ -42,6 +42,13 @@ class DomainProfile(Base):
     )
     memory_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     memory_link_vocabulary: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+
+    @property
+    def vocabulary_version(self) -> str:
+        """Content identity of the current independent memory-link vocabulary."""
+        from rag_mcp.config.domain_profiles import memory_vocabulary_version
+
+        return memory_vocabulary_version(self.memory_link_vocabulary or [])
     is_builtin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), comment="builtin (read-only) flag",
     )

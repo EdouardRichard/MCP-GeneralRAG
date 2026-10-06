@@ -113,6 +113,20 @@ class DomainProfileService:
         )
         return list(result.scalars().all())
 
+    async def current_vocabulary(self, domain_key: str) -> tuple[list, str]:
+        """Validated current independent memory-link vocabulary and its version.
+
+        The document-graph vocabulary (graph_relations) never enables memory
+        links; an unknown profile is an error, never an implicit empty grant.
+        """
+        from rag_mcp.config.domain_profiles import memory_vocabulary_version
+
+        profile = await self._get(domain_key)
+        if profile is None:
+            raise ValueError(f"domain profile '{domain_key}' not found")
+        rows = validate_memory_link_vocabulary(profile.memory_link_vocabulary or [])
+        return rows, memory_vocabulary_version(rows)
+
     async def resolve_planner_config(self, scope_ids: list[int]) -> dict[str, Any]:
         """Resolve the planner config for a request's scope set (009, T005, R7).
 

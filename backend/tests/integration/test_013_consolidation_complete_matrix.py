@@ -62,7 +62,7 @@ async def test_persisted_supersede_after_proposal_is_rejected(db_session, memory
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('change,reason', [('removed', 'LINK_TYPE_NOT_ALLOWED'), ('direction', 'LINK_DIRECTION_INVALID'),
-    ('category', 'DEPENDENCY_SUPPORT_INVALID')])
+    ('category', None)])
 async def test_current_vocabulary_rechecked_after_valid_proposal(db_session, memory_writer_owner, change, reason):
     fixture = await prepared(db_session, memory_writer_owner, links=True)
     from rag_mcp.models.domain_profile import DomainProfile
@@ -80,7 +80,18 @@ async def test_current_vocabulary_rechecked_after_valid_proposal(db_session, mem
     profile.memory_link_vocabulary = vocabulary
     await db_session.commit()
     outcome = await commit(fixture)
-    assert outcome.status == 'rejected' and reason in outcome.reason_codes
+    assert outcome.status == 'rejected' and not outcome.output_memory_ids
+    if reason is not None:
+        assert reason in outcome.reason_codes
+    else:
+        # T058: a live link is itself the support declaration, so a category
+        # change no longer fails a rule check; it changes the captured approved
+        # effect, the group key, and therefore the commit rejects the stale
+        # approval without publishing the edge.
+        current = await fixture[1].read_snapshot(token.scope_id)
+        assert not any(link.get('relation_type') == 'related'
+                       for row in current.entries.values()
+                       for link in (row.get('approved_links') or {}).values())
 
 
 @pytest.mark.asyncio

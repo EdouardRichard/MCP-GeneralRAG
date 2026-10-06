@@ -155,12 +155,16 @@ def lower_group(group, decisions, batch, context, policy, current, token, now):
         decision, proposal = by_key[planned['proposal_key']]
         operation, value = planned['operation'], planned.get('value', {})
         aggregate_id = _references(planned['aggregate_id'], allocated)
-        refs = thaw(proposal['source_refs'])
+        propagation_context = context.execution_context == 'deterministic_propagation'
+        # A propagation wave recovers its permanent historical lineage instead of
+        # distiller-window inputs; the window is null and no source is consumed.
+        refs = thaw(context.historical_source_refs) if propagation_context else thaw(proposal['source_refs'])
         effect = {'memory_id': aggregate_id, 'links': []}
         for link in value.get('links', []):
             effect['links'].append({'from_id': _references(link['from_ref'], allocated),
                 'to_id': _references(link['to_ref'], allocated), 'relation_type': link['relation_type'],
-                'provenance': 'llm_proposed', 'confidence': link['confidence'], 'created_by_run': str(token.run_id),
+                'provenance': link.get('origin', 'llm_proposed'), 'confidence': link['confidence'],
+                'created_by_run': str(token.run_id),
                 'vocabulary_version': stable_key(current.vocabulary), 'category': link['category'],
                 'propagation': link['propagation'], 'description': link['description'], 'source_refs': refs})
         model = context.inferences.get(proposal['proposal_id'], {}).get('inference_meta', {}).get('model_version', 'deterministic')
@@ -188,22 +192,38 @@ def lower_group(group, decisions, batch, context, policy, current, token, now):
         if operation != 'derive':
             outcomes = [{'source_event_id': o['source_version']['source_event_id'], 'outcome': o['outcome'],
                          'required_group_key': group.group_key} for o in decision.source_outcomes]
+        if propagation_context:
+            material = thaw(proposal.get('propagation_material') or {})
+            propagation = {'trigger': material['trigger'],
+                'visited_memory_ids': list(material['visited_memory_ids']), 'depth': int(material['depth']),
+                'frontier_memory_ids': list(material['frontier_memory_ids']),
+                'continuation_key': material['continuation_key'],
+                'vocabulary_version': material['vocabulary_version']}
+            versions = {'model': model, 'prompt': None, 'schema': '013.1', 'rule': decision.rule_version,
+                        'policy': stable_key(policy.model_dump()), 'vocabulary': stable_key(current.vocabulary)}
+        else:
+            propagation, versions = None, {'model': model, 'prompt': '013.distiller.1', 'schema': '013.1',
+                                           'rule': decision.rule_version,
+                                           'policy': stable_key(policy.model_dump()),
+                                           'vocabulary': stable_key(current.vocabulary)}
         payload = {'payload_version': 2, 'operation': operation, 'action': proposal['action'],
             'proposal_key': planned['proposal_key'], 'group_key': group.group_key, 'group_id': group_id,
             'effect_index': planned['effect_index'], 'effect_count': planned['effect_count'],
-            'created_by_run': str(token.run_id), 'execution_context': 'distiller_window',
-            'window_id': context.window.window_id, 'propagation': None, 'source_refs': refs,
+            'created_by_run': str(token.run_id),
+            'execution_context': 'deterministic_propagation' if propagation_context else 'distiller_window',
+            'window_id': None if propagation_context else context.window.window_id, 'propagation': propagation,
+            'source_refs': refs,
             'source_lineage': refs, 'target_refs': [{k: getattr(v, k) for k in
                 ('memory_id', 'source_event_id', 'state_event_id', 'content_hash')} for v in decision.expected_versions
                 if v.memory_id not in {r['memory_id'] for r in refs}], 'source_outcomes': outcomes,
             'required_support': [{'support_kind': 'evidence', 'support_id': a['evidence_id'],
                 'version': str(a['version_id']), 'content_hash': a['content_hash'], 'revocation_semantics': 'must_remain_active'}
                 for a in attributions], 'confidence': effect_proof['confidence'], 'confidence_origin': origin,
-            'versions': {'model': model, 'prompt': '013.distiller.1', 'schema': '013.1', 'rule': decision.rule_version,
-                         'policy': stable_key(policy.model_dump()), 'vocabulary': stable_key(current.vocabulary)},
+            'versions': versions,
             'captured_policy': policy.model_dump(), 'captured_vocabulary': thaw(current.vocabulary),
             'adjudication': {'decision_id': decision.decision_id, 'decision': 'accept', 'rule_version': decision.rule_version,
-                'reason_codes': list(decision.reason_codes), 'min_confidence': policy.consolidation.min_confidence,
+                'reason_codes': list(decision.reason_codes),
+                'min_confidence': policy.consolidation.min_confidence if policy.consolidation else 0.,
                 'proofs': [_concrete_plan(thaw(decision.proof), allocated), {'recovery': recovery}], 'evidence_attributions': attributions},
             'approved_effect': effect, 'evidence_refs': list(proposal.get('evidence_refs', ()))}
         if operation == 'create':
@@ -220,7 +240,7 @@ def lower_group(group, decisions, batch, context, policy, current, token, now):
     return fields
 
 
-async def _publish(service, runtime, token, fence, fields=None):
+async def _publish(service, runtime, token, fence, fields=None, *, context=None):
     scope = token.scope_id
     store = MemoryEventStore(service.session)
     await service.session.execute(text("SELECT set_config('rag_memory.consolidation_token',:token,true)"),
@@ -228,6 +248,11 @@ async def _publish(service, runtime, token, fence, fields=None):
     await service.session.execute(text("SELECT set_config('rag_memory.consolidation_fence',:fence,true),"
         "set_config('rag_memory.consolidation_started_at',:started,true)"),
         {'fence': json.dumps(token.to_dict()), 'started': fence.started_at.isoformat()})
+    if context is not None and context.execution_context == 'deterministic_propagation':
+        # Maintenance waves commit under a disabled ordinary policy; the SQL
+        # fence accepts only this exact eligibility identity as the allowance.
+        await service.session.execute(text("SELECT set_config('rag_memory.consolidation_maintenance',:maintenance,true)"),
+                                      {'maintenance': str(token.eligibility_id)})
     try:
         async with service.session.begin_nested():
             if fields:
@@ -279,7 +304,7 @@ async def commit_approved(service, decisions, token, *, runtime, batch, context)
                         reasons.append('POLICY_CHANGED')
                     continue
                 fields = lower_group(group, checked, batch, fresh_context, policy, current, token, now)
-                published = await _publish(service, runtime, token, fence, fields)
+                published = await _publish(service, runtime, token, fence, fields, context=context)
                 if published:
                     memories.extend(v['aggregate_id'] for v in fields if v['payload']['operation'] == 'create')
                     events.extend(v['event_id'] for v in fields)

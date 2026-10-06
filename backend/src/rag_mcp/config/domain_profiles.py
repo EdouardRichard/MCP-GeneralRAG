@@ -176,6 +176,7 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
             "retrieval_modes": ["dense", "hybrid", "graph_enhanced", "agentic"],
             "has_graph": True,
         },
+        "memory_link_vocabulary": [],
         "is_builtin": True,
     },
     "generic": {
@@ -192,6 +193,7 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
             "retrieval_modes": ["dense", "hybrid"],
             "has_graph": False,
         },
+        "memory_link_vocabulary": [],
         "is_builtin": True,
     },
     "personal": {
@@ -209,6 +211,7 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
             "retrieval_modes": ["dense", "hybrid"],
             "has_graph": False,
         },
+        "memory_link_vocabulary": [],
         "is_builtin": True,
     },
     "legal": {
@@ -233,6 +236,7 @@ BUILTIN_DOMAIN_PROFILES: dict[str, dict] = {
             "retrieval_modes": ["dense", "hybrid"],
             "has_graph": False,
         },
+        "memory_link_vocabulary": [],
         "is_builtin": True,
     },
 }

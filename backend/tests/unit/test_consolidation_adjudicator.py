@@ -221,9 +221,9 @@ def link(**changes):
     (link(relation_type='unknown'), 'LINK_TYPE_NOT_ALLOWED'),
     (link(confidence=.79), 'CONFIDENCE_BELOW_THRESHOLD'),
     (link(from_ref=ref(row(2)), to_ref=ref(row(2))), 'LINK_DIRECTION_INVALID'),
-    (link(relation_type='requires'), 'DEPENDENCY_SUPPORT_INVALID')])
+    (link(to_ref=ref(row(4, kind='semantic'))), 'TARGET_NOT_ALLOWED')])
 def test_invalid_link_does_not_poison_valid_core(attachment, reason):
-    d = decide(proposal(link_suggestions=[attachment, link()]))
+    d = decide(proposal(link_suggestions=[attachment, link(to_ref=ref(row(3)))]))
     assert d.decision == 'accept'
     rejected(d.children[1], reason)
     assert d.children[2].decision == 'accept'

@@ -1,3 +1,14 @@
+"""Typed memory link projection mapping (013 T011/T056).
+
+`memory_links` keeps the 012 view columns (row_id/scope/revision/node_key/data)
+and adds typed columns filled from the immutable `data` authority by the
+`verify_typed_memory_link` parity trigger: base 012 edges (evidence/supersedes)
+are always deterministic with the 012-base-v1 vocabulary; advanced edges carry
+the declaring vocabulary version, semantic category and propagation mode
+captured at approval time. Evidence endpoints are chunks, so `to_id` takes no
+blanket memory FK; `created_by_run` is a permanent scalar that must not FK the
+TTL'd audit tables.
+"""
 from uuid import UUID as PythonUUID
 
 from sqlalchemy import BigInteger, CheckConstraint, Float, ForeignKey, Index, String, UniqueConstraint
@@ -5,6 +16,12 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from rag_mcp.models import Base
+
+BASE_RELATIONS = ('evidence', 'supersedes')
+BASE_VOCABULARY_VERSION = '012-base-v1'
+LINK_CATEGORIES = ('live_dependency', 'historical_lineage', 'association')
+PROPAGATION_MODES = ('to_to_from', 'none')
+LINK_PROVENANCE = ('deterministic', 'llm_proposed')
 
 
 class MemoryLink(Base):

@@ -66,6 +66,61 @@ def _scoped_target(entries, memory_id, scope):
     return target
 
 
+def validate_propagation_control(event):
+    """Trusted deterministic-propagation continuation seal (T060).
+
+    Carries only the permanent traversal material of a wave that produced no
+    lifecycle effect; it never grants create/merge/link/context/candidate or
+    source-consumption authority.
+    """
+    payload = event.get('payload') or {}
+    if (event.get('actor') != 'management' or event.get('authority', {}).get('source') != 'consolidation_control'
+        or payload.get('control_adjudication') != {'decision': 'seal_propagation', 'effect': 'control_only',
+                                                    'rule_version': '013.propagation.1'}):
+        raise PermissionError('trusted consolidation control required')
+    keys = {'payload_version', 'grant_type', 'trigger', 'visited_memory_ids', 'depth', 'frontier_memory_ids',
+            'continuation_key', 'vocabulary_version', 'control_adjudication', 'eligibility_token'}
+    if set(payload) != keys or payload['payload_version'] != 2:
+        raise ValueError('invalid consolidation propagation seal')
+    token = payload['eligibility_token']
+    if set(token) != {'eligibility_id', 'scope_id', 'run_id', 'holder_instance_id', 'writer_lease_id',
+                      'eligibility_version'}:
+        raise ValueError('invalid consolidation propagation token')
+    for key in ('eligibility_id', 'run_id', 'holder_instance_id'):
+        UUID(token[key])
+    if token['scope_id'] != event['knowledge_scope_id']:
+        raise ValueError('SCOPE_MISMATCH')
+    for key in ('writer_lease_id', 'eligibility_version'):
+        if isinstance(token[key], bool) or not isinstance(token[key], int) or token[key] <= 0:
+            raise ValueError('invalid consolidation propagation token')
+    trigger = payload['trigger']
+    if (not isinstance(trigger, dict)
+        or set(trigger) != {'kind', 'event_id', 'evidence_id', 'version', 'observed_at', 'proof'}
+        or trigger['kind'] not in ('authority_event', 'evidence_revocation', 'support_expiry')
+        or not isinstance(trigger['proof'], dict) or not trigger['proof']
+        or (trigger['event_id'] is None and trigger['evidence_id'] is None)
+        or not isinstance(trigger['version'], str) or not trigger['version']
+        or not isinstance(trigger['observed_at'], str)
+        or datetime.fromisoformat(trigger['observed_at']).tzinfo is None):
+        raise ValueError('invalid consolidation propagation trigger')
+    depth = payload['depth']
+    if isinstance(depth, bool) or not isinstance(depth, int) or not 0 <= depth <= 32:
+        raise ValueError('invalid consolidation propagation depth')
+    visited = payload['visited_memory_ids']
+    if (not isinstance(visited, list) or not visited or len(visited) > 128 or len(set(visited)) != len(visited)
+        or any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in visited)):
+        raise ValueError('invalid consolidation propagation visited set')
+    frontier = payload['frontier_memory_ids']
+    if (not isinstance(frontier, list) or len(frontier) > 5000 or len(set(frontier)) != len(frontier)
+        or any(isinstance(item, bool) or not isinstance(item, int) or item <= 0 for item in frontier)):
+        raise ValueError('invalid consolidation propagation frontier')
+    for key in ('continuation_key', 'vocabulary_version'):
+        value = payload[key]
+        if not isinstance(value, str) or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+            raise ValueError('invalid consolidation propagation identity')
+    return payload
+
+
 def validate_window_control(event):
     payload = event.get('payload') or {}
     if (event.get('actor') != 'management' or event.get('authority', {}).get('source') != 'consolidation_control'
@@ -243,6 +298,12 @@ def reduce_events(events, *, initial_state=None):
                 consolidation_state['window_seals'][str(event['event_id'])] = {
                     **deepcopy(seal), 'window_id': event['event_id'], 'knowledge_scope_id': scope}
                 consolidation_state['unresolved_windows'].append(event['event_id'])
+            elif payload.get('grant_type') == 'consolidation_propagation':
+                seal = validate_propagation_control(event)
+                # Only materialized on demand so a scope without propagation
+                # control keeps the exact 0095 SQL/Python replay parity shape.
+                consolidation_state.setdefault('propagation_seals', {})[str(event['event_id'])] = {
+                    **deepcopy(seal), 'seal_id': event['event_id'], 'knowledge_scope_id': scope}
             elif "binding_id" in payload:
                 bindings[payload["binding_id"]] = {
                     **{key: payload[key] for key in ("binding_id", "binding_kind", "binding_value", "priority", "status")},

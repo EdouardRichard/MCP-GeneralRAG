@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -9,6 +10,19 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from rag_mcp.services.memory_reducer import require_reducer_state
+
+PROPAGATION_MAX_DEPTH = 32
+PROPAGATION_MAX_VISITED = 128
+PROPAGATION_TRIGGER_KINDS = ('authority_event', 'evidence_revocation', 'support_expiry')
+
+
+def __getattr__(name):
+    """Re-export the adjudication context without a module-level import cycle."""
+    if name == 'AdjudicationContext':
+        from rag_mcp.services.consolidation_adjudicator import AdjudicationContext
+
+        return AdjudicationContext
+    raise AttributeError(name)
 
 
 def freeze(value):
@@ -468,3 +482,219 @@ def select_window(current: CurrentSnapshot, *, policy, now, start=None, token=No
         episodes={ref.memory_id: row for ref, row in inputs}, references={ref.memory_id: row for ref, row in references},
         policy=policy.model_dump(), vocabulary=current.vocabulary, window_id=window_id,
         original_window_id=original_id, truncated=len(inputs) < len(episode_rows))
+
+
+def support_maintenance_context(*, historical_source_refs, propagation_trigger,
+                                support_facts=None, support_versions=None):
+    """Trusted support hook: the only constructor of a propagation context.
+
+    Writer maintenance/governance code calls this; REST, MCP, proposal payloads
+    and model output cannot, because the hook seal never leaves this module.
+    """
+    from rag_mcp.services.consolidation_adjudicator import AdjudicationContext
+
+    return AdjudicationContext(
+        execution_context='deterministic_propagation',
+        historical_source_refs=tuple(historical_source_refs or ()),
+        propagation_trigger=dict(propagation_trigger or {}),
+        support_facts=dict(support_facts or {}),
+        support_versions=dict(support_versions or {}),
+        _seal=_SUPPORT_HOOK_SEAL)
+
+
+def _live_supports(row):
+    """Unique live-dependency out-edges captured at approval time."""
+    edges = []
+    for key in sorted((row or {}).get('approved_links', {})):
+        link = row['approved_links'][key]
+        if (link.get('category') == 'live_dependency' and link.get('propagation') == 'to_to_from'
+                and link.get('from_id') == row.get('memory_id')):
+            edges.append((link.get('to_id'), link.get('relation_type')))
+    return edges
+
+
+def _propagation_target(row, current, now):
+    if row is None or row.get('knowledge_scope_id') != current.scope_id:
+        return False
+    if row.get('status') != 'active' or row.get('write_status', 'complete') != 'complete':
+        return False
+    try:
+        if any(row.get(key) and datetime.fromisoformat(row[key]) <= now for key in ('expires_at', 'valid_to')):
+            return False
+        if row.get('valid_from') and datetime.fromisoformat(row['valid_from']) > now:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def propagation_trigger_material(trigger):
+    """Lower a trusted in-context trigger to its exact schema material."""
+    keys = ('kind', 'event_id', 'evidence_id', 'version', 'observed_at', 'proof')
+    missing = [key for key in keys if key not in trigger]
+    if missing:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+    kind = trigger['kind']
+    if kind not in PROPAGATION_TRIGGER_KINDS:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+    proof = trigger['proof']
+    if not isinstance(proof, Mapping) or not proof:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+    if trigger['event_id'] is None and trigger['evidence_id'] is None:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+    try:
+        observed = datetime.fromisoformat(trigger['observed_at'])
+    except (TypeError, ValueError):
+        raise ValueError('PROPAGATION_TRIGGER_INVALID') from None
+    if observed.tzinfo is None:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+    return freeze({'kind': kind, 'event_id': trigger['event_id'], 'evidence_id': trigger['evidence_id'],
+                   'version': str(trigger['version']), 'observed_at': trigger['observed_at'],
+                   'proof': thaw(proof)})
+
+
+def plan_propagation(current, *, context, now):
+    """Bounded reverse live-dependency plan; no Distiller, no source consumption."""
+    from rag_mcp.services.consolidation_adjudicator import memory_ref, stable_key
+
+    if not getattr(context, 'trusted_support_hook', False):
+        raise PermissionError('TRUSTED_CONTEXT_REQUIRED')
+    if now.tzinfo is None:
+        raise ValueError('timezone-aware clock required')
+    trigger = thaw(context.propagation_trigger or {})
+    material_trigger = thaw(propagation_trigger_material(trigger))
+    proof = dict(trigger.get('proof') or {})
+    reference = dict(trigger.get('target_ref') or {})
+    root = reference.get('memory_id')
+    if isinstance(root, bool) or not isinstance(root, int):
+        raise TypeError('PROPAGATION_TRIGGER_INVALID')
+    live = proof.get('kind') == 'live_dependency'
+    if live:
+        if (isinstance(proof.get('cause_memory_id'), bool) or not isinstance(proof.get('cause_memory_id'), int)
+                or not isinstance(proof.get('relation_type'), str) or not proof['relation_type']):
+            raise ValueError('PROPAGATION_TRIGGER_INVALID')
+        anchor, relation = proof['cause_memory_id'], proof['relation_type']
+    else:
+        anchor, relation = None, None
+    if anchor is not None and proof.get('memory_id') is not None and proof['memory_id'] != root:
+        raise ValueError('PROPAGATION_TRIGGER_INVALID')
+
+    visited, depths, frontier, proposals = set(), {}, [], []
+    queue = deque([(root, anchor, relation, 1)])
+    while queue:
+        mid, cause_id, relation_type, depth = queue.popleft()
+        if mid in visited:
+            continue
+        if len(visited) >= PROPAGATION_MAX_VISITED:
+            frontier.append(mid)
+            continue
+        visited.add(mid)
+        depths[mid] = depth
+        row = current.entries.get(mid)
+        if cause_id is not None and (cause_id, relation_type) not in _live_supports(row):
+            # Only a declared live-dependency dependent carries lifecycle impact;
+            # association and historical lineage never propagate.
+            continue
+        within = depth <= PROPAGATION_MAX_DEPTH
+        if not within:
+            frontier.append(mid)
+        elif _propagation_target(row, current, now):
+            # A non-live trigger authorizes its own root through the current
+            # evidence/authority proof; descendants carry the live-edge claim.
+            dependency = ({'kind': 'live_dependency', 'cause_memory_id': cause_id, 'relation_type': relation_type}
+                          if cause_id is not None else None)
+            proposal = {
+                'proposal_id': 'm' + stable_key({'scope': current.scope_id, 'target': memory_ref(row),
+                                                 'trigger': material_trigger, 'dependency': dependency})[:63],
+                'action': 'invalidate_contradiction', 'target_ref': memory_ref(row), 'correcting_ref': None,
+                'contradiction_basis': 'necessary support denial reached this dependent',
+                'source_refs': [], 'confidence': 1., 'evidence_refs': [],
+                'justification': 'deterministic propagation'}
+            if dependency is not None:
+                proposal['propagation_proof'] = dependency
+            proposals.append(proposal)
+        for child, child_relation in _live_supports_inverse(current, mid):
+            queue.append((child, mid, child_relation, depth + 1))
+    depths_of_proposals = [depths[proposal['target_ref']['memory_id']] for proposal in proposals]
+    material = {'trigger': material_trigger, 'visited_memory_ids': sorted(visited),
+                'depth': max(depths_of_proposals, default=0), 'frontier_memory_ids': sorted(set(frontier)),
+                'vocabulary_version': stable_key(list(current.vocabulary))}
+    material['continuation_key'] = stable_key({'scope': current.scope_id, 'material': material})
+    for proposal in proposals:
+        # The permanent continuation material travels with the approved effect so
+        # the commit path never has to re-plan or re-read authority.
+        proposal['propagation_material'] = material
+    return proposals, material
+
+
+def _live_supports_inverse(current, target_id):
+    dependents = []
+    for mid, row in current.entries.items():
+        if row.get('knowledge_scope_id') != current.scope_id or mid == target_id:
+            continue
+        for to_id, relation in _live_supports(row):
+            if to_id == target_id:
+                dependents.append((mid, relation))
+    dependents.sort()
+    return dependents
+
+
+async def run_propagation(runtime, token, *, context):
+    """Adjudicate and publish one deterministic propagation wave.
+
+    Shares the ordinary scope eligibility, writer lease, token fence and final
+    publication path; it never selects a window, calls the Distiller, creates,
+    merges or derives links/context/candidates, and never consumes a source.
+    """
+    from rag_mcp.models.domain_profile import DomainProfile
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.services.consolidation_adjudicator import adjudicate_batch
+    from rag_mcp.services.consolidation_commit import read_evidence
+    from rag_mcp.services.memory_policy import MemoryPolicy
+
+    if not getattr(context, 'trusted_support_hook', False):
+        from rag_mcp.services.consolidation_runtime import ConsolidationRuntimeError
+
+        raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
+    current = await runtime.read_snapshot(token.scope_id)
+    scope = await runtime.session.get(KnowledgeScope, token.scope_id, populate_existing=True)
+    profile = await runtime.session.get(DomainProfile, scope.domain_key, populate_existing=True)
+    policy = MemoryPolicy.model_validate(profile.memory_policy or {})
+    now = await runtime._clock()
+    proposals, material = plan_propagation(current, context=context, now=now)
+    identifiers = {attribution['evidence_id'] for row in current.entries.values()
+                   for attribution in (row.get('adjudication') or {}).get('evidence_attributions', ()) or ()}
+    identifiers.update(identifier for proposal in proposals for identifier in proposal.get('evidence_refs', ()))
+    support = await read_evidence(runtime.session, identifiers) if identifiers else {}
+    await runtime.session.rollback()
+    context = replace(context, support_facts=support, support_versions=support)
+    from rag_mcp.services.consolidation_runtime import ConsolidationUsage
+
+    usage = ConsolidationUsage().to_dict()
+    # No model runs during maintenance: usage is an explicit actual zero.
+    usage.update(source='actual', input_tokens=0, output_tokens=0, cost_usd=0)
+    batch = ProposalBatch((), tuple(proposals), model_and_version='deterministic', usage=usage)
+    decisions = adjudicate_batch(batch, current, policy, current.vocabulary,
+        {'count': current.quota_count, 'limit': policy.per_scope_memory_quota}, context, now)
+    outcome = await runtime.memory_service.commit_approved(decisions, token, runtime=runtime,
+                                                           batch=batch, context=context)
+    from rag_mcp.services.consolidation_runtime import ConsolidationRuntimeError
+
+    fence_lost = any(code in ('ELIGIBILITY_LOST', 'WRITER_LEASE_LOST') for code in outcome.reason_codes)
+    if not fence_lost and not outcome.output_event_ids and material['visited_memory_ids']:
+        try:
+            # A wave with no lifecycle effect still persists its continuation
+            # material as a trusted control grant, never as an empty success.
+            await runtime.append_propagation_seal(token, material, context=context)
+        except ConsolidationRuntimeError:
+            fence_lost = True
+        if not outcome.reason_codes:
+            reasons = tuple(dict.fromkeys(code for decision in decisions.decisions
+                                          for child in (decision, *decision.children)
+                                          if child.decision == 'reject' for code in child.reason_codes))
+            outcome = replace(outcome, reason_codes=reasons or ('NO_PROPAGATION_EFFECT',))
+    try:
+        await runtime.observe_result(token, decisions, outcome, batch=batch)
+    except ConsolidationRuntimeError:
+        pass
+    return outcome

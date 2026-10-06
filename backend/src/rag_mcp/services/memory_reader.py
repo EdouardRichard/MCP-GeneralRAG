@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from time import monotonic
 from types import SimpleNamespace
@@ -95,6 +96,80 @@ def stable_package_visible(row):
     return start is None or observed is not None and start <= observed
 
 
+# --- 013 Phase 5 additive recall enhancements (T061/T062/T063) -------------
+ENHANCEMENT_RESERVE_CHARACTERS = 200
+
+
+def enhancement_envelope(*, link_status, linked_count, context_status, reasons):
+    """The only additive root field; legacy calls never include it."""
+    return {"link_expansion_status": link_status, "linked_count": int(linked_count),
+            "context_status": context_status, "degradation_reasons": [str(reason) for reason in reasons]}
+
+
+def memory_context(row):
+    """Presentation-only approved context; no fallback text is ever invented."""
+    if not row or not row.get("context_digest") or not row.get("context_version") or not row.get("context_source_event_id"):
+        return None
+    keywords = list(dict.fromkeys(keyword for keyword in (row.get("keywords") or []) if keyword))
+    if not keywords:
+        return None
+    return {"digest": row["context_digest"], "keywords": keywords, "version": row["context_version"],
+            "source": str(row["context_source_event_id"])}
+
+
+def plan_link_expansion(selected, links, vocabulary, rows, *, max_hops=1, max_nodes=8, limit=50):
+    """Deterministic same-scope typed-link expansion; no IO, clock or model.
+
+    Only relations declared by the current independent vocabulary traversed in
+    their declared recall direction participate; base 012 evidence/supersedes
+    edges and undeclared/cross-scope edges never expand.
+    """
+    declared = {row["key"]: row for row in (vocabulary or ())} if not isinstance(vocabulary, Mapping) \
+        else {key: dict(value) for key, value in vocabulary.items()}
+    chosen = list(dict.fromkeys(int(mid) for mid in selected))
+    present = set(chosen)
+    frontier = list(chosen)
+    edges = []
+    for link in links or ():
+        relation = link.get("relation_type") or link.get("relation")
+        declaration = declared.get(relation)
+        if declaration is None:
+            continue
+        from_id, to_id = link.get("from_id"), link.get("to_id")
+        if (isinstance(from_id, bool) or isinstance(to_id, bool)
+                or not isinstance(from_id, int) or not isinstance(to_id, int) or from_id == to_id):
+            continue
+        edges.append((from_id, to_id, declaration, link.get("knowledge_scope_id")))
+    added = []
+    for _ in range(max(0, max_hops)):
+        candidates = set()
+        for from_id, to_id, declaration, scope in edges:
+            direction = declaration.get("recall_direction")
+            for node, neighbour in ((from_id, to_id), (to_id, from_id)):
+                if node not in frontier:
+                    continue
+                if direction == "none" or (direction == "from_to_to" and node != from_id) \
+                        or (direction == "to_to_from" and node != to_id):
+                    continue
+                row, origin = rows.get(neighbour), rows.get(node)
+                if row is None or origin is None or row.get("knowledge_scope_id") != origin.get("knowledge_scope_id"):
+                    continue
+                if scope is not None and scope != row.get("knowledge_scope_id"):
+                    continue
+                candidates.add(neighbour)
+        fresh = sorted(mid for mid in candidates if mid not in present)
+        frontier = []
+        for mid in fresh:
+            if len(added) >= max_nodes or len(chosen) + len(added) >= min(limit, 50):
+                break
+            added.append(mid)
+            present.add(mid)
+            frontier.append(mid)
+        if not frontier:
+            break
+    return added
+
+
 class MemoryReader:
     def __init__(self, session, projections):
         self.session, self.projections = session, projections
@@ -162,7 +237,11 @@ class MemoryReader:
 
     async def recall(self, *, scope_ref, query=None, memory_ids=None, kind=None, session_id=None,
                      agent_id=None, time_window=None, as_of=None, include_superseded=False,
-                     include_delivered=False, limit=10):
+                     include_delivered=False, limit=10, include_linked=False, include_context=False):
+        for flag in (include_linked, include_context):
+            if not isinstance(flag, bool):
+                # The error contract maps ValueError to MEMORY_PROVENANCE_INVALID.
+                raise ValueError("MEMORY_PROVENANCE_INVALID: enhancement flag")  # noqa: TRY004
         started = monotonic()
         if query is not None and memory_ids is not None:
             raise ValueError("MEMORY_IDS_QUERY_CONFLICT")
@@ -289,6 +368,12 @@ class MemoryReader:
                         result["gaps"] = [{"description": "No eligible memory matched the explicit request.",
                                            "suggested_action": "Verify filters or explicitly request include_delivered."}]
                 result["counts"]["characters"] = serialized_characters(result)
+                if include_linked or include_context:
+                    await self._enhance(result, scope_ids=scope_ids, rows=rows, point=point, now=now,
+                                        include_linked=include_linked, include_context=include_context,
+                                        limit=limit, started=started)
+                    result["counts"]["returned"] = len(result["memories"])
+                    result["counts"]["characters"] = serialized_characters(result)
         except TimeoutError:
             failed_paths = ["recall_timeout"]
             result = {"completion_status": "failed", "memories": [], "counts": {"mode": mode, "returned": 0},
@@ -313,6 +398,176 @@ class MemoryReader:
             except TimeoutError:
                 pass
         return result
+
+    async def _entries_map(self, scope_id):
+        """Complete same-scope entries for optional endpoint revalidation.
+
+        `_views` narrows entries to the requested ids; an enhancement still has
+        to revalidate the *other* endpoint against the same complete manifest.
+        """
+        payload = MemoryProjectionMeta.payload
+        records = (await self.session.execute(select(payload["state"]["entries"]).where(
+            MemoryProjectionMeta.knowledge_scope_id == scope_id,
+            MemoryProjectionMeta.projection_type == "manifest",
+            MemoryProjectionMeta.status == "complete",
+            payload["verification_version"].as_integer() == 1))).scalars().all()
+        entries = {}
+        for state in records:
+            for identifier, row in (state or {}).items():
+                if row is not None:
+                    entries[int(identifier)] = row
+        return entries
+
+    async def _link_rows(self, scope_id):
+        payload = MemoryProjectionMeta.payload
+        records = (await self.session.execute(select(payload["state"]).where(
+            MemoryProjectionMeta.knowledge_scope_id == scope_id,
+            MemoryProjectionMeta.projection_type == "links",
+            MemoryProjectionMeta.status == "complete",
+            payload["verification_version"].as_integer() == 1))).scalars().all()
+        return [value for state in records for value in (state or {}).values()
+                if isinstance(value, dict) and value.get("from_id") is not None]
+
+    async def _enhance(self, result, *, scope_ids, rows, point, now, include_linked, include_context, limit, started):
+        """Optional, additive, bounded enhancement; legacy calls never reach here."""
+        from rag_mcp.config.domain_profiles import validate_memory_link_vocabulary
+
+        reasons = []
+        direct_ids = [item["memory_id"] for item in result["memories"]]
+        policy, vocabulary, entries = {}, [], {}
+        if len(scope_ids) == 1:
+            entries = await self._entries_map(scope_ids[0])
+            scope = await self.session.get(KnowledgeScope, scope_ids[0])
+            profile = await self.session.get(DomainProfile, scope.domain_key) if scope is not None else None
+            if profile is not None:
+                policy = profile.memory_policy or {}
+                vocabulary = validate_memory_link_vocabulary(profile.memory_link_vocabulary or [])
+        entries = entries or rows
+        link_status, linked_count = "disabled", 0
+        if include_linked:
+            link_status, linked_count = await self._expand_links(
+                result, direct_ids=direct_ids, scope_ids=scope_ids, rows=entries, point=point, now=now,
+                policy=policy, vocabulary=vocabulary, limit=limit, started=started, reasons=reasons)
+        context_status = "disabled"
+        if include_context:
+            available = 0
+            for item in result["memories"]:
+                context = memory_context(entries.get(item["memory_id"]))
+                if context is None:
+                    continue
+                item["context"] = context
+                if serialized_characters(result) + ENHANCEMENT_RESERVE_CHARACTERS > 6000:
+                    item.pop("context")
+                    reasons.append("CONTEXT_CONTENT_BUDGET")
+                    continue
+                available += 1
+            context_status = ("available" if available and available == len(result["memories"])
+                              else "partial" if available else "unavailable")
+        result["enhancement"] = enhancement_envelope(link_status=link_status, linked_count=linked_count,
+                                                     context_status=context_status, reasons=reasons)
+        # Optional presentation is trimmed before it can evict a direct selection.
+        while serialized_characters(result) > 6000:
+            stripped = next((item for item in reversed(result["memories"]) if "context" in item), None)
+            if stripped is not None:
+                stripped.pop("context")
+                context_status = "partial" if context_status == "available" else context_status
+                reasons.append("CONTEXT_CONTENT_BUDGET")
+            elif len(result["memories"]) > len(direct_ids):
+                result["memories"].pop()
+                linked_count = max(0, linked_count - 1)
+                link_status = "degraded"
+                reasons.append("EXPANSION_CONTENT_BUDGET")
+            else:
+                break
+            result["enhancement"] = enhancement_envelope(link_status=link_status, linked_count=linked_count,
+                                                         context_status=context_status, reasons=reasons)
+
+    async def _expand_links(self, result, *, direct_ids, scope_ids, rows, point, now, policy, vocabulary,
+                            limit, started, reasons):
+        from rag_mcp.services.memory_policy import MemoryPolicy
+
+        if not (policy.get("consolidation_enabled") and policy.get("consolidation") is not None):
+            reasons.append("CONSOLIDATION_DISABLED")
+            return "disabled", 0
+        if not policy.get("link_expansion_enabled"):
+            reasons.append("LINK_EXPANSION_DISABLED")
+            return "disabled", 0
+        if len(scope_ids) != 1:
+            reasons.append("GATE_SCOPE_MISMATCH")
+            return "not_available", 0
+        from rag_mcp.services.consolidation_gate import gather_current_binding, load_gate_proof
+
+        config = MemoryPolicy.model_validate(policy).consolidation
+        remaining = max(0.0, 2.75 - (monotonic() - started))
+        binding, proof = None, None
+        try:
+            binding = await gather_current_binding(self.session, scope_ids[0])
+        except Exception:  # noqa: BLE001 - binding failure degrades to no authorization
+            binding = None
+        if binding is not None:
+            try:
+                proof = await load_gate_proof(str(scope_ids[0]), binding, now,
+                                              remaining_budget_ms=int(min(100.0, remaining * 1000)))
+            except Exception:  # noqa: BLE001 - proof failure degrades to not_available
+                proof = None
+        if proof is None or not proof.available:
+            reasons.append(proof.reason_code if proof is not None else "GATE_INVALID")
+            return "not_available", 0
+        eligible_rows = {mid: row for mid, row in rows.items()
+                         if row.get("knowledge_scope_id") == scope_ids[0]
+                         and memory_visible(row, point=point, now=now)}
+        links = await self._link_rows(scope_ids[0])
+        added = plan_link_expansion(direct_ids, links, vocabulary, eligible_rows,
+                                    max_hops=config.expansion_max_hops,
+                                    max_nodes=config.expansion_max_nodes, limit=limit)
+        added, stale_support = await self._live_support_nodes(added, eligible_rows)
+        if stale_support:
+            reasons.append("EXPANSION_SUPPORT_STALE")
+        status = "applied"
+        for mid in added:
+            result["memories"].append(public_entry(eligible_rows[mid], match=None))
+            if serialized_characters(result) + ENHANCEMENT_RESERVE_CHARACTERS > 6000:
+                result["memories"].pop()
+                reasons.append("EXPANSION_CONTENT_BUDGET")
+                status = "degraded"
+                break
+        return status, len(result["memories"]) - len(direct_ids)
+
+    async def _live_support_nodes(self, added, rows):
+        """Revalidate necessary evidence support of expansion endpoints.
+
+        Only nodes the expansion proposes to add are checked, and only their
+        captured ``must_remain_active`` evidence descriptors are read. A node
+        whose support is missing, no longer published, or whose version/content
+        no longer matches its captured attribution is filtered immediately, so a
+        withdrawn corpus fact cannot be resurrected through link expansion.
+        Failure to read support is fail-closed for expansion (direct results are
+        untouched).
+        """
+        from rag_mcp.services.consolidation_commit import read_evidence
+
+        required = {}
+        for mid in added:
+            for descriptor in rows.get(mid, {}).get("required_support") or ():
+                if descriptor.get("support_kind") == "evidence" \
+                        and descriptor.get("revocation_semantics") == "must_remain_active":
+                    required.setdefault(str(descriptor.get("support_id")), []).append((mid, descriptor))
+        if not required:
+            return list(added), False
+        try:
+            facts = await read_evidence(self.session, list(required))
+        except Exception:  # noqa: BLE001 - unreadable support never authorizes expansion
+            return [], True
+        invalid = set()
+        for identifier, descriptors in required.items():
+            fact = facts.get(identifier)
+            for mid, descriptor in descriptors:
+                if (fact is None or fact.get("status") != "published"
+                        or fact.get("source_status") != "published"
+                        or str(fact.get("version_id")) != str(descriptor.get("version"))
+                        or fact.get("content_hash") != descriptor.get("content_hash")):
+                    invalid.add(mid)
+        return [mid for mid in added if mid not in invalid], bool(invalid)
 
     async def consolidation_candidates(self, *, scope_ref):
         """Deterministic candidate window only; proposal/adjudication belongs to 013."""

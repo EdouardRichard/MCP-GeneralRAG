@@ -22,6 +22,7 @@ def register_recall_memory_tool(server, session_factory, embedding_provider, qdr
         session_id: UUID | None = None, agent_id: str | None = None, time_window: dict | None = None,
         as_of: datetime | None = None, include_superseded: StrictBool = False, include_delivered: StrictBool = False,
         limit: Annotated[StrictInt, Field(ge=1, le=50)] = 10,
+        include_linked: StrictBool = False, include_context: StrictBool = False,
     ) -> CallToolResult:
         """Recall only explicitly scoped completed memory; semantic status is verified in PG."""
         context = session_factory()
@@ -34,7 +35,8 @@ def register_recall_memory_tool(server, session_factory, embedding_provider, qdr
                 result = await MemoryService(session, embedding_provider=embedding_provider, qdrant_store=qdrant_store).recall(
                     scope_ref=scope_ref, query=query, memory_ids=memory_ids, kind=kind,
                     session_id=str(session_id) if session_id else None, agent_id=agent_id, time_window=time_window,
-                    as_of=as_of, include_superseded=include_superseded, include_delivered=include_delivered, limit=limit)
+                    as_of=as_of, include_superseded=include_superseded, include_delivered=include_delivered, limit=limit,
+                    include_linked=include_linked, include_context=include_context)
         except Exception as exception:
             if result is None:
                 result = memory_error(exception, recall=True)

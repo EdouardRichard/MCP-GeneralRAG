@@ -65,6 +65,21 @@ def validate_consolidation_payload(event):
         raise ValueError('CONSOLIDATION_GROUP_INVALID')
     if payload['source_lineage'] != payload['source_refs']:
         raise ValueError('SOURCE_CHAIN_INCOMPLETE')
+    if payload['execution_context'] == 'deterministic_propagation':
+        # Trusted support-maintenance waves: historical lineage, null window,
+        # captured propagation material, invalidate-only and no consumption.
+        propagation = payload.get('propagation') or {}
+        if (payload['operation'] != 'invalidate' or payload['action'] != 'invalidate_contradiction'
+            or payload['window_id'] is not None or not propagation
+            or payload['source_outcomes'] or payload['confidence_origin'] != 'deterministic_rule'
+            or payload['approved_effect'].get('links') or 'context' in payload['approved_effect']
+            or 'candidate' in payload['approved_effect']
+            or set(propagation.get('trigger') or {}) != {'kind', 'event_id', 'evidence_id', 'version',
+                                                         'observed_at', 'proof'}
+            or not propagation['trigger']['proof']
+            or (propagation['trigger']['event_id'] is None
+                and propagation['trigger']['evidence_id'] is None)):
+            raise ValueError('CONSOLIDATION_AUTHORITY_INVALID')
     if payload['operation'] == 'create':
         if (payload['confidence'] != payload['inference_meta']['confidence']
             or payload['inference_meta']['confidence_origin'] != payload['confidence_origin']

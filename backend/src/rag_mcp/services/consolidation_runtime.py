@@ -237,8 +237,13 @@ class ConsolidationRuntime:
         profile = await self.session.scalar(select(DomainProfile).where(DomainProfile.domain_key == scope.domain_key)
                                              .with_for_update(read=True).execution_options(populate_existing=True))
         if context.execution_context == 'deterministic_propagation':
-            # The writer support hook and its current proof verifier land together in T060.
-            raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
+            # Trusted writer maintenance/governance support hook only: the same
+            # scope eligibility, lease and fence apply, but the ordinary
+            # consolidation switches never gate a necessary-support denial.
+            if not context.trusted_support_hook:
+                raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
+            await self._verify_support_proof(scope_id, context)
+            return MemoryPolicy.model_validate(profile.memory_policy or {}), profile
         captured = profile.memory_policy or {}
         if captured.get('consolidation_enabled') and captured.get('consolidation') is None:
             raise ConsolidationRuntimeError('CONSOLIDATION_CONFIGURATION_REQUIRED')
@@ -278,24 +283,44 @@ class ConsolidationRuntime:
             await fence.validate_before_publish()
 
     async def admit(self, scope_id, *, trigger, request_id=None, actor='management', context=None, run_id=None):
+        from rag_mcp.orchestration.consolidation_pipeline import propagation_trigger_material
+
         context = context or TrustedContext()
-        if trigger not in ('manual', 'idle', 'volume') or context.execution_context != 'distiller_window':
+        maintenance = trigger == 'support_maintenance'
+        if maintenance:
+            # Only the trusted writer support hook may construct this context.
+            if not context.trusted_support_hook:
+                raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
+            try:
+                propagation_trigger_material(dict(context.propagation_trigger))
+            except (TypeError, ValueError):
+                raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED') from None
+        elif trigger not in ('manual', 'idle', 'volume') or context.execution_context != 'distiller_window':
             raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
         try:
             async with self._transaction():
                 await self._lock_scope(scope_id)
+                # The domain/configuration gate is answered before occupancy: a
+                # disabled or unconfigured domain never reports a busy run.
+                await self._live_lease()
+                await self._validate_policy(scope_id, context)
                 active = await self.session.scalar(select(ConsolidationEligibility).where(
                     ConsolidationEligibility.knowledge_scope_id == scope_id, ConsolidationEligibility.state == 'active')
                     .with_for_update().execution_options(populate_existing=True))
                 now = await self._clock()
+                superseded = None
                 if active and active.expires_at > now:
-                    raise ConsolidationRuntimeError('CONSOLIDATION_BUSY', run_id=active.run_id)
+                    # Only the trusted support hook may preempt an ordinary
+                    # distiller window; it may never preempt another maintenance
+                    # wave, so the same-scope exclusivity still holds.
+                    latest = await self.latest_observation(active.run_id) if maintenance else None
+                    if latest is None or latest.trigger == 'support_maintenance':
+                        raise ConsolidationRuntimeError('CONSOLIDATION_BUSY', run_id=active.run_id)
+                    superseded = active.run_id
                 if active:
                     active.state = 'expired'
                     active.released_at = now
                     await self.session.flush()
-                await self._live_lease()
-                await self._validate_policy(scope_id, context)
                 version = (await self.session.scalar(select(func.max(ConsolidationEligibility.eligibility_version))
                     .where(ConsolidationEligibility.knowledge_scope_id == scope_id)) or 0) + 1
                 token = EligibilityToken(uuid4(), scope_id, run_id or uuid4(), self.owner.holder_instance_id,
@@ -305,9 +330,16 @@ class ConsolidationRuntime:
                     writer_lease_id=token.writer_lease_id, eligibility_version=version, state='active',
                     acquired_at=now, renewed_at=now, expires_at=now + timedelta(seconds=120)))
                 await self.session.flush()
-                await self._observe_locked(token, status='admitted', trigger=trigger,
-                    execution_context=context.execution_context, request_id=request_id or str(uuid4()), actor=actor,
-                    provider_usage=ConsolidationUsage().to_dict(), eligibility_state='active')
+                observation = {'status': 'admitted', 'trigger': trigger,
+                    'execution_context': context.execution_context, 'request_id': request_id or str(uuid4()),
+                    'actor': actor, 'provider_usage': ConsolidationUsage().to_dict(), 'eligibility_state': 'active'}
+                if maintenance:
+                    observation.update(window=None, input_event_ids=[],
+                        historical_source_refs=thaw(context.historical_source_refs),
+                        propagation_trigger=thaw(context.propagation_trigger))
+                if superseded is not None:
+                    observation['degradation_reasons'] = ['superseded_ordinary_eligibility']
+                await self._observe_locked(token, **observation)
             return token
         except IntegrityError as error:
             async with self._transaction():
@@ -330,6 +362,90 @@ class ConsolidationRuntime:
             trigger, request, actor = (latest.trigger, latest.request_id, latest.actor) if latest else ('manual', None, 'management')
         return await self.admit(old_token.scope_id, trigger=trigger, run_id=old_token.run_id,
                                 request_id=request, actor=actor)
+
+    async def append_propagation_seal(self, token, material, *, context):
+        """Persist permanent continuation material for a wave with no effect.
+
+        This is the trusted control grant `consolidation_propagation`: it never
+        writes an empty success, never consumes a source and never carries
+        create/merge/link/context/candidate authority.
+        """
+        from rag_mcp.services.memory_projection_store import ProjectionFailure
+        from rag_mcp.services.memory_service import MemoryService
+
+        async with self.commit_fence(token, context=context) as fence:
+            now = await self._clock()
+            identifier = generate_id()
+            payload = {'payload_version': 2, 'grant_type': 'consolidation_propagation',
+                'trigger': thaw(material['trigger']),
+                'visited_memory_ids': list(material['visited_memory_ids']),
+                'depth': int(material['depth']),
+                'frontier_memory_ids': list(material['frontier_memory_ids']),
+                'continuation_key': material['continuation_key'],
+                'vocabulary_version': material['vocabulary_version'],
+                'control_adjudication': {'decision': 'seal_propagation', 'effect': 'control_only',
+                                         'rule_version': '013.propagation.1'},
+                'eligibility_token': token.to_dict()}
+            fields = {'event_id': identifier, 'aggregate_id': identifier, 'event_type': 'grant',
+                'knowledge_scope_id': token.scope_id, 'payload': payload, 'actor': 'management',
+                'request_id': str(uuid4()), 'occurred_at': now,
+                'authority': {'source': 'consolidation_control'}, 'scope_meta': {'knowledge_scope_id': token.scope_id},
+                'mutability': {'correction': 'append_event'}, 'provenance_meta': {'source': 'consolidation_control'},
+                'recoverability': {'source': 'event_log'}, 'actionability': 'audit'}
+            await self.session.execute(text("SELECT set_config('rag_memory.consolidation_token',:token,true)"),
+                                       {'token': str(token.eligibility_id)})
+            service = self.memory_service or MemoryService(self.session)
+            service._ensure_vector_store()
+            try:
+                async with self.session.begin_nested():
+                    await MemoryEventStore(self.session).append(MemoryEvent(**fields))
+                    state = reduce_events(await MemoryEventStore(self.session).replay(token.scope_id))
+                    await service.projections.materialize(state, token.scope_id, identifier)
+                    await fence.validate_before_publish()
+            except ProjectionFailure as error:
+                if error.path == 'relation':
+                    raise
+                await MemoryEventStore(self.session).append(MemoryEvent(**fields))
+                state = reduce_events(await MemoryEventStore(self.session).replay(token.scope_id))
+                await service.projections.retain_failure(state, token.scope_id, identifier, error.path)
+            await self._observe_locked(token, status='no_change',
+                                       degradation_reasons=['propagation_frontier_retained'])
+        return identifier
+
+    async def _verify_support_proof(self, scope_id, context):
+        """Re-verify the trigger's current invalidation proof at every fence.
+
+        A stale proof (republished evidence, reactivated support) revokes the
+        maintenance admission and any pending commit, including grant-only
+        continuation seals.
+        """
+        from rag_mcp.services.consolidation_commit import read_evidence
+
+        trigger = context.propagation_trigger
+        proof = trigger.get('proof') or {}
+        if trigger.get('evidence_id') is not None:
+            facts = await read_evidence(self.session, [str(trigger['evidence_id'])], locked=True)
+            fact = facts.get(str(trigger['evidence_id']))
+            if (fact is None or fact.get('status') != 'withdrawn'
+                or str(fact.get('version_id')) != str(trigger.get('version_id'))):
+                raise ConsolidationRuntimeError('CONTRADICTION_NOT_PROVEN')
+            return
+        cause = proof.get('cause_memory_id', proof.get('memory_id'))
+        if isinstance(cause, bool) or not isinstance(cause, int):
+            raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
+        current = await self.read_snapshot(scope_id)
+        row = current.entries.get(cause)
+        now = await self._clock()
+
+        def past(value):
+            if value is None:
+                return False
+            stamp = value if isinstance(value, datetime) else datetime.fromisoformat(value)
+            return stamp <= now
+
+        if (row is not None and row.get('status') == 'active'
+            and not past(row.get('expires_at')) and not past(row.get('valid_to'))):
+            raise ConsolidationRuntimeError('CONTRADICTION_NOT_PROVEN')
 
     async def heartbeat(self, token):
         async with self._transaction():
