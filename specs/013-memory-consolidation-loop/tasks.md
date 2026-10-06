@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过隔离验证，等待独立评审；T018-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已实现并通过针对性隔离验证，等待独立评审；T029-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1的17项已勾选，87项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–2的28项已勾选，76项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -56,20 +56,20 @@
 
 ### US3 测试先行
 
-- [ ] T018 [P] [US3] 在 `backend/tests/unit/test_consolidation_adjudicator.py` 先写 confidence 缺失/非有限/越界/等于下限/低于下限、source/target/support 跨域与最新状态、配额边界、断链/环/深度、缺失五元与永久源链的纯函数矩阵，依赖 T017。
-- [ ] T019 [P] [US3] 在 `backend/tests/unit/test_consolidation_hard_protection.py` 先写 research §6 新软/新硬/人工三路径全 effect 矩阵：replace/invalidate/merge-hidden/缩短有效期/降级/传播，伪权限与硬锚 distilled 均拒绝，合法 trusted hard 替代/人工处置沿既有入口，依赖 T017。
-- [ ] T020 [P] [US3] 在 `backend/tests/unit/test_consolidation_proposal_graph.py` 先写 proposal_id 唯一与 proposal_ref 拓扑测试：未知、自引、环、驳回输出不可用，临时输出只能来自已暂批 extract/distill；共享源/输出依赖同组、事件128上限整组拒绝，依赖 T017。
-- [ ] T021 [P] [US2] 在 `backend/tests/unit/test_consolidation_deterministic_rules.py` 先写相同 clock/policy 的精确等价规则、元数据/证据/锚冲突、可证明纠正与不确定语义冲突拒绝测试，TTL 复用既有治理且禁用/无模型仍执行，依赖 T017。
+- [x] T018 [P] [US3] 在 `backend/tests/unit/test_consolidation_adjudicator.py` 先写 confidence 缺失/非有限/越界/等于下限/低于下限、source/target/support 跨域与最新状态、配额边界、断链/环/深度、缺失五元与永久源链的纯函数矩阵，依赖 T017。
+- [x] T019 [P] [US3] 在 `backend/tests/unit/test_consolidation_hard_protection.py` 先写 research §6 新软/新硬/人工三路径全 effect 矩阵：replace/invalidate/merge-hidden/缩短有效期/降级/传播，伪权限与硬锚 distilled 均拒绝，合法 trusted hard 替代/人工处置沿既有入口，依赖 T017。
+- [x] T020 [P] [US3] 在 `backend/tests/unit/test_consolidation_proposal_graph.py` 先写 proposal_id 唯一与 proposal_ref 拓扑测试：未知、自引、环、驳回输出不可用，临时输出只能来自已暂批 extract/distill；共享源/输出依赖同组、事件128上限整组拒绝，依赖 T017。
+- [x] T021 [P] [US2] 在 `backend/tests/unit/test_consolidation_deterministic_rules.py` 先写相同 clock/policy 的精确等价规则、元数据/证据/锚冲突、可证明纠正与不确定语义冲突拒绝测试，TTL 复用既有治理且禁用/无模型仍执行，依赖 T017。
 
 ### US3 / US2 实现
 
-- [ ] T022 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现纯 adjudicate 与稳定 reason codes，输入不可变当前快照/显式 now/策略/词表/配额/可信上下文，输出逐 core/附件决定与证明；无 session、网络、LLM、隐式时钟且 reject 无 effects，依赖 T018、T019、T020。
-- [ ] T023 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现全 effect 硬保护矩阵与 trusted command 校验，不从 confidence/频次/模型声称生成 hard 授权，保留原 hard confidence=NULL；自然既有 TTL 与软提案缩短期限分开，依赖 T019、T022。
-- [ ] T024 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现源/目标/support 当前合法性、单指针无环 supersede、五元/永久 lineage、quota 累计占用与原始自评 confidence 校验，拒绝不足不驱逐、不补值/聚合/抬高置信度，依赖 T018、T023。
-- [ ] T025 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现 core、link、context、candidate 分别裁决与仅复制获批 effects，代码确定 origin/proof；必要 corpus fact 锚生成 server-owned required_support，模型不得省略或伪造，依赖 T024。
-- [ ] T026 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现同批拓扑/provisional snapshot 和原子连通组预计算，稳定 proposal_key/group_key 排除 run/request，精确计算 create/lifecycle/derive 数量并执行 max_events_per_group≤128、整组拒绝不消费，依赖 T020、T025。
-- [ ] T027 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立于 LLM 的确定性去重/可证明归并/支持纠正提案与 TTL intents，规则 proof/version 由可信代码赋予，全部状态效果经 T022 的同一批准规则及既有治理，依赖 T021、T026。
-- [ ] T028 [US3] 运行纯裁决/硬保护/拓扑/规则测试并检查导入边界，在 `backend/tests/unit/test_consolidation_adjudicator.py` 增加重复输入一致性与禁止 IO spy 的关键断言；接受/驳回均可定位规则且无旁路，依赖 T027。
+- [x] T022 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现纯 adjudicate 与稳定 reason codes，输入不可变当前快照/显式 now/策略/词表/配额/可信上下文，输出逐 core/附件决定与证明；无 session、网络、LLM、隐式时钟且 reject 无 effects，依赖 T018、T019、T020。
+- [x] T023 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现全 effect 硬保护矩阵与 trusted command 校验，不从 confidence/频次/模型声称生成 hard 授权，保留原 hard confidence=NULL；自然既有 TTL 与软提案缩短期限分开，依赖 T019、T022。
+- [x] T024 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现源/目标/support 当前合法性、单指针无环 supersede、五元/永久 lineage、quota 累计占用与原始自评 confidence 校验，拒绝不足不驱逐、不补值/聚合/抬高置信度，依赖 T018、T023。
+- [x] T025 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现 core、link、context、candidate 分别裁决与仅复制获批 effects，代码确定 origin/proof；必要 corpus fact 锚生成 server-owned required_support，模型不得省略或伪造，依赖 T024。
+- [x] T026 [US3] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 实现同批拓扑/provisional snapshot 和原子连通组预计算，稳定 proposal_key/group_key 排除 run/request，精确计算 create/lifecycle/derive 数量并执行 max_events_per_group≤128、整组拒绝不消费，依赖 T020、T025。
+- [x] T027 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立于 LLM 的确定性去重/可证明归并/支持纠正提案与 TTL intents，规则 proof/version 由可信代码赋予，全部状态效果经 T022 的同一批准规则及既有治理，依赖 T021、T026。
+- [x] T028 [US3] 运行纯裁决/硬保护/拓扑/规则测试并检查导入边界，在 `backend/tests/unit/test_consolidation_adjudicator.py` 增加重复输入一致性与禁止 IO spy 的关键断言；接受/驳回均可定位规则且无旁路，依赖 T027。
 
 **Checkpoint**: 裁决规则可独立验收；软推翻 hard=0，缺证据/链/归属/配额未通过生效=0。
 

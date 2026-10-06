@@ -102,7 +102,8 @@ class CurrentSnapshot:
         if any(row['knowledge_scope_id'] != scope_id for row in state['entries'].values()):
             raise ValueError("SCOPE_MISMATCH")
         return cls(scope_id, high_water_mark, state['entries'], state.get('consolidation_state', {}),
-                   tuple(vocabulary), sum(row['status'] == 'active' for row in state['entries'].values()))
+                   tuple(vocabulary), sum(row['status'] == 'active' and row.get('write_status', 'complete') == 'complete'
+                                          for row in state['entries'].values()))
 
 
 @dataclass(frozen=True)
@@ -127,11 +128,13 @@ class Decision:
     source_outcomes: tuple = ()
     proof: Mapping = field(default_factory=dict)
     rule_version: str = '013.1'
+    children: tuple = ()
 
     def __post_init__(self):
-        for key in ('reason_codes', 'approved_effects', 'expected_versions', 'source_outcomes', 'proof'):
+        for key in ('reason_codes', 'approved_effects', 'expected_versions', 'source_outcomes', 'proof', 'children'):
             object.__setattr__(self, key, freeze(getattr(self, key)))
-        if self.decision not in ('accept', 'reject') or self.decision == 'reject' and self.approved_effects:
+        if self.decision not in ('accept', 'reject') or self.decision == 'reject' and (
+            self.approved_effects or self.source_outcomes):
             raise ValueError("rejected decisions cannot carry effects")
 
 
@@ -190,6 +193,95 @@ class Adjudicate(Protocol):
 
 class CommitApproved(Protocol):
     async def __call__(self, decisions: tuple[Decision, ...], token: Any) -> CommitOutcome: ...
+
+
+def deterministic_proposals(current, *, context, policy, now):
+    """Generate only mechanically provable work; approval remains adjudicate's job."""
+    from rag_mcp.services.consolidation_adjudicator import Rejection, _correction, equivalent, memory_ref, stable_key
+
+    if policy.consolidation is None or context.window is None:
+        return ()
+    sources = [current.entries.get(v.memory_id) for v in context.window.input_episode_refs]
+    sources = [r for r in sources if r and r.get('status') == 'active' and r.get('kind') == 'episodic']
+    if not sources:
+        return ()
+    source_refs = [memory_ref(sources[0])]
+    refs = context.window.input_episode_refs + context.window.reference_refs
+    targets = [current.entries[v.memory_id] for v in refs if v.memory_id in current.entries]
+    targets.sort(key=lambda row: row['memory_id'])
+    proposals, merged = [], set()
+    for index, keeper in enumerate(targets):
+        if keeper['memory_id'] in merged:
+            continue
+        duplicates = [r for r in targets[index + 1:] if r['memory_id'] not in merged and equivalent(keeper, r)]
+        if duplicates:
+            duplicates = duplicates[:32]
+            merged.update(r['memory_id'] for r in duplicates)
+            proposals.append({'action': 'merge_duplicate', 'survivor_ref': memory_ref(keeper),
+                              'duplicate_refs': [memory_ref(r) for r in duplicates],
+                              'equivalence_basis': 'exact content and compatible authority metadata'})
+    for target in targets:
+        if target['memory_id'] in merged:
+            continue
+        correction_found = False
+        for correcting in targets:
+            try:
+                _correction(target, correcting, current, context)
+            except Rejection:
+                continue
+            proposals.append({'action': 'invalidate_contradiction', 'target_ref': memory_ref(target),
+                              'correcting_ref': memory_ref(correcting),
+                              'contradiction_basis': 'authoritative single-pointer correction'})
+            correction_found = True
+            break
+        if correction_found:
+            continue
+        for required in target.get('required_support', ()):
+            support = context.support_facts.get(required.get('evidence_id'), {})
+            if support.get('status') == 'withdrawn' and support.get('version_id') == required.get('version_id'):
+                proposals.append({'action': 'invalidate_contradiction', 'target_ref': memory_ref(target),
+                                  'correcting_ref': None, 'contradiction_basis': 'current required support withdrawn'})
+                break
+    for proposal in proposals:
+        proposal.update(source_refs=source_refs, confidence=1., evidence_refs=[], justification='deterministic rule')
+        proposal['proposal_id'] = 'r' + stable_key(proposal)[:63]
+    return freeze(proposals)
+
+
+_TTL_SEAL = object()
+
+
+@dataclass(frozen=True)
+class TTLIntent:
+    scope_id: int
+    target_ref: Mapping
+    retention_stage: str
+    _seal: object = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, 'target_ref', freeze(self.target_ref))
+
+
+def ttl_intents(current, *, now):
+    from rag_mcp.services.consolidation_adjudicator import memory_ref
+
+    if now.tzinfo is None:
+        raise ValueError('timezone-aware clock required')
+    transitions = {'active': 'compressed', 'compressed': 'archived', 'archived': 'tombstone'}
+    return tuple(TTLIntent(current.scope_id, memory_ref(row), transitions[row['retention_stage']], _TTL_SEAL)
+                 for _, row in sorted(current.entries.items())
+                 if row.get('knowledge_scope_id') == current.scope_id and row.get('status') == 'active'
+                 and row.get('write_status', 'complete') == 'complete'
+                 and row.get('retention_stage') in transitions and row.get('expires_at')
+                 and datetime.fromisoformat(row['expires_at']) <= now)
+
+
+def adjudicate_ttl(intent, current, *, now):
+    from rag_mcp.services.consolidation_adjudicator import adjudicate_lifecycle, reject
+
+    if not isinstance(intent, TTLIntent) or intent._seal is not _TTL_SEAL:
+        return reject('TRUSTED_CONTEXT_REQUIRED')
+    return adjudicate_lifecycle(intent, current, now=now)
 
 
 def select_window(current: CurrentSnapshot, *, policy, now, start=None, token=None,

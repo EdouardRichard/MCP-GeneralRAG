@@ -25,6 +25,13 @@ from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
 from rag_mcp.utils.snowflake import generate_id
 
 
+def _hard_replacement_command(event, target, validation):
+    """Pure adapter called only after the existing record authorization checks."""
+    from rag_mcp.services.consolidation_adjudicator import _COMMAND_ISSUER_SEAL, _governed_command
+
+    return _governed_command(event, target=target, validation=validation, _issuer=_COMMAND_ISSUER_SEAL)
+
+
 class MemoryService:
     def __init__(self, session, projection_store=None, *, embedding_provider=None, qdrant_store=None, projection_root=None):
         self.session = session
@@ -109,6 +116,17 @@ class MemoryService:
             scope_meta={"knowledge_scope_id": scope_id}, mutability={"correction": "supersede"},
             provenance_meta=validation, recoverability={"source": "event_log"}, actionability="evidence")
         event_fields = {column.name: getattr(event, column.name) for column in MemoryEvent.__table__.columns if column.name != "created_at"}
+        if clean.get('supersedes_memory_id') and target.provenance == 'hard':
+            from rag_mcp.services.consolidation_adjudicator import guard_effect
+
+            target_fact = {key: getattr(target, key) for key in (
+                'memory_id', 'knowledge_scope_id', 'source_event_id', 'state_event_id', 'content_hash', 'provenance')}
+            target_fact['state_event_id'] = target_fact['state_event_id'] or target_fact['source_event_id']
+            command = _hard_replacement_command(event_fields, target_fact, validation)
+            checked = guard_effect({'operation': 'replace', 'aggregate_id': target.memory_id,
+                                    'replacement_id': identifier}, target_fact, command=command)
+            if checked.decision != 'accept':
+                raise PermissionError('HARD_MEMORY_PROTECTED')
         try:
             async with self.session.begin_nested():
                 await MemoryEventStore(self.session).append(event)

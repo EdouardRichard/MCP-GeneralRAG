@@ -16,6 +16,13 @@ from rag_mcp.services.scope_binding_service import ScopeBindingService
 from rag_mcp.utils.snowflake import generate_id
 
 
+def _management_effect_command(event, target):
+    """Pure adapter for an existing authorized management retirement."""
+    from rag_mcp.services.consolidation_adjudicator import _COMMAND_ISSUER_SEAL, _governed_command
+
+    return _governed_command(event, target=target, _issuer=_COMMAND_ISSUER_SEAL)
+
+
 class MemoryGovernance:
     def __init__(self, service):
         self.service, self.session = service, service.session
@@ -108,6 +115,13 @@ class MemoryGovernance:
             mutability={"correction": "append_event"}, provenance_meta={"source": "management"},
             recoverability={"source": "event_log"}, actionability="audit")
         candidate = {column.name: getattr(event, column.name) for column in MemoryEvent.__table__.columns if column.name != "created_at"}
+        if action in {'retire', 'purge'} and target.get('provenance') == 'hard':
+            from rag_mcp.services.consolidation_adjudicator import guard_effect
+
+            command = _management_effect_command(candidate, target)
+            checked = guard_effect({'operation': 'invalidate', 'aggregate_id': memory_id}, target, command=command)
+            if checked.decision != 'accept':
+                raise PermissionError('HARD_MEMORY_PROTECTED')
         after = reduce_events([*history, candidate])
         impact = {"memory_ids": sorted(mid for mid in set(state["entries"]) | set(after["entries"])
                                         if state["entries"].get(mid) != after["entries"].get(mid)),
