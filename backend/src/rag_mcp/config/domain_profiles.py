@@ -20,6 +20,49 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
+
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
+from typing import Literal
+
+
+class MemoryLinkDeclaration(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    key: str = Field(pattern=r"^[a-z][a-z0-9_]{0,62}$")
+    from_kinds: list[Literal['episodic', 'semantic', 'procedural']] = Field(min_length=1)
+    to_kinds: list[Literal['episodic', 'semantic', 'procedural']] = Field(min_length=1)
+    category: Literal['live_dependency', 'historical_lineage', 'association']
+    propagation: Literal['to_to_from', 'none']
+    recall_direction: Literal['from_to_to', 'to_to_from', 'both', 'none']
+    allow_self: StrictBool = False
+    description: str = Field(max_length=512)
+
+    @model_validator(mode='after')
+    def validate_semantics(self):
+        if self.key in ('evidence', 'supersedes') or self.allow_self:
+            raise ValueError('reserved base relation or self-link')
+        if self.propagation != ('to_to_from' if self.category == 'live_dependency' else 'none'):
+            raise ValueError('propagation must match semantic category')
+        return self
+
+
+def validate_memory_link_vocabulary(value):
+    if not isinstance(value, list) or len(value) > 128:
+        raise ValueError('memory link vocabulary must be a bounded list')
+    rows = [MemoryLinkDeclaration.model_validate(row).model_dump() for row in value]
+    if len({row['key'] for row in rows}) != len(rows):
+        raise ValueError('duplicate memory link key')
+    from rag_mcp.services.memory_validators import sanitize_submission
+    for row in rows:
+        clean, detected = sanitize_submission({'content': row['description']})
+        if clean['content'] != row['description'] or detected.status != 'active':
+            raise ValueError('unsafe memory link description')
+    return rows
+
+
+def memory_vocabulary_version(value):
+    rows = sorted(validate_memory_link_vocabulary(value), key=lambda row: row['key'])
+    return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 SE_PROJECT_FORMATS: tuple[str, ...] = (
     "markdown", "java", "openapi", "ddl", "go", "python", "word", "pdf",

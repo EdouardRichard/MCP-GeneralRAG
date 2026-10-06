@@ -41,6 +41,7 @@ class DomainProfile(Base):
         JSONB, nullable=False, comment="default capability declaration",
     )
     memory_policy: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    memory_link_vocabulary: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     is_builtin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), comment="builtin (read-only) flag",
     )

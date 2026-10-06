@@ -16,6 +16,7 @@ from rag_mcp.config.domain_profiles import (
     BUILTIN_DOMAIN_KEYS,
     is_builtin,
     relation_vocab_union,
+    validate_memory_link_vocabulary,
 )
 from rag_mcp.models.domain_profile import DomainProfile
 
@@ -63,6 +64,7 @@ class DomainProfileService:
             graph_relations=data.get("graph_relations", {}),
             prompt_overrides=data.get("prompt_overrides"),
             default_capabilities=data.get("default_capabilities", {}),
+            memory_link_vocabulary=validate_memory_link_vocabulary(data.get("memory_link_vocabulary", [])),
             is_builtin=False,
         )
         self._session.add(profile)
@@ -82,6 +84,8 @@ class DomainProfileService:
         row.graph_relations = data.get("graph_relations", row.graph_relations)
         row.prompt_overrides = data.get("prompt_overrides", row.prompt_overrides)
         row.default_capabilities = data.get("default_capabilities", row.default_capabilities)
+        if "memory_link_vocabulary" in data:
+            row.memory_link_vocabulary = validate_memory_link_vocabulary(data["memory_link_vocabulary"])
         await self._session.flush()
         return row
 
@@ -176,6 +180,7 @@ class DomainProfileService:
             graph_relations=seed["graph_relations"],
             prompt_overrides=seed.get("prompt_overrides"),
             default_capabilities=seed["default_capabilities"],
+            memory_link_vocabulary=seed.get("memory_link_vocabulary", []),
             is_builtin=True,
         )
 
@@ -187,6 +192,7 @@ class DomainProfileService:
             and row.graph_relations == seed["graph_relations"]
             and row.prompt_overrides == seed.get("prompt_overrides")
             and row.default_capabilities == seed["default_capabilities"]
+            and (row.memory_link_vocabulary or []) == seed.get("memory_link_vocabulary", [])
             and bool(row.is_builtin) is True
         )
 
@@ -199,4 +205,5 @@ class DomainProfileService:
         row.graph_relations = seed["graph_relations"]
         row.prompt_overrides = seed.get("prompt_overrides")
         row.default_capabilities = seed["default_capabilities"]
+        row.memory_link_vocabulary = seed.get("memory_link_vocabulary", [])
         row.is_builtin = True
