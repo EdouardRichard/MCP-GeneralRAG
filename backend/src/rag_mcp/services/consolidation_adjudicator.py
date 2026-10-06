@@ -5,6 +5,7 @@ The caller must re-collect these facts under the writer fence before committing.
 """
 import json
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from datetime import date, datetime
@@ -57,8 +58,96 @@ def reject(reason, *, key=None):
     return Decision(key or stable_key({'reason': reason}), 'reject', (reason,), rule_version=RULE_VERSION)
 
 
-def accept(effects, *, versions=(), outcomes=(), proof=None):
+def _rejection_value(value, references=None):
+    """Typed audit encoding keeps invalid numbers distinct from JSON values."""
+    if isinstance(value, Mapping):
+        if set(value) == {'proposal_ref'}:
+            label = value['proposal_ref']
+            return ['proposal_ref', (references or {}).get(label, 'unresolved')
+                    if isinstance(label, str) else _rejection_value(label)]
+        return ['object', [[key, _rejection_value(item, references)] for key, item in sorted(value.items())
+                           if key not in {'proposal_id', 'run_id', 'request_id'}]]
+    if isinstance(value, (tuple, list)):
+        return ['array', [_rejection_value(item, references) for item in value]]
+    if isinstance(value, float) and not math.isfinite(value):
+        return ['nonfinite', str(value)]
+    return ['scalar', value]
+
+
+def _rejection_facts(proposal, current):
+    identifiers = set()
+
+    def collect(value):
+        if isinstance(value, Mapping):
+            identifier = value.get('memory_id')
+            if isinstance(identifier, (int, str)):
+                identifiers.add(identifier)
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                collect(item)
+
+    collect(proposal)
+    return {'scope': current.scope_id, 'versions': [
+        {'reference': identifier, 'current': memory_ref(current.entries[identifier])
+         if identifier in current.entries else None}
+        for identifier in sorted(identifiers, key=str)]}
+
+
+def _bind_rejections(decision, proposal, current, *, references=None, component=()):
+    children = tuple(_bind_rejections(child, proposal, current, references=references,
+                                     component=(*component, index))
+                     for index, child in enumerate(decision.children))
+    if decision.decision != 'reject':
+        return replace(decision, children=children)
+    key = stable_key({'proposal': _rejection_value(proposal, references),
+                      'current': _rejection_facts(proposal, current), 'component': component,
+                      'reasons': decision.reason_codes, 'rule': RULE_VERSION})
+    return replace(decision, decision_id=key, children=children)
+
+
+def _rejection_references(proposals):
+    # Describe graph nodes by semantic content, then include reachable adjacency.
+    # Local labels are used only to traverse, never placed in the audit identity.
+    by_id = {p['proposal_id']: p for p in proposals}
+    content = {label: stable_key(_rejection_value(p)) for label, p in by_id.items()}
+    references = {}
+    for label in by_id:
+        seen, pending, graph = set(), [label], []
+        while pending:
+            item = pending.pop()
+            if item in seen or item not in by_id:
+                continue
+            seen.add(item)
+            graph.append(_rejection_value(by_id[item], content))
+            pending.extend(_references(by_id[item]))
+        references[label] = stable_key({'root': content[label], 'graph': sorted(graph, key=stable_key)})
+    return references
+
+
+def _bind_rejected_members(decisions, proposals, current, *, references=None):
+    bound = [_bind_rejections(d, p, current, references=references) if d.decision == 'reject' else d
+             for d, p in zip(decisions, proposals)]
+    counts, occurrences = {}, {}
+    for decision in bound:
+        if decision.decision == 'reject':
+            counts[decision.decision_id] = counts.get(decision.decision_id, 0) + 1
+    for index, (decision, proposal) in enumerate(zip(bound, proposals)):
+        key = decision.decision_id
+        if counts.get(key, 0) > 1:
+            occurrence = occurrences.get(key, 0)
+            occurrences[key] = occurrence + 1
+            bound[index] = _bind_rejections(decision, proposal, current, references=references,
+                                            component=('occurrence', occurrence))
+    return tuple(bound)
+
+
+def accept(effects, *, versions=(), outcomes=(), proof=None, support_versions=()):
     proof = proof or {'origin': 'deterministic_rule', 'rule_id': 'effect_guard'}
+    if support_versions:
+        facts = {stable_key(fact): fact for fact in (*proof.get('support_versions', ()), *support_versions)}
+        proof = {**proof, 'support_versions': tuple(facts[key] for key in sorted(facts))}
     key = stable_key({'effects': effects, 'versions': [memory_ref(vars(v)) for v in versions],
                       'rule': RULE_VERSION, 'proof': proof})
     return Decision(key, 'accept', ('APPROVED',), tuple(effects), tuple(versions), tuple(outcomes),
@@ -213,16 +302,21 @@ def _chain(row, current, limit):
             raise Rejection('SUPERSEDE_CHAIN_INVALID')
 
 
-def _resolve(reference, current, context, now, config, versions, *, source=False, output=None, check_support=True):
+def _resolve(reference, current, context, now, config, versions, *, source=False, output=None, check_support=True,
+             support_versions=None):
     if reference.get('local') == 'output':
         if output is None:
             raise Rejection('OUTPUT_NOT_APPROVED')
+        if check_support:
+            _required_support(output, current, context, now, config, versions, support_versions)
         return output
     if 'output_key' in reference:
         result = context.provisional.get(reference['output_key'])
         if source or result is None:
             raise Rejection('OUTPUT_NOT_APPROVED')
         _current(result, current.scope_id, now)
+        if check_support:
+            _required_support(result, current, context, now, config, versions, support_versions)
         return result
     if 'proposal_ref' in reference:
         raise Rejection('OUTPUT_NOT_APPROVED')
@@ -244,48 +338,87 @@ def _resolve(reference, current, context, now, config, versions, *, source=False
     if source and row.get('kind') != 'episodic':
         raise Rejection('SOURCE_NOT_ELIGIBLE')
     if source and row.get('provenance') == 'hard':
-        _hard_attribution(row, current, context)
+        _hard_attribution(row, current, context, support_versions)
     _chain(row, current, config.max_chain_depth)
     if check_support:
-        _required_support(row, current, context, now, versions)
+        _required_support(row, current, context, now, config, versions, support_versions)
     if selected not in versions:
         versions.append(selected)
     return row
 
 
-def _support(identifier, current, context):
+def _support(identifier, current, context, support_versions=None):
     fact = context.support_facts.get(identifier)
     if not fact or fact.get('status') != 'published' or fact.get('source_status') != 'published':
         raise Rejection('EVIDENCE_UNAVAILABLE')
     if any(fact.get(key) != current.scope_id for key in ('knowledge_scope_id', 'source_scope_id', 'version_scope_id')):
         raise Rejection('SCOPE_MISMATCH')
     if (fact.get('attributed') is not True or not fact.get('position') or not fact.get('content_hash')
-        or not fact.get('source_id') or not fact.get('version', 0) >= 1):
+        or not fact.get('source_id') or not fact.get('version_id') or not fact.get('version', 0) >= 1):
         raise Rejection('ATTRIBUTION_FAILED')
     if fact != context.support_versions.get(identifier):
         raise Rejection('TARGET_VERSION_CHANGED')
-    return {'evidence_id': identifier, **fact}
+    captured = {'evidence_id': identifier, **fact}
+    if support_versions is not None and captured not in support_versions:
+        support_versions.append(captured)
+    return captured
 
 
-def _required_support(row, current, context, now, versions):
-    for required in row.get('required_support', ()):
-        try:
+def _required_support(row, current, context, now, config, versions, support_versions=None):
+    nodes, active, heights = set(), set(), {}
+
+    def node(kind, identifier, depth):
+        if depth > config.max_chain_depth:
+            raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+        nodes.add((kind, stable_key(identifier)))
+        if len(nodes) > 128:
+            raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+
+    def visit(memory, depth):
+        identifier = stable_key(memory['memory_id'])
+        node('memory', memory['memory_id'], depth)
+        if identifier in active:
+            raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+        if identifier in heights:
+            if depth + heights[identifier] - 1 > config.max_chain_depth:
+                raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+            return heights[identifier]
+        active.add(identifier)
+        height = 1
+        # Root attribution/protection belongs to its source or action gate.
+        if depth > 1 and memory.get('provenance') == 'hard':
+            for fact in _hard_attribution(memory, current, context, support_versions):
+                node('evidence', fact['evidence_id'], depth + 1)
+                height = 2
+        for required in memory.get('required_support', ()):
             if 'evidence_id' in required:
-                fact = _support(required['evidence_id'], current, context)
-                if fact['version_id'] != required.get('version_id'):
+                fact = _support(required['evidence_id'], current, context, support_versions)
+                if (fact['version_id'] != required.get('version_id')
+                    or any(required[key] != fact.get(key) for key in (
+                        'source_id', 'version', 'position', 'content_hash') if key in required)):
                     raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+                node('evidence', fact['evidence_id'], depth + 1)
+                height = max(height, 2)
             elif 'memory_id' in required:
                 support = current.entries.get(required['memory_id'])
-                if not support or memory_ref(support) != {k: required.get(k) for k in VERSION_FIELDS}:
+                if (not support or memory_ref(support) != {k: required.get(k) for k in VERSION_FIELDS}
+                    or max(support['source_event_id'], support['state_event_id']) > current.high_water_mark):
                     raise Rejection('DEPENDENCY_SUPPORT_INVALID')
                 _current(support, current.scope_id, now)
                 version = SourceVersion(**memory_ref(support), observed_at=_date(support['observed_at']))
                 if version not in versions:
                     versions.append(version)
+                height = max(height, 1 + visit(support, depth + 1))
             else:
                 raise Rejection('DEPENDENCY_SUPPORT_INVALID')
-        except Rejection:
-            raise Rejection('DEPENDENCY_SUPPORT_INVALID') from None
+        active.remove(identifier)
+        heights[identifier] = height
+        return height
+
+    try:
+        visit(row, 1)
+    except (Rejection, KeyError, TypeError, ValueError):
+        raise Rejection('DEPENDENCY_SUPPORT_INVALID') from None
 
 
 def equivalent(left, right):
@@ -298,28 +431,31 @@ def equivalent(left, right):
                     for r in (left, right)))
 
 
-def _hard_attribution(row, current, context):
+def _hard_attribution(row, current, context, support_versions=None):
     metadata = row.get('provenance_meta', {})
     attributions = metadata.get('attributions', ())
     if (row.get('confidence') is not None or not row.get('evidence_refs')
         or metadata.get('validated') is not True
         or {a.get('evidence_id') for a in attributions} != set(row['evidence_refs'])):
         raise Rejection('ATTRIBUTION_FAILED')
+    facts = []
     for attribution in attributions:
-        fact = _support(attribution['evidence_id'], current, context)
+        fact = _support(attribution['evidence_id'], current, context, support_versions)
         if any(attribution.get(key) != fact.get(key) for key in (
             'source_id', 'version_id', 'version', 'position', 'content_hash')):
             raise Rejection('ATTRIBUTION_FAILED')
+        facts.append(fact)
+    return tuple(facts)
 
 
-def _correction(target, correcting, current, context):
+def _correction(target, correcting, current, context, support_versions=None):
     if correcting is not None:
         if (correcting.get('supersedes_memory_id') == target['memory_id']
             and correcting.get('provenance') == 'hard' and correcting.get('confidence') is None
             and correcting.get('authority', {}).get('source') == 'validated_evidence'
             and correcting.get('provenance_meta', {}).get('validated') is True
             and correcting.get('evidence_refs')):
-            _hard_attribution(correcting, current, context)
+            _hard_attribution(correcting, current, context, support_versions)
             return {'rule_id': 'authoritative_correction', 'replacement_id': correcting['memory_id']}
     else:
         for required in target.get('required_support', ()):
@@ -329,6 +465,8 @@ def _correction(target, correcting, current, context):
                 and fact.get('source_scope_id') == current.scope_id and fact.get('version_scope_id') == current.scope_id
                 and fact.get('version_id') == required.get('version_id')
                 and context.support_versions.get(required.get('evidence_id')) == fact):
+                if support_versions is not None:
+                    support_versions.append({'evidence_id': required['evidence_id'], **fact})
                 return {'rule_id': 'support_withdrawal', 'support': required, 'replacement_id': None}
     raise Rejection('CONTRADICTION_NOT_PROVEN')
 
@@ -339,19 +477,25 @@ def _safe(value):
         raise Rejection('GENERATED_CONTENT_UNSAFE')
 
 
+def _source_versions(p, current, context, now, config):
+    refs = p.get('source_refs', ())
+    if not refs or len(refs) > config.max_sources_per_proposal:
+        raise Rejection('SOURCE_NOT_ELIGIBLE')
+    versions, support_versions = [], []
+    for reference in refs:
+        _resolve(reference, current, context, now, config, versions, source=True, support_versions=support_versions)
+    return versions, support_versions
+
+
 def _core(p, current, policy, quota, context, now):
-    versions = []
     config = policy.consolidation
     if not policy.consolidation_enabled or config is None:
         raise Rejection('POLICY_CHANGED')
     if any(k in p for k in ('origin', 'proof', 'rule_id', 'provenance', 'permission', 'authority', 'approved_effects')):
         raise Rejection('AUTHORITY_FIELDS_FORBIDDEN')
     _confidence(p.get('confidence'), config.min_confidence)
+    versions, support_versions = _source_versions(p, current, context, now, config)
     refs = p.get('source_refs', ())
-    if not refs or len(refs) > config.max_sources_per_proposal:
-        raise Rejection('SOURCE_NOT_ELIGIBLE')
-    for reference in refs:
-        _resolve(reference, current, context, now, config, versions, source=True)
     action = p.get('action')
     proof = {'origin': 'llm_self', 'confidence': p['confidence'], 'threshold': config.min_confidence,
              'scope_id': current.scope_id, 'rule_id': action}
@@ -374,7 +518,7 @@ def _core(p, current, policy, quota, context, now):
             raise Rejection('SOURCE_CHAIN_INCOMPLETE')
         if 'fact_anchors' not in info or set(info['fact_anchors']) != set(p.get('evidence_refs', ())):
             raise Rejection('DEPENDENCY_SUPPORT_INVALID')
-        support = tuple(_support(identifier, current, context) for identifier in sorted(info['fact_anchors']))
+        support = tuple(_support(identifier, current, context, support_versions) for identifier in sorted(info['fact_anchors']))
         if quota.get('count') is None or quota.get('limit') is None or quota['count'] >= quota['limit']:
             raise Rejection('QUOTA_EXCEEDED')
         kind = 'semantic' if action == 'extract_fact' else 'procedural'
@@ -391,8 +535,9 @@ def _core(p, current, policy, quota, context, now):
                                  'rule': RULE_VERSION})
         effects = ({'operation': 'create', 'aggregate_id': {'output_key': output_key}, 'value': value},)
     elif action == 'merge_duplicate':
-        keeper = _resolve(p['survivor_ref'], current, context, now, config, versions)
-        duplicates = [_resolve(r, current, context, now, config, versions) for r in p['duplicate_refs']]
+        keeper = _resolve(p['survivor_ref'], current, context, now, config, versions, support_versions=support_versions)
+        duplicates = [_resolve(r, current, context, now, config, versions, support_versions=support_versions)
+                      for r in p['duplicate_refs']]
         if not duplicates or any(r['memory_id'] == keeper['memory_id'] for r in duplicates):
             raise Rejection('EQUIVALENCE_NOT_PROVEN')
         effects = []
@@ -406,12 +551,14 @@ def _core(p, current, policy, quota, context, now):
             effects.append(effect)
         proof.update(origin='deterministic_rule', confidence=1., rule_id='exact_equivalence')
     elif action == 'invalidate_contradiction':
-        target = _resolve(p['target_ref'], current, context, now, config, versions, check_support=False)
+        target = _resolve(p['target_ref'], current, context, now, config, versions, check_support=False,
+                          support_versions=support_versions)
         effect = {'operation': 'invalidate', 'aggregate_id': target['memory_id']}
         if guard_effect(effect, target).decision == 'reject':
             raise Rejection('HARD_MEMORY_PROTECTED')
-        correcting = _resolve(p['correcting_ref'], current, context, now, config, versions) if p.get('correcting_ref') else None
-        correction = _correction(target, correcting, current, context)
+        correcting = _resolve(p['correcting_ref'], current, context, now, config, versions,
+                              support_versions=support_versions) if p.get('correcting_ref') else None
+        correction = _correction(target, correcting, current, context, support_versions)
         proof.update(origin='deterministic_rule', confidence=1., **correction)
         effects = ({**effect, 'value': {'replacement_id': correction['replacement_id']}},)
     else:
@@ -423,7 +570,7 @@ def _core(p, current, policy, quota, context, now):
     elif action == 'invalidate_contradiction':
         completed_refs = [r for r in refs if r['memory_id'] == target['memory_id']]
     outcomes = tuple({'source_version': r, 'outcome': 'consumed_on_complete'} for r in completed_refs)
-    return accept(effects, versions=versions, outcomes=outcomes, proof=proof)
+    return accept(effects, versions=versions, outcomes=outcomes, proof=proof, support_versions=support_versions)
 
 
 def _endpoint_ref(row):
@@ -443,12 +590,16 @@ def _attachments(p, core, current, policy, vocabulary, context, now):
                 raise Rejection('LINK_BUDGET_EXCEEDED')
             if set(link) != {'from_ref', 'to_ref', 'relation_type', 'confidence', 'description'}:
                 raise Rejection('AUTHORITY_FIELDS_FORBIDDEN')
-            versions = []
-            left = _resolve(link['from_ref'], current, context, now, config, versions, output=output)
-            right = _resolve(link['to_ref'], current, context, now, config, versions, output=output)
+            versions, support_versions = _source_versions(p, current, context, now, config)
+            left = _resolve(link['from_ref'], current, context, now, config, versions, output=output,
+                            support_versions=support_versions)
+            right = _resolve(link['to_ref'], current, context, now, config, versions, output=output,
+                             support_versions=support_versions)
             relation = next((r for r in vocabulary if r['key'] == link['relation_type']), None)
             if relation is None:
                 raise Rejection('LINK_TYPE_NOT_ALLOWED')
+            if left.get('kind') not in relation.get('from_kinds', ()) or right.get('kind') not in relation.get('to_kinds', ()):
+                raise Rejection('LINK_KIND_NOT_ALLOWED')
             if left['memory_id'] == right['memory_id'] or relation.get('recall_direction') not in ('both', 'from_to_to', 'to_to_from'):
                 raise Rejection('LINK_DIRECTION_INVALID')
             _confidence(link.get('confidence'), config.min_confidence)
@@ -460,7 +611,8 @@ def _attachments(p, core, current, policy, vocabulary, context, now):
                      'origin': 'llm_proposed', 'category': relation['category'],
                      'propagation': relation['propagation']}
             yield accept(({'operation': 'derive', 'aggregate_id': left['memory_id'], 'value': {'links': [value]}},),
-                         versions=versions, proof={'origin': 'llm_self', 'confidence': link['confidence'], 'rule_id': 'link'})
+                         versions=versions, support_versions=support_versions,
+                         proof={'origin': 'llm_self', 'confidence': link['confidence'], 'rule_id': 'link'})
         except Rejection as error:
             yield reject(str(error))
     if 'context' in p:
@@ -494,9 +646,9 @@ def adjudicate(proposal, current, policy, vocabulary, quota, context, now):
     if now.tzinfo is None:
         raise ValueError('timezone-aware clock required')
     if not isinstance(context, AdjudicationContext):
-        return reject('TRUSTED_CONTEXT_REQUIRED')
+        return _bind_rejections(reject('TRUSTED_CONTEXT_REQUIRED'), proposal, current)
     if context.execution_context != 'distiller_window':
-        return _maintenance(proposal, current, context, now)
+        return _bind_rejections(_maintenance(proposal, current, context, now), proposal, current)
     try:
         core = _core(proposal, current, policy, quota, context, now)
     except Rejection as error:
@@ -504,10 +656,12 @@ def adjudicate(proposal, current, policy, vocabulary, quota, context, now):
     children = (core, *_attachments(proposal, core, current, policy, vocabulary, context, now))
     effects = tuple(e for child in children for e in child.approved_effects)
     if not effects:
-        return replace(core, children=children)
+        return _bind_rejections(replace(core, children=children), proposal, current)
     versions = tuple(dict.fromkeys(v for child in children for v in child.expected_versions))
-    decision = accept(effects, versions=versions, outcomes=core.source_outcomes, proof=core.proof)
-    return replace(decision, children=children)
+    support_versions = tuple(fact for child in children for fact in child.proof.get('support_versions', ()))
+    decision = accept(effects, versions=versions, outcomes=core.source_outcomes, proof=core.proof,
+                      support_versions=support_versions)
+    return _bind_rejections(replace(decision, children=children), proposal, current)
 
 
 def _maintenance(proposal, current, context, now):
@@ -616,18 +770,83 @@ def lower_events(decisions):
     return freeze([{**event, 'effect_index': index, 'effect_count': count} for index, event in enumerate(events)])
 
 
+def _model_structure_valid(proposal):
+    """Reject malformed containers before they can disrupt trusted batch work."""
+    def sequence(value):
+        return isinstance(value, (tuple, list))
+
+    def reference(value, *, source=False):
+        if not isinstance(value, Mapping):
+            return False
+        if not source and set(value) == {'proposal_ref'}:
+            return isinstance(value['proposal_ref'], str)
+        if not source and set(value) == {'local'}:
+            return value['local'] == 'output'
+        return (set(VERSION_FIELDS) <= value.keys()
+                and all(isinstance(value[key], int) and not isinstance(value[key], bool)
+                        for key in VERSION_FIELDS[:3]) and isinstance(value['content_hash'], str))
+
+    if not sequence(proposal.get('source_refs')) or not all(reference(ref, source=True) for ref in proposal['source_refs']):
+        return False
+    if not sequence(proposal.get('evidence_refs')) or not all(isinstance(ref, str) for ref in proposal['evidence_refs']):
+        return False
+    action = proposal.get('action')
+    if not isinstance(action, str):
+        return False
+    if action in CREATES and not all(isinstance(proposal.get(key), str) for key in ('kind', 'content')):
+        return False
+    if action == 'merge_duplicate' and (
+        not reference(proposal.get('survivor_ref')) or not sequence(proposal.get('duplicate_refs'))
+        or not all(reference(ref) for ref in proposal['duplicate_refs'])):
+        return False
+    if action == 'invalidate_contradiction' and (
+        not reference(proposal.get('target_ref')) or 'correcting_ref' not in proposal
+        or proposal['correcting_ref'] is not None and not reference(proposal['correcting_ref'])):
+        return False
+    links = proposal.get('link_suggestions', ())
+    if not sequence(links) or any(not isinstance(link, Mapping)
+        or not {'from_ref', 'to_ref', 'relation_type', 'confidence', 'description'} <= link.keys()
+        or not reference(link['from_ref']) or not reference(link['to_ref']) for link in links):
+        return False
+    if 'context' in proposal:
+        context = proposal['context']
+        if not isinstance(context, Mapping) or not isinstance(context.get('context_digest'), str) or not sequence(context.get('keywords')):
+            return False
+    return True
+
+
 def adjudicate_batch(batch, current, policy, vocabulary, quota, context, now):
+    models, rules = tuple(batch.proposals), tuple(batch.deterministic_proposals)
+    model_fault = None
+    if any(not isinstance(p, Mapping) for p in models):
+        model_fault = 'PROPOSAL_INVALID'
+    elif any(not isinstance(p.get('proposal_id'), str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', p['proposal_id'])
+             for p in models):
+        model_fault = 'PROPOSAL_ID_INVALID'
+    else:
+        model_ids = [p['proposal_id'] for p in models]
+        if len(set(model_ids)) != len(model_ids) or set(model_ids) & {p['proposal_id'] for p in rules}:
+            model_fault = 'PROPOSAL_ID_DUPLICATE'
+        if model_fault is None and any(not _model_structure_valid(p) for p in models):
+            model_fault = 'PROPOSAL_INVALID'
+    if model_fault:
+        trusted = adjudicate_batch(replace(batch, proposals=()), current, policy, vocabulary, quota, context, now)
+        return BatchDecision(trusted.decisions + _bind_rejected_members(
+            tuple(reject(model_fault) for _ in models), models, current), trusted.groups)
     proposals = tuple(batch.deterministic_proposals) + tuple(batch.proposals)
     labels = [p['proposal_id'] for p in proposals]
     if len(set(labels)) != len(labels):
-        return BatchDecision(tuple(reject('PROPOSAL_ID_DUPLICATE') for _ in proposals), ())
+        return BatchDecision(_bind_rejected_members(tuple(reject('PROPOSAL_ID_DUPLICATE') for _ in proposals),
+                                                    proposals, current), ())
     by_id = dict(zip(labels, proposals))
     dependencies = {label: set(_references(p)) for label, p in by_id.items()}
+    rule_ids = {p['proposal_id'] for p in rules}
+    model_ids = {p['proposal_id'] for p in models}
     decisions, outputs, provisional, order = {}, {}, {}, []
     for label, deps in dependencies.items():
         if label in deps:
             decisions[label] = reject('PROPOSAL_REF_SELF')
-        elif deps - by_id.keys():
+        elif deps - (rule_ids if label in rule_ids else model_ids):
             decisions[label] = reject('PROPOSAL_REF_UNKNOWN')
     pending = set(labels) - decisions.keys()
     while pending:
@@ -708,4 +927,6 @@ def adjudicate_batch(batch, current, policy, vocabulary, quota, context, now):
                                               'versions': [decisions[label].expected_versions for label in members],
                                               'plan': planned, 'rule': RULE_VERSION}),
                                   ids, planned, outcomes))
-    return BatchDecision(tuple(decisions[label] for label in labels), tuple(groups))
+    references = _rejection_references(proposals)
+    return BatchDecision(_bind_rejected_members(tuple(decisions[label] for label in labels), proposals,
+                                                current, references=references), tuple(groups))

@@ -6,9 +6,10 @@ import pytest
 from rag_mcp.orchestration.consolidation_pipeline import (
     adjudicate_ttl,
     deterministic_proposals,
+    thaw,
     ttl_intents,
 )
-from tests.unit.consolidation_cases import NOW, POLICY, decide, proposal, ref, rejected, row, setup, support_fact
+from tests.unit.consolidation_cases import NOW, POLICY, VOCAB, decide, proposal, ref, rejected, row, setup, support_fact
 
 
 def merge():
@@ -83,19 +84,20 @@ def test_support_invalidation_does_not_consume_unrelated_episode():
     assert decision.source_outcomes == ()
 
 
-def test_authoritative_single_pointer_correction_accepts():
+@pytest.mark.parametrize('vocabulary', [VOCAB, ()])
+def test_authoritative_single_pointer_correction_accepts(vocabulary):
     correcting = row(3, supersedes_memory_id=2, authority={'source': 'validated_evidence'},
                      provenance='hard', confidence=None, evidence_refs=['7'],
                      provenance_meta={'validated': True, 'attributions': [{'evidence_id': '7', **support_fact()}]})
     p = proposal(action='invalidate_contradiction', target_ref=ref(row(2)), correcting_ref=ref(correcting),
                  contradiction_basis='does not authenticate anything')
     c, ctx = setup(p, entries={1: row(1), 2: row(2), 3: correcting}, support={'7': support_fact()})
-    d = decide(p, c, ctx)
+    d = decide(p, c, ctx, vocabulary=vocabulary)
     assert d.decision == 'accept'
     assert d.approved_effects[0]['value']['replacement_id'] == 3
     assert d.proof['rule_id'] == 'authoritative_correction'
     bad = replace(c, entries={**c.entries, 3: {**correcting, 'authority': {'source': 'inference'}}})
-    rejected(decide(p, bad, ctx), 'CONTRADICTION_NOT_PROVEN')
+    rejected(decide(p, bad, ctx, vocabulary=vocabulary), 'CONTRADICTION_NOT_PROVEN')
 
 
 def test_required_support_withdrawal_accepts_and_stale_or_historical_claim_does_not():
@@ -106,6 +108,8 @@ def test_required_support_withdrawal_accepts_and_stale_or_historical_claim_does_
     d = decide(p, c, ctx)
     assert d.decision == 'accept'
     assert d.proof['rule_id'] == 'support_withdrawal'
+    assert thaw(d.proof.get('support_versions', ())) == [
+        {'evidence_id': '7', **support_fact(status='withdrawn')}]
     rejected(decide(p, c, replace(ctx, support_facts={'7': support_fact()})), 'CONTRADICTION_NOT_PROVEN')
     rejected(decide(p, c, replace(ctx, support_facts={'7': support_fact(status='withdrawn', version_id=10)})),
              'CONTRADICTION_NOT_PROVEN')

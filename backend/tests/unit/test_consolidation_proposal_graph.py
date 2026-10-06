@@ -2,17 +2,18 @@ from dataclasses import replace
 
 import pytest
 
-from rag_mcp.orchestration.consolidation_pipeline import ProposalBatch
+from rag_mcp.config.domain_profiles import validate_memory_link_vocabulary
+from rag_mcp.orchestration.consolidation_pipeline import ProposalBatch, deterministic_proposals, thaw
 from rag_mcp.services.consolidation_adjudicator import adjudicate_batch
-from tests.unit.consolidation_cases import NOW, POLICY, VOCAB, proposal, ref, rejected, row, setup
+from tests.unit.consolidation_cases import NOW, POLICY, VOCAB, facts, proposal, ref, rejected, row, setup
 
 
-def batch(proposals, *, current=None, context=None, quota=None, max_events=128):
+def batch(proposals, *, current=None, context=None, quota=None, max_events=128, vocabulary=VOCAB, deterministic=()):
     if current is None:
         current, context = setup(*proposals)
     policy = POLICY.model_copy(update={'consolidation': POLICY.consolidation.model_copy(
         update={'max_events_per_group': max_events})})
-    return adjudicate_batch(ProposalBatch(tuple(proposals)), current, policy, VOCAB,
+    return adjudicate_batch(ProposalBatch(tuple(proposals), tuple(deterministic)), current, policy, vocabulary,
                             quota or {'count': 0, 'limit': 5000}, context, NOW)
 
 
@@ -28,6 +29,105 @@ def test_unique_proposal_ids_required():
     for d in result.decisions:
         rejected(d, 'PROPOSAL_ID_DUPLICATE')
     assert result.groups == ()
+
+
+def trusted_merge():
+    return proposal('rule', source=row(3), action='merge_duplicate', survivor_ref=ref(row(2)),
+                    duplicate_refs=[ref(row(3))], equivalence_basis='exact')
+
+
+def test_model_id_collision_preserves_exact_generated_rule_groups_and_outcomes():
+    current, context = setup()
+    rules = deterministic_proposals(current, context=context, policy=POLICY, now=NOW)
+    assert len(rules) == 1
+    baseline = batch([], current=current, context=context, deterministic=rules)
+    assert baseline.decisions[0].decision == 'accept'
+    assert [event['operation'] for event in baseline.groups[0].event_plan] == ['merge', 'merge']
+    collision = proposal(rules[0]['proposal_id'], content='model output')
+    context = replace(context, inferences={collision['proposal_id']: facts(collision)})
+    result = batch([collision], current=current, context=context, deterministic=rules)
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert result.groups[0].source_outcomes == baseline.groups[0].source_outcomes
+    rejected(result.decisions[1], 'PROPOSAL_ID_DUPLICATE')
+
+
+@pytest.mark.parametrize('failure,reason', [
+    ('collision', 'PROPOSAL_ID_DUPLICATE'), ('duplicate', 'PROPOSAL_ID_DUPLICATE'),
+    ('missing_id', 'PROPOSAL_ID_INVALID'), ('null_id', 'PROPOSAL_ID_INVALID'),
+    ('list_id', 'PROPOSAL_ID_INVALID'), ('illegal_id', 'PROPOSAL_ID_INVALID'),
+    ('non_object', 'PROPOSAL_INVALID'), ('missing_merge_field', 'PROPOSAL_INVALID'),
+    ('unknown_action', 'ACTION_NOT_ALLOWED'),
+])
+def test_invalid_model_packet_preserves_exact_rule_consumption(failure, reason):
+    rule = trusted_merge()
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    assert baseline.decisions[0].decision == 'accept'
+    assert thaw(baseline.groups[0].source_outcomes) == [
+        {'source_version': ref(row(3)), 'outcome': 'consumed_on_complete'}]
+    invalid = proposal('model')
+    models = [invalid]
+    if failure == 'collision':
+        invalid['proposal_id'] = 'rule'
+    elif failure == 'duplicate':
+        models.append(proposal('model', content='second'))
+    elif failure == 'missing_id':
+        del invalid['proposal_id']
+    elif failure == 'null_id':
+        invalid['proposal_id'] = None
+    elif failure == 'list_id':
+        invalid['proposal_id'] = ['model']
+    elif failure == 'illegal_id':
+        invalid['proposal_id'] = 'Not a legal ID'
+    elif failure == 'non_object':
+        models = [None]
+    elif failure == 'missing_merge_field':
+        invalid.update(action='merge_duplicate', survivor_ref=ref(row(2)))
+    elif failure == 'unknown_action':
+        invalid['action'] = 'not_an_action'
+    result = batch(models, current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    for decision in result.decisions[1:]:
+        rejected(decision, reason)
+
+
+def test_model_packet_id_fault_drops_all_model_work_without_harming_rule():
+    rule = trusted_merge()
+    good, collision = proposal('model'), proposal('rule', content='colliding')
+    current, context = setup(rule, good, collision)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([good, collision], current=current, context=context, deterministic=[rule])
+    assert result.groups == baseline.groups
+    assert result.decisions[0] == baseline.decisions[0]
+    for decision in result.decisions[1:]:
+        rejected(decision, 'PROPOSAL_ID_DUPLICATE')
+
+
+def test_valid_model_topology_and_origin_survive_alongside_trusted_rule():
+    rule = trusted_merge()
+    models = [linked('b', 'a'), proposal('a')]
+    current, context = setup(rule, *models)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch(models, current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert baseline.groups[0] in result.groups
+    assert all(decision.decision == 'accept' for decision in result.decisions)
+    assert result.decisions[0].proof['origin'] == 'deterministic_rule'
+    assert all(decision.proof['origin'] == 'llm_self' for decision in result.decisions[1:])
+    model_group = next(group for group in result.groups if group != baseline.groups[0])
+    assert [event['operation'] for event in model_group.event_plan] == ['create', 'create', 'derive']
+
+
+def test_model_proposal_ref_cannot_resolve_in_trusted_rule_namespace():
+    rule, model = trusted_merge(), linked('model', 'rule')
+    current, context = setup(rule, model)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([model], current=current, context=context, deterministic=[rule])
+    assert result.groups == baseline.groups
+    assert result.decisions[0] == baseline.decisions[0]
+    rejected(result.decisions[1], 'PROPOSAL_REF_UNKNOWN')
 
 
 @pytest.mark.parametrize('proposals,reason', [([linked('p0', 'absent')], 'PROPOSAL_REF_UNKNOWN'),
@@ -46,6 +146,28 @@ def test_forward_reference_topology_uses_approved_output():
     assert len(result.groups) == 1
     assert [e['operation'] for e in result.groups[0].event_plan] == ['create', 'create', 'derive']
     assert result.groups[0].event_plan[-1]['value']['links'][0]['to_ref']['output_key']
+
+
+@pytest.mark.parametrize('side', ['from', 'to'])
+@pytest.mark.parametrize('action,kind,want', [('extract_fact', 'semantic', 'accept'),
+                                           ('distill_procedure', 'procedural', 'reject')])
+def test_provisional_link_vocabulary_uses_approved_output_kind(side, action, kind, want):
+    creator = proposal('a', action=action, kind=kind)
+    attachment = {'from_ref': {'proposal_ref': 'a'} if side == 'from' else ref(row(3)),
+                  'to_ref': {'proposal_ref': 'a'} if side == 'to' else ref(row(3)),
+                  'relation_type': 'related', 'confidence': .8, 'description': 'output relation'}
+    dependent = proposal('b', source=row(2), content='other fact', link_suggestions=[attachment])
+    vocabulary = validate_memory_link_vocabulary([{**VOCAB[0],
+        'from_kinds': ['semantic'] if side == 'from' else ['episodic'],
+        'to_kinds': ['semantic'] if side == 'to' else ['episodic']}])
+    result = batch([dependent, creator], vocabulary=vocabulary)
+    assert result.decisions[0].children[0].decision == result.decisions[1].children[0].decision == 'accept'
+    if want == 'accept':
+        assert result.decisions[0].children[1].decision == 'accept'
+        assert [event['operation'] for event in result.groups[0].event_plan] == ['create', 'create', 'derive']
+    else:
+        rejected(result.decisions[0].children[1], 'LINK_KIND_NOT_ALLOWED')
+        assert [event['operation'] for event in result.groups[0].event_plan] == ['create', 'create']
 
 
 @pytest.mark.parametrize('creator', [proposal('p0', confidence=.1),
@@ -131,6 +253,76 @@ def test_rejected_attachments_never_enter_event_plan():
 def test_invalid_confidence_in_batch_is_a_decision_not_json_serialization_crash():
     result = batch([proposal(confidence=float('nan'))])
     rejected(result.decisions[0], 'CONFIDENCE_INVALID')
+
+
+def test_rejected_batch_keys_distinguish_contents_and_preserve_retry_relabel():
+    proposals = [proposal('a', confidence=.1, content='first'), proposal('b', confidence=.1, content='second')]
+    original = batch(proposals)
+    assert len({decision.decision_id for decision in original.decisions}) == 2
+    renamed = [{**proposals[1], 'proposal_id': 'renamed_b', 'run_id': 'new', 'request_id': 'new'},
+               {**proposals[0], 'proposal_id': 'renamed_a'}]
+    repeated = batch(renamed)
+    assert {decision.decision_id for decision in repeated.decisions} == {
+        decision.decision_id for decision in original.decisions}
+    assert original.groups == repeated.groups == ()
+
+
+def test_rejected_output_dependency_keys_are_stable_after_graph_relabel():
+    original = [proposal('a', confidence=.1, content='creator'), linked('b', 'a', source=2)]
+    renamed = [linked('renamed_b', 'renamed_a', source=2), proposal('renamed_a', confidence=.1, content='creator')]
+    renamed[0]['content'] = 'b'
+    a, b = batch(original), batch(renamed)
+    rejected(a.decisions[1], 'OUTPUT_NOT_APPROVED')
+    assert a.decisions[0].decision_id != a.decisions[1].decision_id
+    assert {decision.decision_id for decision in a.decisions} == {decision.decision_id for decision in b.decisions}
+
+
+def test_cycle_rejection_keys_bind_distinct_contents_and_canonical_topology():
+    original = [linked('a', 'b'), linked('b', 'a')]
+    renamed = [linked('renamed_b', 'renamed_a'), linked('renamed_a', 'renamed_b')]
+    renamed[0]['content'], renamed[1]['content'] = 'b', 'a'
+    a, b = batch(original), batch(renamed)
+    for decision in a.decisions:
+        rejected(decision, 'PROPOSAL_REF_CYCLE')
+    assert len({decision.decision_id for decision in a.decisions}) == 2
+    assert {decision.decision_id for decision in a.decisions} == {decision.decision_id for decision in b.decisions}
+
+
+def test_invalid_model_packet_rejection_keys_do_not_collapse_distinct_members():
+    rule = trusted_merge()
+    models = [proposal('duplicate', content='first'), proposal('duplicate', content='second')]
+    current, context = setup(rule)
+    result = batch(models, current=current, context=context, deterministic=[rule])
+    for decision in result.decisions[1:]:
+        rejected(decision, 'PROPOSAL_ID_DUPLICATE')
+    assert result.decisions[1].decision_id != result.decisions[2].decision_id
+    assert batch(models, current=current, context=context, deterministic=[rule]) == result
+
+
+def test_identical_rejected_members_have_separate_stable_audit_occurrences():
+    proposals = [proposal('a', confidence=.1), proposal('b', confidence=.1)]
+    result = batch(proposals)
+    assert len({decision.decision_id for decision in result.decisions}) == 2
+    renamed = batch([{**proposals[1], 'proposal_id': 'x'}, {**proposals[0], 'proposal_id': 'y'}])
+    assert {decision.decision_id for decision in result.decisions} == {
+        decision.decision_id for decision in renamed.decisions}
+    assert result.groups == renamed.groups == ()
+
+
+@pytest.mark.parametrize('change', [
+    {'action': []}, {'action': {'not': 'an action'}}, {'source_refs': None}, {'source_refs': [None]},
+    {'link_suggestions': [{'from_ref': ref(row(2))}]},
+    {'link_suggestions': [{'from_ref': {'proposal_ref': ['bad']}, 'to_ref': ref(row(2)),
+                          'relation_type': 'related', 'confidence': .8, 'description': 'invalid label'}]},
+])
+def test_nested_malformed_model_output_cannot_stop_deterministic_work(change):
+    rule, model = trusted_merge(), proposal('model', **change)
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([model], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    rejected(result.decisions[1], 'PROPOSAL_INVALID')
 
 
 def test_different_attachments_share_one_derive_event_on_same_aggregate():

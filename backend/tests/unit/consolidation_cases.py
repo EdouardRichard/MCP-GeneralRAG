@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
+from rag_mcp.config.domain_profiles import validate_memory_link_vocabulary
 from rag_mcp.orchestration.consolidation_pipeline import (
     CurrentSnapshot,
     SourceVersion,
@@ -13,10 +14,14 @@ from rag_mcp.services.memory_policy import MemoryPolicy
 
 NOW = datetime(2026, 10, 6, tzinfo=UTC)
 POLICY = MemoryPolicy(consolidation_enabled=True, consolidation={})
-VOCAB = ({'key': 'related', 'category': 'association', 'recall_direction': 'both',
-          'propagation': 'none'},
-         {'key': 'requires', 'category': 'live_dependency', 'recall_direction': 'from_to_to',
-          'propagation': 'to_to_from'})
+VOCAB = tuple(validate_memory_link_vocabulary([
+    {'key': 'related', 'category': 'association', 'recall_direction': 'both', 'propagation': 'none',
+     'from_kinds': ['episodic', 'semantic', 'procedural'], 'to_kinds': ['episodic', 'semantic', 'procedural'],
+     'allow_self': False, 'description': 'Related memories'},
+    {'key': 'requires', 'category': 'live_dependency', 'recall_direction': 'from_to_to',
+     'propagation': 'to_to_from', 'from_kinds': ['episodic', 'semantic', 'procedural'],
+     'to_kinds': ['episodic', 'semantic', 'procedural'], 'allow_self': False, 'description': 'Required support'},
+]))
 
 
 def row(identifier, **changes):
