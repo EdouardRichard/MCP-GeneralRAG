@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rag-mcp:013:consolidate-payload:2",
+  "title": "Trusted consolidate payload v2 (012 event envelope remains required)",
+  "type": "object", "additionalProperties": false,
+  "required": ["payload_version", "operation", "action", "proposal_key", "group_key", "group_id", "effect_index", "effect_count", "created_by_run", "execution_context", "window_id", "propagation", "source_refs", "target_refs", "source_outcomes", "source_lineage", "required_support", "confidence", "confidence_origin", "versions", "captured_policy", "captured_vocabulary", "adjudication", "approved_effect", "evidence_refs"],
+  "properties": {
+    "payload_version": {"const": 2},
+    "operation": {"enum": ["create", "merge", "invalidate", "derive"]},
+    "action": {"enum": ["extract_fact", "distill_procedure", "merge_duplicate", "invalidate_contradiction"]},
+    "proposal_key": {"$ref": "#/$defs/hash"},
+    "group_key": {"$ref": "#/$defs/hash"},
+    "group_id": {"type": "string", "format": "uuid"},
+    "effect_index": {"type": "integer", "minimum": 0},
+    "effect_count": {"type": "integer", "minimum": 1, "maximum": 128},
+    "created_by_run": {"type": "string", "format": "uuid"},
+    "execution_context": {"enum": ["distiller_window", "deterministic_propagation"]},
+    "window_id": {"type": ["integer", "null"], "minimum": 1},
+    "propagation": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/propagation"}]},
+    "source_refs": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "target_refs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "source_outcomes": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["source_event_id", "outcome", "required_group_key"], "properties": {
+      "source_event_id": {"type": "integer", "minimum": 1},
+      "outcome": {"enum": ["consumed_on_complete", "referenced_only"]},
+      "required_group_key": {"$ref": "#/$defs/hash"}
+    }}},
+    "source_lineage": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/ref"}},
+    "required_support": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["support_kind", "support_id", "version", "content_hash", "revocation_semantics"], "properties": {
+      "support_kind": {"enum": ["memory", "evidence", "fact"]}, "support_id": {"type": "string", "minLength": 1, "maxLength": 128},
+      "version": {"type": "string", "minLength": 1, "maxLength": 128}, "content_hash": {"$ref": "#/$defs/hash"},
+      "revocation_semantics": {"enum": ["explicit_denial", "must_remain_active"]}
+    }}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "confidence_origin": {"enum": ["llm_self", "deterministic_rule"]},
+    "versions": {"type": "object", "additionalProperties": false, "required": ["model", "prompt", "schema", "rule", "policy", "vocabulary"], "properties": {
+      "model": {"type": ["string", "null"]}, "prompt": {"type": ["string", "null"]},
+      "schema": {"type": "string", "minLength": 1}, "rule": {"type": "string", "minLength": 1},
+      "policy": {"$ref": "#/$defs/hash"}, "vocabulary": {"$ref": "#/$defs/hash"}
+    }},
+    "captured_policy": {"type": "object", "description": "Validated strict MemoryPolicy snapshot; not model output"},
+    "captured_vocabulary": {"type": "array", "description": "Validated independent memory-link vocabulary snapshot", "maxItems": 128, "items": {"type": "object"}},
+    "adjudication": {"type": "object", "additionalProperties": false, "required": ["decision_id", "decision", "rule_version", "reason_codes", "min_confidence", "proofs", "evidence_attributions"], "properties": {
+      "decision_id": {"type": "string", "minLength": 1, "maxLength": 128}, "decision": {"const": "accept"},
+      "rule_version": {"type": "string", "minLength": 1},
+      "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+      "min_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "proofs": {"type": "array", "items": {"type": "object"}},
+      "evidence_attributions": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/attribution"}}
+    }},
+    "approved_effect": {"type": "object", "additionalProperties": false, "required": ["memory_id", "links"], "properties": {
+      "memory_id": {"type": "integer", "minimum": 1},
+      "links": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/link"}},
+      "context": {"$ref": "#/$defs/context"},
+      "candidate": {"type": "object", "additionalProperties": false, "required": ["promote_candidate_at", "candidate_version", "evidence_attributions"], "properties": {
+        "promote_candidate_at": {"type": "string", "format": "date-time"}, "candidate_version": {"$ref": "#/$defs/hash"},
+        "evidence_attributions": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/attribution"}}
+      }},
+      "lifecycle": {"type": "object", "additionalProperties": false, "required": ["status", "valid_to", "replacement_id", "keeper_id", "trigger_event_id"], "properties": {
+        "status": {"enum": ["retired", "superseded"]}, "valid_to": {"type": "string", "format": "date-time"},
+        "replacement_id": {"type": ["integer", "null"], "minimum": 1}, "keeper_id": {"type": ["integer", "null"], "minimum": 1},
+        "trigger_event_id": {"type": ["integer", "null"], "minimum": 1}
+      }}
+    }},
+    "kind": {"enum": ["semantic", "procedural"]}, "provenance": {"const": "distilled"},
+    "content_text": {"type": "string", "minLength": 1, "maxLength": 4000}, "content_hash": {"$ref": "#/$defs/hash"},
+    "title": {"type": ["string", "null"], "maxLength": 512},
+    "created_at": {"type": "string", "format": "date-time"}, "updated_at": {"type": "string", "format": "date-time"},
+    "decay_rate": {"type": "number", "minimum": 0},
+    "tags": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "session_id": {"type": ["string", "null"], "maxLength": 64}, "agent_id": {"type": ["string", "null"], "maxLength": 255},
+    "task_context": {"type": ["object", "null"]}, "supersedes_memory_id": {"type": ["integer", "null"], "minimum": 1},
+    "submission_meta": {"type": "object", "description": "Canonical 012 source metadata, parity checked against top-level values"},
+    "injection_flags": {"type": "object", "additionalProperties": false, "required": ["suspicious", "risk_level", "matched_patterns"], "properties": {
+      "suspicious": {"type": "boolean"}, "risk_level": {"enum": ["none", "low"]}, "matched_patterns": {"type": "array", "items": {"type": "string"}}
+    }},
+    "provenance_validation": {"type": "object", "required": ["provenance", "validated", "attributions"], "properties": {
+      "provenance": {"const": "distilled"}, "validated": {"const": true}, "attributions": {"type": "array", "minItems": 1, "items": {"type": "object"}}
+    }},
+    "status": {"const": "active"},
+    "valid_from": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": ["string", "null"], "format": "date-time"},
+    "evidence_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "pattern": "^[1-9][0-9]*$"}},
+    "inference_meta": {"type": "object", "additionalProperties": false, "required": ["source", "confidence", "model_version", "time", "supporting_evidence", "confidence_origin"], "properties": {
+      "source": {"type": "string", "minLength": 1}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "model_version": {"type": "string", "minLength": 1}, "time": {"type": "string", "format": "date-time"},
+      "supporting_evidence": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "pattern": "^memory:[1-9][0-9]*$"}},
+      "confidence_origin": {"enum": ["llm_self", "deterministic_rule"]}
+    }}
+  },
+  "allOf": [
+    {"if": {"properties": {"operation": {"const": "create"}}}, "then": {"required": ["kind", "provenance", "content_text", "content_hash", "status", "valid_from", "expires_at", "inference_meta", "created_at", "updated_at", "decay_rate", "tags", "session_id", "agent_id", "task_context", "supersedes_memory_id", "submission_meta", "injection_flags", "provenance_validation"]}, "else": {"not": {"anyOf": [{"required": ["content_text"]}, {"required": ["kind"]}, {"required": ["provenance"]}, {"required": ["inference_meta"]}, {"required": ["submission_meta"]}, {"required": ["provenance_validation"]}]}}},
+    {"if": {"properties": {"operation": {"const": "create"}, "action": {"const": "extract_fact"}}, "required": ["operation", "action"]}, "then": {"properties": {"kind": {"const": "semantic"}}}},
+    {"if": {"properties": {"operation": {"const": "create"}, "action": {"const": "distill_procedure"}}, "required": ["operation", "action"]}, "then": {"properties": {"kind": {"const": "procedural"}}}},
+    {"if": {"properties": {"operation": {"const": "create"}}}, "then": {"properties": {"action": {"enum": ["extract_fact", "distill_procedure"]}}}},
+    {"if": {"properties": {"operation": {"enum": ["merge", "invalidate"]}}}, "then": {"properties": {"approved_effect": {"required": ["lifecycle"]}}}},
+    {"if": {"properties": {"operation": {"const": "merge"}}}, "then": {"properties": {"action": {"const": "merge_duplicate"}}}},
+    {"if": {"properties": {"operation": {"const": "invalidate"}}}, "then": {"properties": {"action": {"const": "invalidate_contradiction"}}}},
+    {"if": {"properties": {"execution_context": {"const": "distiller_window"}}}, "then": {"properties": {"window_id": {"type": "integer", "minimum": 1}, "propagation": {"type": "null"}}}},
+    {"if": {"properties": {"execution_context": {"const": "deterministic_propagation"}}}, "then": {"properties": {
+      "operation": {"const": "invalidate"}, "action": {"const": "invalidate_contradiction"}, "confidence_origin": {"const": "deterministic_rule"},
+      "window_id": {"type": "null"}, "propagation": {"$ref": "#/$defs/propagation"}, "source_outcomes": {"maxItems": 0},
+      "approved_effect": {"properties": {"links": {"maxItems": 0}}, "not": {"anyOf": [{"required": ["context"]}, {"required": ["candidate"]}]}}
+    }}}
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "ref": {"$ref": "urn:rag-mcp:013:distiller-output:1#/$defs/memoryRef"},
+    "propagation": {"type": "object", "additionalProperties": false, "required": ["trigger", "visited_memory_ids", "depth", "frontier_memory_ids", "continuation_key", "vocabulary_version"], "properties": {
+      "trigger": {"type": "object", "additionalProperties": false, "required": ["kind", "event_id", "evidence_id", "version", "observed_at", "proof"], "properties": {
+        "kind": {"enum": ["authority_event", "evidence_revocation", "support_expiry"]},
+        "event_id": {"type": ["integer", "null"], "minimum": 1}, "evidence_id": {"type": ["string", "null"], "pattern": "^[1-9][0-9]*$"},
+        "version": {"type": "string", "minLength": 1}, "observed_at": {"type": "string", "format": "date-time"}, "proof": {"type": "object", "minProperties": 1}
+      }},
+      "visited_memory_ids": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+      "depth": {"type": "integer", "minimum": 0, "maximum": 32},
+      "frontier_memory_ids": {"type": "array", "maxItems": 5000, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+      "continuation_key": {"$ref": "#/$defs/hash"}, "vocabulary_version": {"$ref": "#/$defs/hash"}
+    }},
+    "attribution": {"type": "object", "additionalProperties": false, "required": ["evidence_id", "source_id", "version_id", "version", "position", "content_hash"], "properties": {
+      "evidence_id": {"type": "string", "pattern": "^[1-9][0-9]*$"}, "source_id": {"type": "integer", "minimum": 1},
+      "version_id": {"type": "integer", "minimum": 1}, "version": {"type": "integer", "minimum": 1},
+      "position": {"type": "string", "minLength": 1}, "content_hash": {"$ref": "#/$defs/hash"}
+    }},
+    "link": {"type": "object", "additionalProperties": false, "required": ["from_id", "to_id", "relation_type", "provenance", "confidence", "created_by_run", "vocabulary_version", "category", "propagation", "description", "source_refs"], "properties": {
+      "from_id": {"type": "integer", "minimum": 1}, "to_id": {"type": "integer", "minimum": 1},
+      "relation_type": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}, "provenance": {"enum": ["deterministic", "llm_proposed"]},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "created_by_run": {"type": "string", "format": "uuid"},
+      "vocabulary_version": {"$ref": "#/$defs/hash"}, "category": {"enum": ["live_dependency", "historical_lineage", "association"]},
+      "propagation": {"enum": ["to_to_from", "none"]}, "description": {"type": "string", "minLength": 1, "maxLength": 512},
+      "source_refs": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/ref"}}
+    }},
+    "context": {"type": "object", "additionalProperties": false, "required": ["context_digest", "keywords", "context_version", "source_refs", "model_version", "prompt_version", "schema_version"], "properties": {
+      "context_digest": {"type": "string", "minLength": 1, "maxLength": 1024},
+      "keywords": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+      "context_version": {"type": "string", "minLength": 1}, "source_refs": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/ref"}},
+      "model_version": {"type": "string", "minLength": 1}, "prompt_version": {"type": "string", "minLength": 1}, "schema_version": {"type": "string", "minLength": 1}
+    }}
+  }
+}

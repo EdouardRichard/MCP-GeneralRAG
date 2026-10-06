@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rag-mcp:013:benefit-report:2",
+  "title": "013 consolidation comparison report",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "report_type", "generated_at", "commit", "status", "environment", "gate_binding", "request_ids", "run_ids", "gate_variant", "k", "queries", "aggregates", "relative_gains", "cache", "reproducibility", "hard_metrics", "gates", "default_enable_eligible", "default_configuration", "evidence_paths", "failed_paths"],
+  "properties": {
+    "schema_version": {"const": "013.2"}, "report_type": {"const": "013_memory_consolidation_comparison"},
+    "generated_at": {"type": "string", "format": "date-time"}, "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "status": {"enum": ["passed", "failed", "incomplete"]},
+    "gate_binding": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/gateBinding"}]},
+    "environment": {"type": "object", "additionalProperties": false, "required": ["host", "python", "database", "qdrant", "frozen_clock", "snapshot_hash", "dataset_hash", "policy_hash", "vocabulary_hash", "prompt_hash", "schema_hash", "model_version", "projection_fingerprints"], "properties": {
+      "host": {"type": "string", "minLength": 1}, "python": {"type": "string", "minLength": 1},
+      "database": {"type": "string", "minLength": 1}, "qdrant": {"type": "string", "minLength": 1},
+      "frozen_clock": {"type": ["string", "null"], "format": "date-time"},
+      "snapshot_hash": {"$ref": "#/$defs/nullableHash"}, "dataset_hash": {"$ref": "#/$defs/nullableHash"},
+      "policy_hash": {"$ref": "#/$defs/nullableHash"}, "vocabulary_hash": {"$ref": "#/$defs/nullableHash"},
+      "prompt_hash": {"$ref": "#/$defs/nullableHash"}, "schema_hash": {"$ref": "#/$defs/nullableHash"},
+      "model_version": {"type": ["string", "null"], "minLength": 1}, "projection_fingerprints": {"type": "object", "additionalProperties": {"$ref": "#/$defs/hash"}}
+    }},
+    "request_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "run_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "format": "uuid"}},
+    "gate_variant": {"enum": ["consolidated_direct", "consolidated_candidate_expansion"]}, "k": {"const": 5},
+    "queries": {"type": "array", "items": {"$ref": "#/$defs/query"}},
+    "aggregates": {"type": "object", "additionalProperties": false, "required": ["baseline", "consolidated_direct", "consolidated_candidate_expansion"], "properties": {
+      "baseline": {"$ref": "#/$defs/metrics"}, "consolidated_direct": {"$ref": "#/$defs/metrics"},
+      "consolidated_candidate_expansion": {"$ref": "#/$defs/metrics"}
+    }},
+    "relative_gains": {"type": "object", "additionalProperties": false, "required": ["mrr", "ndcg", "baseline_zero"], "properties": {
+      "mrr": {"type": ["number", "null"]}, "ndcg": {"type": ["number", "null"]}, "baseline_zero": {"type": "boolean"}
+    }},
+    "cache": {"type": "object", "additionalProperties": false, "required": ["path", "manifest_hash", "content_hash", "expected_keys", "recorded_success", "recorded_failure", "replayed_success", "replayed_failure", "missing", "corrupt", "version_mismatch", "record_real_network_calls", "replay_real_network_calls", "response_match_rate", "evidence_complete", "record_usage", "replay_usage"], "properties": {
+      "path": {"type": "string", "minLength": 1}, "manifest_hash": {"$ref": "#/$defs/nullableHash"}, "content_hash": {"$ref": "#/$defs/nullableHash"},
+      "expected_keys": {"$ref": "#/$defs/count"}, "recorded_success": {"$ref": "#/$defs/count"}, "recorded_failure": {"$ref": "#/$defs/count"},
+      "replayed_success": {"$ref": "#/$defs/count"}, "replayed_failure": {"$ref": "#/$defs/count"},
+      "missing": {"$ref": "#/$defs/count"}, "corrupt": {"$ref": "#/$defs/count"}, "version_mismatch": {"$ref": "#/$defs/count"},
+      "record_real_network_calls": {"$ref": "#/$defs/count"}, "replay_real_network_calls": {"$ref": "#/$defs/count"},
+      "response_match_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1}, "evidence_complete": {"type": "boolean"},
+      "record_usage": {"$ref": "#/$defs/usage"}, "replay_usage": {"$ref": "#/$defs/usage"}
+    }},
+    "reproducibility": {"type": "object", "additionalProperties": false, "required": ["status", "non_latency_relative_tolerance", "max_non_latency_relative_drift", "zero_baseline_exact_match", "safety_exact_match"], "properties": {
+      "status": {"enum": ["passed", "failed", "incomplete"]}, "non_latency_relative_tolerance": {"const": 0.01},
+      "max_non_latency_relative_drift": {"type": ["number", "null"], "minimum": 0},
+      "zero_baseline_exact_match": {"type": "boolean"}, "safety_exact_match": {"type": "boolean"}
+    }},
+    "hard_metrics": {"type": ["object", "null"], "additionalProperties": false, "required": ["cross_scope_leaks", "quarantined_inputs", "soft_overturns_hard", "automatic_promotions", "invalid_outputs_applied", "stale_holder_commits", "incomplete_outputs_consumed", "source_chain_complete_rate", "schema_validity_rate", "projection_integrity_rate", "rebuild_llm_calls"], "properties": {
+      "cross_scope_leaks": {"$ref": "#/$defs/count"}, "quarantined_inputs": {"$ref": "#/$defs/count"},
+      "soft_overturns_hard": {"$ref": "#/$defs/count"}, "automatic_promotions": {"$ref": "#/$defs/count"},
+      "invalid_outputs_applied": {"$ref": "#/$defs/count"}, "stale_holder_commits": {"$ref": "#/$defs/count"},
+      "incomplete_outputs_consumed": {"$ref": "#/$defs/count"}, "rebuild_llm_calls": {"$ref": "#/$defs/count"},
+      "source_chain_complete_rate": {"$ref": "#/$defs/rate"}, "schema_validity_rate": {"$ref": "#/$defs/rate"}, "projection_integrity_rate": {"$ref": "#/$defs/rate"}
+    }},
+    "gates": {"type": "object", "additionalProperties": false, "required": ["quality", "safety", "regression"], "properties": {
+      "quality": {"$ref": "#/$defs/gate"}, "safety": {"$ref": "#/$defs/gate"}, "regression": {"$ref": "#/$defs/gate"}
+    }},
+    "default_enable_eligible": {"type": "boolean"},
+    "default_configuration": {"type": "object", "additionalProperties": false, "required": ["consolidation_enabled", "link_expansion_enabled", "policy_published", "reason"], "properties": {
+      "consolidation_enabled": {"type": "boolean"}, "link_expansion_enabled": {"type": "boolean"}, "policy_published": {"const": false},
+      "reason": {"type": "string", "minLength": 1}
+    }},
+    "evidence_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "failed_paths": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "passed"}}}, "then": {"properties": {"default_enable_eligible": {"const": true}}}},
+    {"if": {"properties": {"default_enable_eligible": {"const": true}}}, "then": {"properties": {
+      "status": {"const": "passed"},
+      "gate_binding": {"$ref": "#/$defs/gateBinding"},
+      "run_ids": {"minItems": 1},
+      "queries": {"minItems": 6, "allOf": [
+        {"contains": {"properties": {"primary_category": {"const": "extraction"}}}, "minContains": 2},
+        {"contains": {"properties": {"primary_category": {"const": "correction"}}}, "minContains": 2},
+        {"contains": {"properties": {"primary_category": {"const": "merge"}}}, "minContains": 2},
+        {"contains": {"properties": {"primary_category": {"const": "extraction"}, "extraction_kind": {"const": "semantic"}}}},
+        {"contains": {"properties": {"primary_category": {"const": "extraction"}, "extraction_kind": {"const": "procedural"}}}}
+      ], "items": {"properties": {"baseline": {"type": "object"}, "consolidated_direct": {"type": "object"}, "consolidated_candidate_expansion": {"type": "object"}}}},
+      "environment": {"properties": {"frozen_clock": {"type": "string"}, "snapshot_hash": {"$ref": "#/$defs/hash"}, "dataset_hash": {"$ref": "#/$defs/hash"}, "policy_hash": {"$ref": "#/$defs/hash"}, "vocabulary_hash": {"$ref": "#/$defs/hash"}, "prompt_hash": {"$ref": "#/$defs/hash"}, "schema_hash": {"$ref": "#/$defs/hash"}, "model_version": {"type": "string"}, "projection_fingerprints": {"minProperties": 1}}},
+      "aggregates": {"properties": {"baseline": {"type": "object"}, "consolidated_direct": {"type": "object"}, "consolidated_candidate_expansion": {"type": "object"}}},
+      "relative_gains": {"properties": {"mrr": {"type": "number", "minimum": 0.03}, "ndcg": {"type": "number", "minimum": 0.03}, "baseline_zero": {"const": false}}},
+      "cache": {"properties": {"evidence_complete": {"const": true}, "manifest_hash": {"$ref": "#/$defs/hash"}, "content_hash": {"$ref": "#/$defs/hash"}, "missing": {"const": 0}, "corrupt": {"const": 0}, "version_mismatch": {"const": 0}, "replay_real_network_calls": {"const": 0}, "response_match_rate": {"const": 1}, "replay_usage": {"properties": {"source": {"const": "replay_zero"}}}}},
+      "reproducibility": {"properties": {"status": {"const": "passed"}, "max_non_latency_relative_drift": {"type": "number", "maximum": 0.01}, "zero_baseline_exact_match": {"const": true}, "safety_exact_match": {"const": true}}},
+      "gates": {"properties": {"quality": {"properties": {"status": {"const": "passed"}}}, "safety": {"properties": {"status": {"const": "passed"}}}, "regression": {"properties": {"status": {"const": "passed"}}}}},
+      "hard_metrics": {"type": "object", "properties": {"cross_scope_leaks": {"const": 0}, "quarantined_inputs": {"const": 0}, "soft_overturns_hard": {"const": 0}, "automatic_promotions": {"const": 0}, "invalid_outputs_applied": {"const": 0}, "stale_holder_commits": {"const": 0}, "incomplete_outputs_consumed": {"const": 0}, "rebuild_llm_calls": {"const": 0}, "source_chain_complete_rate": {"const": 1}, "schema_validity_rate": {"const": 1}, "projection_integrity_rate": {"const": 1}}},
+      "failed_paths": {"maxItems": 0}
+    }}},
+    {"if": {"properties": {"default_enable_eligible": {"const": false}}}, "then": {"properties": {"default_configuration": {"properties": {"consolidation_enabled": {"const": false}, "link_expansion_enabled": {"const": false}}}}}}
+  ],
+  "$defs": {
+    "gateBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope_id", "data_hash", "policy_hash", "vocabulary_hash", "prompt_hash", "schema_hash", "model_version", "implementation_hash", "recall_config_hash"],
+      "properties": {
+        "scope_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "data_hash": {"$ref": "#/$defs/hash"}, "policy_hash": {"$ref": "#/$defs/hash"},
+        "vocabulary_hash": {"$ref": "#/$defs/hash"}, "prompt_hash": {"$ref": "#/$defs/hash"},
+        "schema_hash": {"$ref": "#/$defs/hash"}, "model_version": {"type": "string", "minLength": 1},
+        "implementation_hash": {"$ref": "#/$defs/hash"}, "recall_config_hash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "nullableHash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "count": {"type": "integer", "minimum": 0}, "rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "usage": {"type": "object", "additionalProperties": false, "required": ["source", "provider_usage", "input_tokens", "output_tokens", "cost_usd", "latency_ms"], "allOf": [
+      {"if": {"properties": {"source": {"const": "replay_zero"}}}, "then": {"properties": {"provider_usage": {"properties": {"llm_calls": {"const": 0}, "llm_prompt_chars": {"const": 0}, "llm_completion_chars": {"const": 0}}}, "input_tokens": {"const": 0}, "output_tokens": {"const": 0}, "cost_usd": {"const": 0}}}}
+    ], "properties": {
+      "provider_usage": {"type": "object", "additionalProperties": false, "required": ["embedding_calls", "rerank_calls", "llm_calls", "llm_prompt_chars", "llm_completion_chars"], "properties": {
+        "embedding_calls": {"$ref": "#/$defs/count"}, "rerank_calls": {"$ref": "#/$defs/count"}, "llm_calls": {"$ref": "#/$defs/count"},
+        "llm_prompt_chars": {"$ref": "#/$defs/count"}, "llm_completion_chars": {"$ref": "#/$defs/count"}
+      }},
+      "source": {"enum": ["actual", "estimated", "unavailable", "replay_zero"]}, "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+      "output_tokens": {"type": ["integer", "null"], "minimum": 0}, "cost_usd": {"type": ["number", "null"], "minimum": 0}, "latency_ms": {"type": ["number", "null"], "minimum": 0}
+    }},
+    "metrics": {"type": ["object", "null"], "additionalProperties": false, "required": ["mrr", "ndcg", "hit_rate", "recall_at_k", "precision_at_k", "latency_p50_ms", "latency_p95_ms", "cost_usd"], "properties": {
+      "mrr": {"$ref": "#/$defs/rate"}, "ndcg": {"$ref": "#/$defs/rate"}, "hit_rate": {"$ref": "#/$defs/rate"},
+      "recall_at_k": {"$ref": "#/$defs/rate"}, "precision_at_k": {"$ref": "#/$defs/rate"},
+      "latency_p50_ms": {"type": ["number", "null"], "minimum": 0}, "latency_p95_ms": {"type": ["number", "null"], "minimum": 0}, "cost_usd": {"type": ["number", "null"], "minimum": 0}
+    }},
+    "query": {"type": "object", "additionalProperties": false, "required": ["query_id", "primary_category", "extraction_kind", "scope_id", "expected_source_event_ids", "relevance_units", "baseline", "consolidated_direct", "consolidated_candidate_expansion", "result_trace", "failed_paths"], "allOf": [
+      {"if": {"properties": {"primary_category": {"const": "extraction"}}}, "then": {"properties": {"extraction_kind": {"enum": ["semantic", "procedural"]}}}, "else": {"properties": {"extraction_kind": {"type": "null"}}}}
+    ], "properties": {
+      "query_id": {"type": "string", "minLength": 1}, "primary_category": {"enum": ["extraction", "correction", "merge"]},
+      "extraction_kind": {"enum": ["semantic", "procedural", null]}, "scope_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+      "expected_source_event_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[1-9][0-9]*$"}},
+      "relevance_units": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+      "baseline": {"$ref": "#/$defs/metrics"}, "consolidated_direct": {"$ref": "#/$defs/metrics"}, "consolidated_candidate_expansion": {"$ref": "#/$defs/metrics"},
+      "result_trace": {"type": "object", "minProperties": 1}, "failed_paths": {"type": "array", "items": {"type": "string", "minLength": 1}}
+    }},
+    "gate": {"type": "object", "additionalProperties": false, "required": ["status", "checks", "evidence"], "allOf": [
+      {"if": {"properties": {"status": {"const": "passed"}}}, "then": {"properties": {"checks": {"additionalProperties": {"const": true}}}}}
+    ], "properties": {
+      "status": {"enum": ["passed", "failed", "incomplete"]}, "checks": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "boolean"}},
+      "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+    }}
+  }
+}

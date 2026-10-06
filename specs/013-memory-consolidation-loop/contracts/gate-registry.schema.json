@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rag-mcp:013:gate-registry:1",
+  "title": "013 operator-installed read-only gate registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": {"const": "013.gate.1"},
+    "entries": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_binding", "report_path", "report_sha256", "expires_at"],
+        "properties": {
+          "gate_binding": {"$ref": "urn:rag-mcp:013:benefit-report:2#/$defs/gateBinding"},
+          "report_path": {"type": "string", "maxLength": 240, "pattern": "^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.json$"},
+          "report_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "expires_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}
