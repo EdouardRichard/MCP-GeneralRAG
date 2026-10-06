@@ -1,6 +1,15 @@
 """Fence v2 verification receipts and retain rollback group history."""
+import importlib.util as _importlib_util
+from pathlib import Path as _pathlib_Path
+
 from alembic import op
 import sqlalchemy as sa
+
+_downgrade_guard_spec = _importlib_util.spec_from_file_location(
+    '_consolidation_downgrade', _pathlib_Path(__file__).resolve().parents[1] / '_consolidation_downgrade.py')
+_downgrade_guard = _importlib_util.module_from_spec(_downgrade_guard_spec)
+_downgrade_guard_spec.loader.exec_module(_downgrade_guard)
+assert_no_consolidation_authority = _downgrade_guard.assert_no_consolidation_authority
 
 revision = '0097_consolidation_publish_fence'
 down_revision = '0096_consolidation_authority'
@@ -51,4 +60,14 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError('cannot downgrade consolidation publication authority')
+    assert_no_consolidation_authority('0097_consolidation_publish_fence')
+    connection = op.get_bind()
+    definition = connection.execute(sa.text(
+        "SELECT pg_get_functiondef('memory_log_state(bigint,bigint)'::regprocedure)")).scalar_one()
+    before = "results := results || restored->'consolidation_state'->'potential_results';"
+    after = "results := results || (restored->'consolidation_state'->'potential_results');"
+    if definition.count(after) != 1:
+        raise RuntimeError('unexpected successor reducer version; refusing partial downgrade')
+    connection.execute(sa.text(definition.replace(after, before)))
+    op.execute('DROP TRIGGER memory_consolidation_publication ON memory_projection_receipts')
+    op.execute('DROP FUNCTION verify_consolidation_publication()')

@@ -11,6 +11,15 @@ byte-exact parity: propagation_seals only appears once a seal exists.
 from alembic import op
 import sqlalchemy as sa
 
+import importlib.util as _importlib_util
+from pathlib import Path as _pathlib_Path
+
+_downgrade_guard_spec = _importlib_util.spec_from_file_location(
+    '_consolidation_downgrade', _pathlib_Path(__file__).resolve().parents[1] / '_consolidation_downgrade.py')
+_downgrade_guard = _importlib_util.module_from_spec(_downgrade_guard_spec)
+_downgrade_guard_spec.loader.exec_module(_downgrade_guard)
+assert_no_consolidation_authority = _downgrade_guard.assert_no_consolidation_authority
+
 revision = '0099_consolidation_propagation'
 down_revision = '0098_consolidation_integrity'
 branch_labels = None
@@ -174,5 +183,99 @@ def upgrade():
     """.replace('@ADJ@', PROPAGATION_ADJUDICATION))
 
 
+# --- reverse fragments generated from upgrade() (do not edit by hand) ---
+REVERSE_FRAGMENTS = {
+    'assert_consolidation_fence(bigint)': (
+        ("""               OR scope_status IS DISTINCT FROM 'active'
+               OR (nullif(current_setting('rag_memory.consolidation_maintenance',true),'')
+                       IS DISTINCT FROM eligibility.eligibility_id::text
+                   AND (policy->'consolidation_enabled' IS DISTINCT FROM 'true'::jsonb
+                        OR policy->'consolidation' IS NULL OR policy->'consolidation'='null'::jsonb)) THEN""",
+         """               OR scope_status IS DISTINCT FROM 'active' OR policy->'consolidation_enabled' IS DISTINCT FROM 'true'::jsonb
+               OR policy->'consolidation' IS NULL OR policy->'consolidation'='null'::jsonb THEN"""),
+    ),
+    'guard_consolidation_effect()': (
+        ("""            IF NEW.payload->>'execution_context'='deterministic_propagation' THEN
+                IF NEW.payload->>'operation'<>'invalidate' OR NEW.payload->>'action'<>'invalidate_contradiction'
+                   OR NEW.payload->>'window_id' IS NOT NULL OR NEW.payload->'propagation' IS NULL
+                   OR NEW.payload->'propagation'='null'::jsonb
+                   OR jsonb_array_length(NEW.payload->'source_outcomes')<>0
+                   OR NEW.payload->>'confidence_origin'<>'deterministic_rule'
+                   OR jsonb_array_length(NEW.payload->'approved_effect'->'links')<>0
+                   OR NEW.payload->'approved_effect' ? 'context' OR NEW.payload->'approved_effect' ? 'candidate' THEN
+                    RAISE EXCEPTION 'invalid consolidation propagation effect';
+                END IF;
+                FOR ref IN SELECT * FROM jsonb_array_elements(NEW.payload->'source_refs') LOOP
+                    source := memory_log_state(NEW.knowledge_scope_id,root_id-1)->'entries'->(ref->>'memory_id');
+                    IF source IS NULL
+                       OR source->'source_event_id' IS DISTINCT FROM ref->'source_event_id'
+                       OR COALESCE(source->'state_event_id',source->'source_event_id') IS DISTINCT FROM ref->'state_event_id'
+                       OR source->'content_hash' IS DISTINCT FROM ref->'content_hash' THEN
+                        RAISE EXCEPTION 'invalid consolidation historical lineage';
+                    END IF;
+                END LOOP;
+            ELSE
+                FOR ref IN SELECT * FROM jsonb_array_elements(NEW.payload->'source_refs') LOOP
+                    source := memory_log_state(NEW.knowledge_scope_id,root_id-1)->'entries'->(ref->>'memory_id');
+                    IF source IS NULL OR source->>'status'<>'active' OR source->>'kind'<>'episodic'
+                       OR source->'source_event_id' IS DISTINCT FROM ref->'source_event_id'
+                       OR COALESCE(source->'state_event_id',source->'source_event_id') IS DISTINCT FROM ref->'state_event_id'
+                       OR source->'content_hash' IS DISTINCT FROM ref->'content_hash'
+                       OR (source->>'expires_at')::timestamptz<=clock_timestamp() THEN
+                        RAISE EXCEPTION 'invalid consolidation source version';
+                    END IF;
+                END LOOP;
+            END IF;""",
+         """            FOR ref IN SELECT * FROM jsonb_array_elements(NEW.payload->'source_refs') LOOP
+                source := memory_log_state(NEW.knowledge_scope_id,root_id-1)->'entries'->(ref->>'memory_id');
+                IF source IS NULL OR source->>'status'<>'active' OR source->>'kind'<>'episodic'
+                   OR source->'source_event_id' IS DISTINCT FROM ref->'source_event_id'
+                   OR COALESCE(source->'state_event_id',source->'source_event_id') IS DISTINCT FROM ref->'state_event_id'
+                   OR source->'content_hash' IS DISTINCT FROM ref->'content_hash'
+                   OR (source->>'expires_at')::timestamptz<=clock_timestamp() THEN
+                    RAISE EXCEPTION 'invalid consolidation source version';
+                END IF;
+            END LOOP;"""),
+    ),
+    'memory_log_state(bigint,bigint)': (
+        ("""unresolved_windows jsonb := '[]'; results jsonb := '{}';
+            propagations jsonb := '{}';""",
+         "unresolved_windows jsonb := '[]'; results jsonb := '{}';"),
+        ("""                        unresolved_windows := restored->'consolidation_state'->'unresolved_windows';
+                        propagations := COALESCE(restored->'consolidation_state'->'propagation_seals','{}'::jsonb);""",
+         "                        unresolved_windows := restored->'consolidation_state'->'unresolved_windows';"),
+        ("""                        unresolved_windows := unresolved_windows || jsonb_build_array(event.event_id);
+                    END IF;
+                    IF event.payload->>'grant_type'='consolidation_propagation' THEN
+                        IF event.actor<>'management' OR event.authority->>'source' IS DISTINCT FROM 'consolidation_control'
+                           OR event.payload->'control_adjudication' IS DISTINCT FROM
+                              '{"decision":"seal_propagation","effect":"control_only","rule_version":"013.propagation.1"}'::jsonb THEN
+                            RAISE EXCEPTION 'trusted consolidation control required';
+                        END IF;
+                        propagations := jsonb_set(propagations,ARRAY[event.event_id::text],event.payload ||
+                            jsonb_build_object('seal_id',event.event_id,'knowledge_scope_id',scope_id));
+                    END IF;
+                    IF event.payload ? 'binding_id' THEN""",
+         """                        unresolved_windows := unresolved_windows || jsonb_build_array(event.event_id);
+                    END IF;
+                    IF event.payload ? 'binding_id' THEN"""),
+        ("""                    IF event.payload->>'window_id' IS NOT NULL
+                       AND windows ? (event.payload->>'window_id') THEN""",
+         "                    IF windows ? (event.payload->>'window_id') THEN"),
+        ("""                'consolidation_state',jsonb_build_object('window_seals',windows,'potential_results',results,
+                    'potential_source_outcomes',outcomes,'potential_checkpoint',checkpoint,'unresolved_windows',unresolved_windows)
+                    || CASE WHEN propagations='{}'::jsonb THEN '{}'::jsonb
+                            ELSE jsonb_build_object('propagation_seals',propagations) END);""",
+         """                'consolidation_state',jsonb_build_object('window_seals',windows,'potential_results',results,
+                    'potential_source_outcomes',outcomes,'potential_checkpoint',checkpoint,'unresolved_windows',unresolved_windows));"""),
+    ),
+}
+# --- end reverse fragments ---
+
+
 def downgrade():
-    raise RuntimeError('cannot downgrade consolidation authority; use compatible forward deployment')
+    assert_no_consolidation_authority('0099_consolidation_propagation')
+    for signature, fragments in REVERSE_FRAGMENTS.items():
+        replace_function(signature, tuple(reversed(fragments)))
+    op.execute('DROP TRIGGER memory_events_propagation_control ON memory_events')
+    op.execute('DROP FUNCTION guard_consolidation_propagation_event()')
