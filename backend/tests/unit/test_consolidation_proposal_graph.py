@@ -468,6 +468,99 @@ def test_disjoint_proposal_shuffle_keeps_stable_group_keys():
     assert batch(proposals).groups == batch(list(reversed(proposals))).groups
 
 
+@pytest.mark.parametrize('binary', [b'', b'k', b'v', b'\xff\x00\x80'])
+@pytest.mark.parametrize('location', ['key', 'value'])
+def test_binary_malformed_packet_preserves_trusted_results(binary, location, monkeypatch):
+    import builtins
+    import socket
+
+    rule, legal = trusted_merge(), proposal('legal')
+    current, context = setup(rule, legal)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    control = batch([legal], current=current, context=context, deterministic=[rule])
+    assert all(decision.decision == 'accept' for decision in control.decisions)
+    assert baseline.groups[0] in control.groups
+    unknown = {binary: 'v', 'ordinary': 'text'} if location == 'key' else {'ordinary': 'text', 'value': binary}
+    malformed = proposal('bad', unknown=unknown)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('unexpected I/O')
+
+    monkeypatch.setattr(builtins, 'open', forbidden)
+    monkeypatch.setattr(socket, 'socket', forbidden)
+    result = batch([legal, malformed], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert result.groups[0].event_plan == baseline.groups[0].event_plan
+    assert result.groups[0].source_outcomes == baseline.groups[0].source_outcomes
+    for decision in result.decisions[1:]:
+        rejected(decision, 'PROPOSAL_INVALID')
+    assert result.decisions[1].decision_id != result.decisions[2].decision_id
+    assert batch([legal, malformed], current=current, context=context, deterministic=[rule]) == result
+    renamed = [{**malformed, 'proposal_id': 'renamed_bad', 'unknown': dict(reversed(list(unknown.items())))},
+               {**legal, 'proposal_id': 'renamed_legal'}]
+    retry = batch(renamed, current=current, context=context, deterministic=[rule])
+    assert retry.groups == baseline.groups
+    assert retry.decisions[0] == baseline.decisions[0]
+    assert {d.decision_id for d in retry.decisions[1:]} == {d.decision_id for d in result.decisions[1:]}
+
+
+@pytest.mark.parametrize('location', ['key', 'value'])
+def test_binary_audit_identity_is_lossless_and_distinct_from_strings(location):
+    values = [b'', b'k', b'v', b'\xff', b'\xfe', b'\xff\x00\x80', '', 'k', 'v', '6b', "b'k'"]
+    rule = trusted_merge()
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    models = [proposal(f'p{index}', unknown={value: 'v'} if location == 'key' else {'key': value})
+              for index, value in enumerate(values)]
+    # Separate batches ensure occurrence disambiguation cannot mask encoding collisions.
+    decisions = []
+    for model in models:
+        result = batch([model], current=current, context=context, deterministic=[rule])
+        assert result.decisions[0] == baseline.decisions[0]
+        assert result.groups == baseline.groups
+        rejected(result.decisions[1], 'PROPOSAL_INVALID')
+        decisions.append(result.decisions[1])
+    assert len({decision.decision_id for decision in decisions}) == len(values)
+
+
+@pytest.mark.parametrize('value', [bytearray(), bytearray(b'\xff\x00'), memoryview(b''), memoryview(b'\xff\x00'),
+                                 {b'\xff', 'text', 1}, frozenset({b'\xff', 'text', 1}),
+                                 {frozenset({b'\xff', 'text', 1}): 'value'}])
+def test_binary_adjacent_builtin_containers_preserve_trusted_results(value):
+    rule, model = trusted_merge(), proposal('bad', unknown=value)
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    result = batch([model], current=current, context=context, deterministic=[rule])
+    assert result.decisions[0] == baseline.decisions[0]
+    assert result.groups == baseline.groups
+    assert result.groups[0].event_plan == baseline.groups[0].event_plan
+    assert result.groups[0].source_outcomes == baseline.groups[0].source_outcomes
+    rejected(result.decisions[1], 'PROPOSAL_INVALID')
+    assert batch([{**model, 'proposal_id': 'renamed'}], current=current, context=context, deterministic=[rule]) == result
+
+
+def test_binary_container_types_are_distinct_and_unordered_values_are_stable():
+    rule = trusted_merge()
+    current, context = setup(rule)
+    baseline = batch([], current=current, context=context, deterministic=[rule])
+    values = [b'k', bytearray(b'k'), memoryview(b'k'), {b'k', 1}, frozenset({b'k', 1}), [b'k', 1]]
+    keys = []
+    for value in values:
+        result = batch([proposal('bad', unknown=value)], current=current, context=context, deterministic=[rule])
+        assert result.decisions[0] == baseline.decisions[0]
+        assert result.groups == baseline.groups
+        rejected(result.decisions[1], 'PROPOSAL_INVALID')
+        keys.append(result.decisions[1].decision_id)
+    assert len(set(keys)) == len(values)
+    reordered = set()
+    for item in (1, b'k'):
+        reordered.add(item)
+    for value, expected in [(reordered, keys[3]), (frozenset(reordered), keys[4])]:
+        result = batch([proposal('renamed', unknown=value)], current=current, context=context, deterministic=[rule])
+        assert result.decisions[1].decision_id == expected
+
+
 def test_changed_target_version_changes_decision_key():
     p = proposal(action='merge_duplicate', survivor_ref=ref(row(2)), duplicate_refs=[ref(row(3))],
                  equivalence_basis='equal')

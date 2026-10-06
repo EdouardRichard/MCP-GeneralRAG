@@ -74,6 +74,10 @@ def _rejection_value(value, references=None):
             return ['object', pairs]
         if isinstance(item, (tuple, list)):
             return ['array', [encode(child, (*path, index)) for index, child in enumerate(item)]]
+        if isinstance(item, (bytes, bytearray, memoryview)):
+            return [type(item).__name__, item.hex()]
+        if isinstance(item, (set, frozenset)):
+            return [type(item).__name__, sorted((encode(child) for child in item), key=stable_key)]
         if isinstance(item, float) and not math.isfinite(item):
             return ['nonfinite', str(item)]
         return ['scalar', item]
