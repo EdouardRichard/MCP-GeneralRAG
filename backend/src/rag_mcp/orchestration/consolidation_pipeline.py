@@ -181,6 +181,10 @@ class Propose(Protocol):
     def __call__(self, window: WindowSnapshot, distiller: Any) -> ProposalBatch: ...
 
 
+async def propose(window, distiller, *, current, context, policy, now, provider=None):
+    raise NotImplementedError
+
+
 class SelectWindow(Protocol):
     def __call__(self, current: CurrentSnapshot, *, policy: Any, now: datetime,
                  start: datetime | None = None, token: Any = None) -> WindowSnapshot: ...

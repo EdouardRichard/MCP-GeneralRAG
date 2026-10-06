@@ -36,6 +36,11 @@ class ConsolidationRuntimeError(ValueError):
         super().__init__(code)
 
 
+class DistillerProvider:
+    async def run(self, agent, data, *, timeout_s):
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
 class EligibilityToken:
     eligibility_id: UUID
