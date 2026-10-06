@@ -18,6 +18,12 @@ name this database. The isolated Qdrant endpoint is `http://127.0.0.1:16333`; `D
 using the original `.env` database identity. The local, ignored runner loads credentials in
 memory and applies all overrides without printing credentials:
 
+Review fix round 1 encountered a full D: volume. The isolated Qdrant data was copied,
+preserving its D: source, to `C:/.codex-013q`; the test service now uses that short C: storage
+path on the same loopback ports (HTTP 16333, gRPC 16334). `isolation_runner.py check`
+verified the database identity, head and Qdrant health after restart. Original stores were
+not changed. The D: copy is retained for recovery and is no longer the active service root.
+
 ```powershell
 python .superpowers/sdd/013-tasks/isolation_runner.py check
 python .superpowers/sdd/013-tasks/isolation_runner.py alembic upgrade head
@@ -42,9 +48,11 @@ reuse the source/ProcessingRun registration boundary in its later phase. Phase 1
 wire LLMs, automatic triggers, or memory-changing consolidation commands.
 
 Phase 1 evidence is recorded in `.superpowers/sdd/013-tasks/phase1-report.md`; preflight
-policy/reducer/AgentBase baseline: 15 focused tests passed. T017 final verification on
+policy/reducer/AgentBase baseline: 15 focused tests passed. T017 initial verification on
 2026-10-06: 77 Phase 1 tests passed in 55.32s; 71 affected legacy memory/domain tests
-passed in 5.11s. No tests were skipped. Run the Phase 1 suite from the worktree root:
+passed in 5.11s. Review fix round 1 verification: 81 Phase 1 tests passed in 67.16s;
+71 affected legacy tests passed in 5.15s. No tests were skipped. Run the Phase 1 suite
+from the worktree root:
 
 ```powershell
 python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_schemas.py tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_selection.py tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_audit.py tests/integration/test_013_consolidation_migration.py tests/integration/test_013_consolidation_windows.py -q --tb=short
@@ -55,7 +63,14 @@ The fixture guards require a nonempty `CONSOLIDATION_ISOLATED_DATABASE` matching
 database in the configured URL; the runner supplies this explicit opt-in. The populated
 upgrade test creates a fresh temporary 0094 database with legacy events, source/version/chunk,
 entry and link projections, then upgrades and verifies preserved authority/defaults.
-It does not depend on the disposable clone's current schema.
+It now publishes an actual 0094 manifest through the six-projection implementation from
+Git baseline `6796c0c` before upgrading; that Git object is required by the fixture.
+It verifies unchanged saved manifest data, compatible read-only normalization, and rejection
+of corrupt fingerprint/state or unknown legacy verification version. It does not depend on
+the disposable clone's current schema. Retained authority with no complete manifest requires
+recovery; only scopes with no authority can produce a verified empty snapshot. Selection
+scans for fitting entries in stable order and reports `input_budget_excluded` when every
+eligible episode exceeds the input budget; excluded versions remain unconsumed.
 
 The disposable clone now contains v2 control grants, so destructive downgrade is refused.
 The still-unreleased 0095 draft was synchronized there by the ignored
