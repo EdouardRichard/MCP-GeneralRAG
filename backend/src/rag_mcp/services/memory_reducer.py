@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-
 _REDUCER_SEAL = object()
 PROJECTION_NAMES = ("entries", "dense", "links", "summary", "files", "salience")
 GOVERNANCE_AXES = ("authority", "scope_meta", "mutability", "provenance_meta", "recoverability", "actionability")
@@ -112,6 +111,24 @@ def reduce_events(events, *, initial_state=None):
     consolidation_state = initial_state['consolidation_state'] if initial_state is not None else {
         'window_seals': {}, 'potential_results': {}, 'potential_source_outcomes': {},
         'potential_checkpoint': None, 'unresolved_windows': []}
+    groups = {}
+    for event in history:
+        if event['event_type'] == 'consolidate' and event['payload'].get('payload_version') == 2:
+            from rag_mcp.services.memory_validators import validate_consolidation_payload
+            payload = validate_consolidation_payload(event)
+            groups.setdefault(payload['group_key'], []).append(event)
+    complete_groups = set()
+    for key, members in groups.items():
+        first = members[0]['payload']
+        indexes = [e['payload']['effect_index'] for e in members]
+        if (indexes != list(range(len(members))) or len(members) > first['effect_count']
+            or any((e['knowledge_scope_id'], e['payload']['group_id'], e['payload']['effect_count'],
+                    e['payload']['window_id'], e['payload']['created_by_run']) != (
+                    members[0]['knowledge_scope_id'], first['group_id'], first['effect_count'],
+                    first['window_id'], first['created_by_run']) for e in members)):
+            raise ValueError('CONSOLIDATION_GROUP_INVALID')
+        if len(members) == first['effect_count']:
+            complete_groups.add(key)
     for index, event in enumerate(history):
         eid = event["aggregate_id"]
         scope = event["knowledge_scope_id"]
@@ -122,7 +139,32 @@ def reduce_events(events, *, initial_state=None):
         timestamp = event.get("occurred_at")
         if hasattr(timestamp, "isoformat"):
             timestamp = timestamp.isoformat()
-        if kind in {"assert", "revise", "consolidate"}:
+        v2 = kind == 'consolidate' and payload.get('payload_version') == 2
+        if v2 and payload['group_key'] not in complete_groups:
+            continue
+        if v2 and payload['operation'] != 'create':
+            target = _scoped_target(entries, eid, scope)
+            effect = payload['approved_effect']
+            if payload['operation'] in ('merge', 'invalidate'):
+                lifecycle = effect['lifecycle']
+                target.update(status=lifecycle['status'], valid_to=lifecycle['valid_to'],
+                    invalidated_at=timestamp, superseded_by=lifecycle['replacement_id'], retention_stage='tombstone')
+            if effect.get('context'):
+                context = effect['context']
+                target.update(context_digest=context['context_digest'], keywords=context['keywords'],
+                    context_version=context['context_version'], context_source_event_id=event['event_id'],
+                    context=context)
+            if effect.get('candidate'):
+                candidate = effect['candidate']
+                target.update(promote_candidate_at=candidate['promote_candidate_at'],
+                              candidate_version=candidate['candidate_version'], candidate_basis=candidate)
+            if effect['links']:
+                registry = target.setdefault('approved_links', {})
+                for link in effect['links']:
+                    registry[f"{link['from_id']}/{link['relation_type']}/{link['to_id']}"] = {
+                        **link, 'knowledge_scope_id': scope, 'source_event_id': event['event_id']}
+            target['state_event_id'] = event['event_id']
+        elif kind in {"assert", "revise", "consolidate"}:
             governance = _governance_axes(event, payload)
             if eid in entries:
                 raise ValueError("memory identity is immutable; revision requires supersede")
@@ -141,6 +183,8 @@ def reduce_events(events, *, initial_state=None):
                             "superseded_by": None, "invalidated_at": None,
                             "retention_stage": "active",
                             "source_event_id": event["event_id"]}
+            if v2:
+                entries[eid]['state_event_id'] = event['event_id']
             salience[eid] = {**governance, "memory_id": eid, "knowledge_scope_id": scope, "salience": 0.,
                              "access_count": 0, "decay_rate": payload.get("decay_rate", .05),
                              "last_access_at": None, "evidence_refs": payload.get("evidence_refs", []),
@@ -155,8 +199,9 @@ def reduce_events(events, *, initial_state=None):
             # Captured policy makes replay stable; legacy access retains its prior rate.
             state["decay_rate"] = payload.get("decay_rate", state["decay_rate"])
             state["access_count"] += 1
-            from rag_mcp.services.salience_service import SalienceService
             from datetime import datetime
+
+            from rag_mcp.services.salience_service import SalienceService
             age = (datetime.fromisoformat(timestamp) - datetime.fromisoformat(state["last_access_at"])).total_seconds() / 86400 if state["last_access_at"] else 0
             state["salience"] = SalienceService(beta=state["decay_rate"]).update(state["salience"], access_count=1, age_days=age)
             state["last_access_at"] = timestamp
@@ -178,6 +223,15 @@ def reduce_events(events, *, initial_state=None):
                     unaffected[mid] = {**row, "status": "retired", "retention_stage": "tombstone", "valid_to": timestamp, "invalidated_at": timestamp}
             unaffected.update({mid: row for mid, row in restored["entries"].items() if row["knowledge_scope_id"] == scope})
             entries = unaffected
+            if payload.get('payload_version') == 2:
+                for row in entries.values():
+                    if row['knowledge_scope_id'] == scope:
+                        row['state_event_id'] = event['event_id']
+                historical = consolidation_state['potential_results']
+                consolidation_state = restored['consolidation_state']
+                consolidation_state['potential_results'] = {
+                    **{key: {**value, 'rolled_back': True} for key, value in historical.items()},
+                    **consolidation_state['potential_results']}
             restored_bindings = {key: row for key, row in restored["bindings"].items() if row["knowledge_scope_id"] == scope}
             bindings = {key: ({**row, "status": "disabled"} if row["knowledge_scope_id"] == scope else row) for key, row in bindings.items()}
             bindings.update(restored_bindings)
@@ -203,6 +257,22 @@ def reduce_events(events, *, initial_state=None):
                     target.update(status="retired", valid_to=timestamp, invalidated_at=timestamp)
         else:
             raise ValueError("invalid authority event type")
+        if v2 and payload['effect_index'] == payload['effect_count'] - 1:
+            members = groups[payload['group_key']]
+            consolidation_state['potential_results'][payload['group_key']] = {
+                'group_id': payload['group_id'], 'event_ids': [e['event_id'] for e in members],
+                'memory_ids': [e['aggregate_id'] for e in members if e['payload']['operation'] == 'create'],
+                'window_id': payload['window_id'], 'rolled_back': False}
+            for member in members:
+                for outcome in member['payload']['source_outcomes']:
+                    ref = next(r for r in member['payload']['source_refs'] if r['source_event_id'] == outcome['source_event_id'])
+                    identity = [ref[k] for k in ('memory_id', 'source_event_id', 'state_event_id')]
+                    consolidation_state['potential_source_outcomes']['/'.join(map(str, identity))] = {
+                        **outcome, 'source_version': identity}
+            seal = consolidation_state['window_seals'].get(str(payload['window_id']))
+            if seal:
+                consolidation_state['potential_checkpoint'] = max(
+                    consolidation_state['potential_checkpoint'] or seal['end'], seal['end'])
     dense, links, summary, files = {}, {}, {}, {}
     for mid, row in entries.items():
         if row["status"] in {"retired", "quarantined"}:
@@ -222,6 +292,7 @@ def reduce_events(events, *, initial_state=None):
         if row.get("supersedes_memory_id"):
             links[f"{mid}/supersedes"] = {**row, "from_id": mid, "to_id": row["supersedes_memory_id"], "relation": "supersedes"}
         summary.setdefault(branch, []).append(deepcopy(row))
+        links.update(deepcopy(row.get('approved_links', {})))
     state = {"entries": entries, "dense": dense, "links": links, "summary": summary,
              "files": files, "salience": salience, "bindings": bindings, 'consolidation_state': consolidation_state}
     return ReducerState(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str), _REDUCER_SEAL)

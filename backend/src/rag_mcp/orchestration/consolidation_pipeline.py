@@ -148,11 +148,12 @@ class CommitOutcome:
     output_event_ids: tuple[int, ...] = ()
     pending_result_keys: tuple[str, ...] = ()
     reason_codes: tuple[str, ...] = ()
+    failed_result_keys: tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.status not in ('completed', 'pending', 'rejected', 'rolled_back', 'failure'):
             raise ValueError("invalid commit outcome")
-        for key in ('output_memory_ids', 'output_event_ids', 'pending_result_keys', 'reason_codes'):
+        for key in ('output_memory_ids', 'output_event_ids', 'pending_result_keys', 'reason_codes', 'failed_result_keys'):
             object.__setattr__(self, key, tuple(getattr(self, key)))
 
 
@@ -250,6 +251,56 @@ class Adjudicate(Protocol):
 
 class CommitApproved(Protocol):
     async def __call__(self, decisions: tuple[Decision, ...], token: Any) -> CommitOutcome: ...
+
+
+async def run_pipeline(runtime, token, *, distiller, select=None, propose_stage=None, adjudicate_stage=None, commit_stage=None):
+    from rag_mcp.services.consolidation_adjudicator import AdjudicationContext, adjudicate_batch
+    from rag_mcp.services.memory_policy import MemoryPolicy
+
+    window = await (select or runtime.select_and_seal)(token)
+    if not window.input_episode_refs:
+        return CommitOutcome('rejected', reason_codes=('empty_window',))
+    current = await runtime.read_snapshot(token.scope_id)
+    policy = MemoryPolicy.model_validate(thaw(window.policy))
+    context = AdjudicationContext(window=window)
+    now = await runtime._clock()
+    await runtime.session.rollback()
+    await runtime.observe(token, status='proposing')
+    import asyncio
+    try:
+        batch = await (propose_stage or propose)(window, distiller, current=current, context=context, policy=policy, now=now)
+    except asyncio.CancelledError:
+        await runtime.observe(token, status='interrupted', degradation_reasons=['PROVIDER_INTERRUPTED'])
+        raise
+    inferences = {}
+    for proposal in batch.proposals:
+        if proposal.get('action') in ('extract_fact', 'distill_procedure'):
+            refs = proposal['source_refs']
+            inferences[proposal['proposal_id']] = {'inference_meta': {
+                'source': 'memory_distiller', 'confidence': proposal['confidence'],
+                'model_version': batch.model_and_version or 'injected_distiller', 'time': window.frozen_at.isoformat(),
+                'supporting_evidence': [f"memory:{r['memory_id']}" for r in refs]},
+                'source_lineage': [{key: ref[key] for key in ('memory_id', 'source_event_id', 'content_hash')} for ref in refs],
+                'fact_anchors': list(proposal.get('evidence_refs', ()))}
+    context = replace(context, inferences=inferences)
+    from rag_mcp.services.consolidation_commit import read_evidence
+    from rag_mcp.services.consolidation_runtime import ConsolidationUsage
+    identifiers = {identifier for p in (*batch.deterministic_proposals, *batch.proposals) for identifier in p.get('evidence_refs', ())}
+    identifiers.update(identifier for entry in current.entries.values() for identifier in entry.get('evidence_refs', ()))
+    support = await read_evidence(runtime.session, identifiers)
+    await runtime.session.rollback()
+    context = replace(context, support_facts=support, support_versions=support)
+    batch = replace(batch, usage={**ConsolidationUsage().to_dict(), **thaw(batch.usage)})
+    decisions = (adjudicate_stage or adjudicate_batch)(batch, current, policy, current.vocabulary,
+        {'count': current.quota_count, 'limit': policy.per_scope_memory_quota}, context, now)
+    await runtime.observe(token, status='adjudicating', provider_usage=thaw(batch.usage),
+        degradation_reasons=list(batch.degradation_reasons), adjudications=[{
+            'decision_id': d.decision_id, 'decision': d.decision, 'reason_codes': list(d.reason_codes),
+            'publication': 'not_committed'} for d in decisions.decisions])
+    outcome = await (commit_stage or runtime.memory_service.commit_approved)(
+        decisions, token, runtime=runtime, batch=batch, context=context)
+    await runtime.observe_result(token, decisions, outcome, batch=batch)
+    return outcome
 
 
 def deterministic_proposals(current, *, context, policy, now):

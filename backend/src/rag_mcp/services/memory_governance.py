@@ -1,16 +1,16 @@
 """Trusted management commands append events before any derived write."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select, text
 
-from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.domain_profile import DomainProfile
+from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.scope_binding import ScopeBinding
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import ProjectionFailure
-from rag_mcp.services.memory_reducer import reduce_events, projection_fingerprint
+from rag_mcp.services.memory_reducer import projection_fingerprint, reduce_events
 from rag_mcp.services.memory_validators import sanitize_submission
 from rag_mcp.services.scope_binding_service import ScopeBindingService
 from rag_mcp.utils.snowflake import generate_id
@@ -72,6 +72,7 @@ class MemoryGovernance:
             event_point = plan["event_point"]
             event_type, aggregate_id = "rollback", event_id
             payload["event_point"] = event_point
+            payload['payload_version'] = 2
         elif action == "policy":
             from rag_mcp.services.domain_profile_service import assert_not_builtin
             from rag_mcp.services.memory_policy import MemoryPolicy
@@ -108,7 +109,7 @@ class MemoryGovernance:
             payload.update(binding_id=binding_id, binding_kind=binding_kind, binding_value=binding_value, priority=priority, status=status)
             event_type, aggregate_id = "grant", binding_id
         payload, _ = sanitize_submission(payload)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         event = MemoryEvent(event_id=event_id, aggregate_id=aggregate_id, knowledge_scope_id=scope_id,
             event_type=event_type, payload=payload, actor="management", request_id=request_id, occurred_at=now,
             authority={"source": "management"}, scope_meta={"knowledge_scope_id": scope_id},

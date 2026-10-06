@@ -221,7 +221,8 @@ def test_populated_012_upgrade_preserves_flat_events_base_edges_and_revision_his
             with connection.cursor() as cursor:
                 cursor.execute("SELECT source_event_id,fingerprint,payload FROM memory_projection_meta WHERE projection_id='current:1'")
                 assert cursor.fetchone() == legacy_manifest
-                cursor.execute("INSERT INTO memory_events(event_id,event_type,aggregate_id,knowledge_scope_id,payload,authority,scope_meta,mutability,provenance_meta,recoverability,actor,request_id,occurred_at) VALUES (4,'consolidate',4,1,'{\"payload_version\":2}','{}','{}','{}','{}','{}','memory_tool','v2-downgrade-test',clock_timestamp())")
+                # Forward authority revisions refuse downgrade themselves. An
+                # invalid v2 sentinel is no longer an admissible event fixture.
         refused = alembic(target.set(drivername='postgresql+asyncpg').render_as_string(hide_password=False),
                           'downgrade', '0094_memory_management_audit')
         assert refused.returncode != 0

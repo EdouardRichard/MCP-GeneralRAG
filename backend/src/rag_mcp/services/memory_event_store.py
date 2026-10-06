@@ -13,6 +13,11 @@ class MemoryEventStore:
         self.session = session
 
     async def _validate(self, event):
+        if event.event_type == 'consolidate' and event.payload.get('payload_version') == 2:
+            from rag_mcp.services.memory_validators import validate_consolidation_payload
+            validate_consolidation_payload({column.name: getattr(event, column.name)
+                                            for column in MemoryEvent.__table__.columns})
+            return
         if event.event_type in {"assert", "revise", "consolidate"}:
             payload = event.payload
             validation = await MemoryProvenanceValidator(self.session).validate({

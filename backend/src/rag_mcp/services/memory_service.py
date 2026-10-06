@@ -1,27 +1,32 @@
 from __future__ import annotations
 
 import hashlib
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import func, select, text
 
 from rag_mcp.errors import MemoryContentConflictError
-from rag_mcp.models.memory_event import MemoryEvent
-from rag_mcp.services.memory_event_store import MemoryEventStore
-from rag_mcp.services.memory_projection_store import MemoryProjectionStore, ProjectionFailure
-from rag_mcp.services.memory_reducer import reduce_events
-from rag_mcp.services.memory_validators import redact_submission, detect_submission
-from rag_mcp.services.memory_validators import MemoryProvenanceValidator, check_quota, derive_ttl, validate_supersede
+from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
+from rag_mcp.models.memory_event import MemoryEvent
+from rag_mcp.models.memory_management_audit import MemoryManagementAudit
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.session import MemorySession
-from rag_mcp.models.memory_management_audit import MemoryManagementAudit
-from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+from rag_mcp.services.memory_event_store import MemoryEventStore
+from rag_mcp.services.memory_projection_store import MemoryProjectionStore, ProjectionFailure
+from rag_mcp.services.memory_reducer import reduce_events
+from rag_mcp.services.memory_validators import (
+    MemoryProvenanceValidator,
+    check_quota,
+    derive_ttl,
+    detect_submission,
+    redact_submission,
+    validate_supersede,
+)
 from rag_mcp.utils.snowflake import generate_id
 
 
@@ -59,6 +64,14 @@ class MemoryService:
         # Raw caller events are not an authorized memory-write surface.
         raise PermissionError("MEMORY_WRITE_UNAVAILABLE: use validated memory commands")
 
+    async def commit_approved(self, decisions, token, *, runtime, batch, context):
+        from rag_mcp.services.consolidation_commit import commit_approved
+        return await commit_approved(self, decisions, token, runtime=runtime, batch=batch, context=context)
+
+    async def recover_consolidation(self, token, *, runtime):
+        from rag_mcp.services.consolidation_commit import recover_consolidation
+        return await recover_consolidation(self, token, runtime=runtime)
+
     async def record(self, payload):
         scope_id = payload.get("scope_id")
         scope = await self.session.get(KnowledgeScope, scope_id) if isinstance(scope_id, int) else None
@@ -76,15 +89,17 @@ class MemoryService:
         metadata["evidence_refs"] = sorted(set(clean.get("evidence_refs") or []))
         metadata["tags"] = sorted(set(clean.get("tags") or []))
         digest = hashlib.sha256(sanitized.content.encode()).hexdigest()
-        existing = await self.session.scalar(select(MemoryEntry).where(
+        matches = (await self.session.scalars(select(MemoryEntry).where(
             MemoryEntry.knowledge_scope_id == scope_id, MemoryEntry.content_hash == digest
-        ))
+        ).order_by(MemoryEntry.source_event_id, MemoryEntry.memory_id))).all()
         request_id = str(uuid4())
-        if existing:
-            if existing.write_status != "complete":
+        if matches:
+            if any(row.write_status != "complete" for row in matches):
                 raise ValueError("MEMORY_WRITE_UNAVAILABLE")
-            if existing.submission_meta != metadata:
-                raise MemoryContentConflictError(existing.memory_id)
+            conflict = next((row for row in matches if row.submission_meta != metadata), None)
+            if conflict:
+                raise MemoryContentConflictError(conflict.memory_id)
+            existing = matches[0]
             return {"memory_id": existing.memory_id, "status": existing.status,
                     "provenance_validation": validation, "injection_flags": existing.injection_flags,
                     "request_id": request_id}
@@ -100,7 +115,7 @@ class MemoryService:
             MemoryEntry.knowledge_scope_id == scope_id, MemoryEntry.status == "active", MemoryEntry.write_status == "complete"
         ))
         check_quota(count, policy.get("per_scope_memory_quota", 5000))
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ttl = derive_ttl(clean["kind"], policy)
         identifier = generate_id()
         event_payload = {**metadata, "content_text": sanitized.content, "content_hash": digest,

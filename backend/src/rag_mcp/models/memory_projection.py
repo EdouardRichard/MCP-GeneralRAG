@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, Float, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, Float, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,7 @@ class MemoryEntry(Base):
         Index("ix_memory_entries_scope_status", "knowledge_scope_id", "status"),
         Index("ix_memory_entries_scope_kind_status", "knowledge_scope_id", "kind", "status"),
         Index("ix_memory_entries_session", "session_id"),
-        UniqueConstraint("knowledge_scope_id", "content_hash", name="uq_memory_entries_scope_hash"),
+        Index("ix_memory_entries_scope_hash", "knowledge_scope_id", "content_hash"),
         CheckConstraint("char_length(content_text) BETWEEN 1 AND 4000", name="ck_memory_content_length"),
         CheckConstraint("confidence IS NULL OR confidence BETWEEN 0 AND 1", name="ck_memory_confidence"),
         *(CheckConstraint(f"{field} ~ '^[a-z][a-z0-9_]*$'", name=f"ck_memory_{field}_wide")

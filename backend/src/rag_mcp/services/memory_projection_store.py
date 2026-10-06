@@ -11,15 +11,14 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from rag_mcp.config import get_settings
-from rag_mcp.models.memory_projection import MemoryEntry
+from rag_mcp.indexing.memory_vectors import revision_filter, revision_point_id
 from rag_mcp.models.memory_event import MemoryEvent
+from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.memory_salience import MemorySalience
 from rag_mcp.models.memory_views import MemoryLink, MemorySummaryNode
 from rag_mcp.models.scope_binding import ScopeBinding
-from rag_mcp.indexing.memory_vectors import revision_filter, revision_point_id
 from rag_mcp.services.memory_reducer import GOVERNANCE_AXES, projection_fingerprint, require_reducer_state
-
 
 VIEW_KEYS = {"relation": "entries", "dense": "dense", "links": "links",
              "summary": "summary", "file": "files", "salience": "salience"}
@@ -139,8 +138,15 @@ class MemoryProjectionStore:
     async def _materialize_links(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
         for key, row in state["links"].items():
+            from uuid import UUID
+            advanced = row.get('relation_type') not in (None, 'evidence', 'supersedes')
+            typed = ({'from_id': str(row['from_id']), 'to_id': str(row['to_id']), 'to_kind': 'memory',
+                'relation_type': row['relation_type'], 'provenance': row['provenance'], 'confidence': row['confidence'],
+                'created_by_run': UUID(row['created_by_run']), 'source_event_id': row['source_event_id'],
+                'vocabulary_version': row['vocabulary_version'], 'semantic_category': row['category'],
+                'propagation': row['propagation']} if advanced else {})
             await self._upsert(state, scope_id, event_id, MemoryLink, {"row_id": f"{scope_id}:{event_id}:{key}",
-                "knowledge_scope_id": scope_id, "revision_id": event_id, "node_key": key, "data": row}, "row_id")
+                "knowledge_scope_id": scope_id, "revision_id": event_id, "node_key": key, "data": row, **typed}, "row_id")
 
     async def _materialize_summary(self, state, scope_id, event_id):
         await self._authorize(state, scope_id, event_id)
@@ -194,7 +200,19 @@ class MemoryProjectionStore:
                 continue
             await self._upsert(state, scope_id, event_id, ScopeBinding, values, "binding_id")
 
-    async def materialize(self, state, scope_id, event_id):
+    async def materialize(self, state, scope_id, event_id, *, final_fence=None):
+        current = await self.current(scope_id)
+        covered = current.source_event_id if current else 0
+        pending_consolidation = await self.session.scalar(select(MemoryEvent.event_id).where(
+            MemoryEvent.knowledge_scope_id == scope_id, MemoryEvent.event_id > covered,
+            MemoryEvent.event_type == 'consolidate', MemoryEvent.payload['payload_version'].as_integer() == 2).limit(1))
+        if pending_consolidation:
+            from rag_mcp.services.consolidation_runtime import CommitFence
+            fence = getattr(final_fence, '__self__', None)
+            if (not isinstance(fence, CommitFence) or fence.runtime.session is not self.session
+                or fence.token.scope_id != scope_id or getattr(fence, '_publication_event_id', None) != event_id
+                or getattr(final_fence, '__name__', '') != 'validate_before_publish'):
+                raise ValueError('CONSOLIDATION_PENDING_RECOVERY_REQUIRED')
         collection = None
         for path in ("relation", "dense", "links", "summary", "files", "salience"):
             try:
@@ -202,7 +220,8 @@ class MemoryProjectionStore:
                 if path == "dense":
                     collection = result
             except Exception as error:
-                raise ProjectionFailure(path) from error
+                failure_path = 'files' if path == 'summary' and isinstance(error, OSError) else path
+                raise ProjectionFailure(failure_path) from error
         await self._authorize(state, scope_id, event_id)
         await self._materialize_bindings(state, scope_id, event_id)
         metadata = []
@@ -222,6 +241,8 @@ class MemoryProjectionStore:
             report = await self.inspect(state, scope_id)
             if set(report) != set(VIEW_KEYS) or not all(row["matches_replay"] for row in report.values()):
                 raise ProjectionFailure("integrity")
+            if final_fence is not None:
+                await final_fence()
             await self.session.execute(text("SET LOCAL ROLE rag_memory_publisher"))
             await self.session.execute(text("INSERT INTO memory_projection_receipts "
                 "(knowledge_scope_id,source_event_id,transaction_id,state_fingerprint,fingerprints,collection,root,dense_revision,report) "
@@ -241,7 +262,12 @@ class MemoryProjectionStore:
                 "fingerprint": projection_fingerprint(state), "payload": {"state": state.export(), **descriptor},
             }, "projection_id", publication=self._publication_capability)
             await self.session.flush()
+            if final_fence is not None:
+                await final_fence()
         except Exception as error:
+            from rag_mcp.services.consolidation_runtime import ConsolidationRuntimeError
+            if isinstance(error, ConsolidationRuntimeError):
+                raise
             raise ProjectionFailure("integrity") from error
         finally:
             self._publication_capability = None

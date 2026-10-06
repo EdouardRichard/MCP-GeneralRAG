@@ -6,7 +6,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -17,6 +17,64 @@ from rag_mcp.models.knowledge_source import KnowledgeSource
 from rag_mcp.models.knowledge_version import KnowledgeVersion
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.parsers.credential_redactor import redact_credentials
+
+
+def canonical_distilled(value, *, policy, now):
+    from datetime import timedelta
+
+    from rag_mcp.orchestration.consolidation_pipeline import thaw
+
+    value = thaw(value)
+    meta = {key: item for key, item in value['inference_meta'].items() if key != 'origin'}
+    meta['confidence_origin'] = 'llm_self'
+    metadata = {key: value.get(key) for key in ('kind', 'provenance', 'confidence', 'title')}
+    metadata.update(inference_meta=meta, session_id=None, agent_id=None, task_context=None,
+                    supersedes_memory_id=None, tags=[], evidence_refs=value['evidence_refs'])
+    checked = detect_submission({'content': value['content_text']})
+    if checked.status != 'active' or checked.content != value['content_text']:
+        raise ValueError('GENERATED_CONTENT_UNSAFE')
+    ttl = derive_ttl(value['kind'], policy.model_dump())
+    return {**metadata, 'content_text': value['content_text'], 'content_hash': value['content_hash'],
+        'submission_meta': metadata, 'status': 'active', 'injection_flags': checked.injection_flags,
+        'provenance_validation': {'provenance': 'distilled', 'validated': True,
+                                  'attributions': value['source_lineage']},
+        'created_at': now.isoformat(), 'updated_at': now.isoformat(), 'valid_from': now.isoformat(),
+        'decay_rate': policy.decay_rate,
+        'expires_at': (now + timedelta(days=ttl)).isoformat() if ttl is not None else None}
+
+
+def validate_consolidation_payload(event):
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator, FormatChecker
+    from referencing import Registry, Resource
+
+    root = Path(__file__).resolve().parents[4] / 'specs/013-memory-consolidation-loop/contracts'
+    schemas = [json.loads((root / name).read_text(encoding='utf-8')) for name in
+               ('consolidate-event.schema.json', 'distiller-output.schema.json')]
+    registry = Registry().with_resources((schema['$id'], Resource.from_contents(schema)) for schema in schemas)
+    payload = event['payload']
+    json.dumps(payload, allow_nan=False)
+    Draft202012Validator(schemas[0], registry=registry, format_checker=FormatChecker()).validate(payload)
+    if (event['aggregate_id'] != payload['approved_effect']['memory_id']
+        or event.get('actor') != 'consolidation_service'
+        or event.get('authority', {}).get('source') != 'consolidation_adjudicator'
+        or event.get('scope_meta') != {'knowledge_scope_id': event['knowledge_scope_id']}):
+        raise ValueError('CONSOLIDATION_AUTHORITY_INVALID')
+    if any(outcome['required_group_key'] != payload['group_key'] for outcome in payload['source_outcomes']):
+        raise ValueError('CONSOLIDATION_GROUP_INVALID')
+    if payload['source_lineage'] != payload['source_refs']:
+        raise ValueError('SOURCE_CHAIN_INCOMPLETE')
+    if payload['operation'] == 'create':
+        if (payload['confidence'] != payload['inference_meta']['confidence']
+            or payload['inference_meta']['confidence_origin'] != payload['confidence_origin']
+            or payload['content_hash'] != hashlib.sha256(payload['content_text'].encode()).hexdigest()
+            or payload['inference_meta']['supporting_evidence'] != [f"memory:{r['memory_id']}" for r in payload['source_refs']]):
+            raise ValueError('SOURCE_CHAIN_INCOMPLETE')
+        for key, value in payload['submission_meta'].items():
+            if payload.get(key) != value:
+                raise ValueError('CONSOLIDATION_METADATA_INVALID')
+    return payload
 
 
 @dataclass(frozen=True)
@@ -123,7 +181,7 @@ class MemoryProvenanceValidator:
                 source = await self.session.get(MemoryEntry, int(identifier))
                 if source is None or source.knowledge_scope_id != payload["scope_id"] or source.status != "active" or source.write_status != "complete":
                     raise ValueError("MEMORY_PROVENANCE_INVALID")
-                if source.memory_id in _chain or len(_chain) >= 32 or source.expires_at and source.expires_at <= datetime.now(timezone.utc):
+                if source.memory_id in _chain or len(_chain) >= 32 or source.expires_at and source.expires_at <= datetime.now(UTC):
                     raise ValueError("MEMORY_PROVENANCE_INVALID")
                 source_payload = {"scope_id": source.knowledge_scope_id, "kind": source.kind,
                     "content": source.content_text, "provenance": source.provenance,

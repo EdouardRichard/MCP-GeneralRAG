@@ -20,7 +20,7 @@ from rag_mcp.orchestration.consolidation_pipeline import (
 )
 from rag_mcp.services.memory_validators import detect_submission, redact_submission
 
-RULE_VERSION = '013.adjudication.1'
+RULE_VERSION = '013.adjudication.2'
 CREATES = frozenset(('extract_fact', 'distill_procedure'))
 VERSION_FIELDS = ('memory_id', 'source_event_id', 'state_event_id', 'content_hash')
 _COMMAND_SEAL = object()
@@ -375,6 +375,21 @@ def _support(identifier, current, context, support_versions=None):
     return captured
 
 
+def _captured_support(row):
+    """Translate permanent descriptors only through their captured attribution."""
+    for required in row.get('required_support', ()):
+        if 'support_kind' not in required:
+            yield required
+            continue
+        attribution = next((fact for fact in row.get('adjudication', {}).get('evidence_attributions', ())
+                            if fact.get('evidence_id') == required.get('support_id')), None)
+        if (required.get('support_kind') != 'evidence' or attribution is None
+            or str(attribution.get('version_id')) != required.get('version')
+            or attribution.get('content_hash') != required.get('content_hash')):
+            raise Rejection('DEPENDENCY_SUPPORT_INVALID')
+        yield attribution
+
+
 def _required_support(row, current, context, now, config, versions, support_versions=None):
     nodes, active, heights = set(), set(), {}
 
@@ -401,7 +416,7 @@ def _required_support(row, current, context, now, config, versions, support_vers
             for fact in _hard_attribution(memory, current, context, support_versions):
                 node('evidence', fact['evidence_id'], depth + 1)
                 height = 2
-        for required in memory.get('required_support', ()):
+        for required in _captured_support(memory):
             if 'evidence_id' in required:
                 fact = _support(required['evidence_id'], current, context, support_versions)
                 if (fact['version_id'] != required.get('version_id')
@@ -433,11 +448,12 @@ def _required_support(row, current, context, now, config, versions, support_vers
 
 
 def equivalent(left, right):
-    """Canonical stored content hash plus all authority-relevant metadata."""
-    keys = ('content_hash', 'kind', 'provenance', 'evidence_refs', 'submission_meta', 'required_support', 'title', 'tags',
+    """Exact metadata and CRLF/LF representation equality; raw hashes stay intact."""
+    keys = ('knowledge_scope_id', 'kind', 'provenance', 'evidence_refs', 'submission_meta', 'required_support', 'title', 'tags',
             'valid_from', 'valid_to', 'expires_at', 'supersedes_memory_id', 'confidence', 'inference_meta',
             'authority', 'provenance_meta')
     return (all(left.get(key) == right.get(key) for key in keys)
+            and left.get('content_text', '').replace('\r\n', '\n') == right.get('content_text', '').replace('\r\n', '\n')
             and all(r.get('content_hash') == sha256(r.get('content_text', '').encode()).hexdigest()
                     for r in (left, right)))
 
@@ -469,7 +485,7 @@ def _correction(target, correcting, current, context, support_versions=None):
             _hard_attribution(correcting, current, context, support_versions)
             return {'rule_id': 'authoritative_correction', 'replacement_id': correcting['memory_id']}
     else:
-        for required in target.get('required_support', ()):
+        for required in _captured_support(target):
             fact = context.support_facts.get(required.get('evidence_id'))
             if (fact and fact.get('status') == 'withdrawn'
                 and fact.get('knowledge_scope_id') == current.scope_id

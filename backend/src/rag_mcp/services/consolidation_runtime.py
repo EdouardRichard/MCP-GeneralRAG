@@ -239,7 +239,10 @@ class ConsolidationRuntime:
         if context.execution_context == 'deterministic_propagation':
             # The writer support hook and its current proof verifier land together in T060.
             raise ConsolidationRuntimeError('TRUSTED_CONTEXT_REQUIRED')
-        policy = MemoryPolicy.model_validate(profile.memory_policy or {})
+        captured = profile.memory_policy or {}
+        if captured.get('consolidation_enabled') and captured.get('consolidation') is None:
+            raise ConsolidationRuntimeError('CONSOLIDATION_CONFIGURATION_REQUIRED')
+        policy = MemoryPolicy.model_validate(captured)
         if not policy.consolidation_enabled:
             raise ConsolidationRuntimeError('CONSOLIDATION_DISABLED')
         if policy.consolidation is None:
@@ -387,6 +390,30 @@ class ConsolidationRuntime:
             await self._validate_token(token)
             observation = await self._observe_locked(token, **changes)
         return observation
+
+    async def observe_result(self, token, decisions, outcome, *, batch):
+        published = set(outcome.output_event_ids)
+        status = ('partial' if published and (outcome.pending_result_keys or outcome.failed_result_keys) else
+                  'failed' if outcome.pending_result_keys or outcome.status in ('failure', 'rolled_back') else
+                  'degraded' if batch.degraded else 'succeeded' if published else 'no_change')
+        reasons = list(batch.degradation_reasons) + list(outcome.reason_codes)
+        if not decisions.groups and not reasons:
+            reasons.append('all_rejected')
+        publication = {}
+        async with self._transaction():
+            current = await self.read_snapshot(token.scope_id)
+            results = current.consolidation_state['potential_results']
+            for group in decisions.groups:
+                result = results.get(group.group_key, {})
+                state = ('committed' if not result.get('rolled_back') and published.intersection(result.get('event_ids', ()))
+                         else 'pending' if group.group_key in outcome.pending_result_keys
+                         else 'failed' if group.group_key in outcome.failed_result_keys else 'not_committed')
+                publication.update(dict.fromkeys(group.decision_ids, state))
+        return await self.observe(token, status=status, output_memory_ids=list(outcome.output_memory_ids),
+            output_event_ids=list(outcome.output_event_ids), pending_result_keys=list(outcome.pending_result_keys),
+            provider_usage=thaw(batch.usage), degradation_reasons=reasons,
+            adjudications=[{'decision_id': d.decision_id, 'decision': d.decision, 'reason_codes': list(d.reason_codes),
+                'publication': publication.get(d.decision_id, 'not_committed')} for d in decisions.decisions])
 
     async def purge_expired_observations(self):
         async with self._transaction():
