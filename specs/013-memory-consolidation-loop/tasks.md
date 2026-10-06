@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已实现并通过针对性隔离验证，等待独立评审；T029-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证，等待root独立评审；T038-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–2的28项已勾选，76项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–3的37项已勾选，67项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -81,18 +81,18 @@
 
 ### US2 测试先行
 
-- [ ] T029 [P] [US2] 在 `backend/tests/unit/agents/test_memory_distiller.py` 先写 AgentBase ROLE/NODE_SCHEMA/execute/fallback、四 action 与附件、域中立跨域声明提示、稳定 JSON 编码/版本与无变化 run/request payload 的测试，依赖 T028。
-- [ ] T030 [P] [US2] 在 `backend/tests/unit/test_consolidation_fallback.py` 及 `backend/tests/integration/test_013_consolidation_llm_faults.py` 先写缺配置、None、429/500、连接失败、超时、错误JSON/未知 action/超量/缺字段、AgentBase fallback `{}` 再验证与 trusted 空包测试；增加阻塞底层调用的取消/超时在途槽保持、实际结束才释放、最多2真实调用及迟到结果拒绝断言；同 clock 下规则/TTL 对照，依赖 T028。
-- [ ] T031 [P] [US2] 在 `backend/tests/unit/test_consolidation_injection_boundary.py` 先写正文/标题/tags/理由/context/keywords/link 描述角色伪造、JSON闭合、凭据、scope/权限/hard/策略/晋升指令攻击及 forbidden-writer spies；Schema 合法也不能授权，依赖 T028。
+- [x] T029 [P] [US2] 在 `backend/tests/unit/agents/test_memory_distiller.py` 先写 AgentBase ROLE/NODE_SCHEMA/execute/fallback、四 action 与附件、域中立跨域声明提示、稳定 JSON 编码/版本与无变化 run/request payload 的测试，依赖 T028。
+- [x] T030 [P] [US2] 在 `backend/tests/unit/test_consolidation_fallback.py` 及 `backend/tests/integration/test_013_consolidation_llm_faults.py` 先写缺配置、None、429/500、连接失败、超时、错误JSON/未知 action/超量/缺字段、AgentBase fallback `{}` 再验证与 trusted 空包测试；增加阻塞底层调用的取消/超时在途槽保持、实际结束才释放、最多2真实调用及迟到结果拒绝断言；同 clock 下规则/TTL 对照，依赖 T028。
+- [x] T031 [P] [US2] 在 `backend/tests/unit/test_consolidation_injection_boundary.py` 先写正文/标题/tags/理由/context/keywords/link 描述角色伪造、JSON闭合、凭据、scope/权限/hard/策略/晋升指令攻击及 forbidden-writer spies；Schema 合法也不能授权，依赖 T028。
 
 ### US2 实现
 
-- [ ] T032 [US2] 在 `backend/src/rag_mcp/agents/memory_distiller.py` 实现独立 AgentBase 第四子类与四提案 NODE_SCHEMA，精确采用 `contracts/distiller-output.schema.json`；只注入 LLMClient/只读数据，不持 session/MemoryService/治理/上传/工具执行句柄，不进入检索图，依赖 T029、T031。
-- [ ] T033 [US2] 在 `backend/src/rag_mcp/config/domain_profiles.py` 配置沿 009 的受信任域中立 Distiller 提示与版本声明，正文/reference 放在 JSON untrusted_* 数据区、固定角色/控制指令，不使用领域硬编码或正文插值替换 system，依赖 T029、T032。
-- [ ] T034 [US2] 在 `backend/src/rag_mcp/services/memory_validators.py` 扩展递归净化与 detect_submission 检查范围至全部新增输入/生成文本，复用 008/012 脱敏/注入分级，高风险生成效果拒绝/隔离且审计不存原凭据或跨域失败正文，依赖 T031、T033。
-- [ ] T035 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现 propose 包验证与可观察降级：执行前保留确定性工作，整非法模型包丢弃，fallback 二次 Schema 校验仍失败时使用受信 `{proposals: []}`，区分模型成功和降级，依赖 T030、T032、T034。
-- [ ] T036 [US2] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现同步 httpx LLM 的有界线程适配与 provider 信号量（真实在途调用上限2），超时/取消停止接纳新结果，底层调用尚未终止仍占槽、finally 实际结束才释放；不阻塞事件循环、不让迟到结果持 DB 会话或提交 token，依赖 T030、T035。
-- [ ] T037 [US2] 运行 Agent/注入/降级与迟到结果测试，对 `backend/src/rag_mcp/agents/memory_distiller.py` 做 rg/AST/依赖调用路径审查并配合 runtime writer spies，将命令/允许命中解释/零直写证据要求记录于 `specs/013-memory-consolidation-loop/quickstart.md`，依赖 T036。
+- [x] T032 [US2] 在 `backend/src/rag_mcp/agents/memory_distiller.py` 实现独立 AgentBase 第四子类与四提案 NODE_SCHEMA，精确采用 `contracts/distiller-output.schema.json`；只注入 LLMClient/只读数据，不持 session/MemoryService/治理/上传/工具执行句柄，不进入检索图，依赖 T029、T031。
+- [x] T033 [US2] 在 `backend/src/rag_mcp/config/domain_profiles.py` 配置沿 009 的受信任域中立 Distiller 提示与版本声明，正文/reference 放在 JSON untrusted_* 数据区、固定角色/控制指令，不使用领域硬编码或正文插值替换 system，依赖 T029、T032。
+- [x] T034 [US2] 在 `backend/src/rag_mcp/services/memory_validators.py` 扩展递归净化与 detect_submission 检查范围至全部新增输入/生成文本，复用 008/012 脱敏/注入分级，高风险生成效果拒绝/隔离且审计不存原凭据或跨域失败正文，依赖 T031、T033。
+- [x] T035 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现 propose 包验证与可观察降级：执行前保留确定性工作，整非法模型包丢弃，fallback 二次 Schema 校验仍失败时使用受信 `{proposals: []}`，区分模型成功和降级，依赖 T030、T032、T034。
+- [x] T036 [US2] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现同步 httpx LLM 的有界线程适配与 provider 信号量（真实在途调用上限2），超时/取消停止接纳新结果，底层调用尚未终止仍占槽、finally 实际结束才释放；不阻塞事件循环、不让迟到结果持 DB 会话或提交 token，依赖 T030、T035。
+- [x] T037 [US2] 运行 Agent/注入/降级与迟到结果测试，对 `backend/src/rag_mcp/agents/memory_distiller.py` 做 rg/AST/依赖调用路径审查并配合 runtime writer spies，将命令/允许命中解释/零直写证据要求记录于 `specs/013-memory-consolidation-loop/quickstart.md`，依赖 T036。
 
 **Checkpoint**: provider/Schema 故障不会停止确定性规则；grep 证据配合调用路径与动态 spy，不只凭字符串未命中推定权限隔离。
 

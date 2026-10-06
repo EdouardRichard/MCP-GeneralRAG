@@ -183,6 +183,52 @@ python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_con
 
 报告质量/安全/回归全pass才default_enable_eligible；报告不发布policy。质量未过/证据缺失两个默认开关false，能力保留；任一hard失败阻断发布。规划检查通过不能代替上述运行证据。
 
+## Phase 3 verification (2026-10-06, T029-T037)
+
+Phase 3 implementation evidence is in `.superpowers/sdd/013-tasks/phase3-report.md`.
+This is component and isolated-store verification; Phase 4 publication and Phase 7
+automatic triggers are not implemented by this phase. Root owns independent review.
+Both default switches remain false and checklist bytes are unchanged.
+
+Run serially from the repository root:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/agents tests/unit/test_consolidation_fallback.py tests/unit/test_consolidation_injection_boundary.py tests/integration/test_013_consolidation_llm_faults.py tests/integration/test_013_consolidation_audit.py tests/integration/test_013_consolidation_admission.py tests/unit/test_consolidation_adjudicator.py tests/unit/test_consolidation_hard_protection.py tests/unit/test_consolidation_proposal_graph.py tests/unit/test_consolidation_deterministic_rules.py tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_selection.py tests/contract/test_consolidation_schemas.py tests/unit/test_memory_validators.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/phase3_lint_delta.py
+rg -n 'session|MemoryService|governance|upload|tool|commit|flush|record' backend/src/rag_mcp/agents/memory_distiller.py
+```
+
+Observed: **749 passed in 25.53s**, no skips; Ruff delta against `d5ef80f`:
+zero new findings, 14 pre-existing findings. The `rg` command has no matches
+(exit 1 is expected). The injection suite also performs AST/import/call checks,
+checks the retrieval factory, and spies on AsyncSession, MemoryService,
+MemoryGovernance, MemoryEventStore, upload/reprocessing/ingestion entry points.
+Zero calls were observed on success and fault paths. String absence alone is
+not the boundary evidence.
+
+Reviewed call path: MemoryDistiller -> fixed prompt/canonical JSON + stateless
+redaction/detection -> LLMClient strict whole-response parser -> AgentBase
+validation/fallback -> propose final whole-package validation -> immutable
+ProposalBatch. The packaged schema is checked against the exact contract.
+Validators import ORM types for older provenance services, but this path calls
+only their pure sanitizers; it never constructs the session-bearing validator.
+The only resource read in the agent is its packaged schema; model text cannot
+supply a path or execute a tool. No retrieval graph edits were made.
+
+DistillerProvider receives only the agent, immutable window, and call-local
+accounting. A process-wide two-slot semaphore is released by the synchronous
+worker's finally block. Tests block the underlying httpx call, time out/cancel
+waiters, reject a third call, release one real call, and admit the next. The
+event loop keeps progressing and late outputs are not delivered. Receipts are
+call-local snapshots, not deltas of shared client counters; cached success and
+failure report zero transport. Unknown tokens/cost remain null.
+
+Injection uses recursive input/output checks, exact-schema rejection of unknown
+authority fields, pure adjudicator safety rejection of schema-valid text, and
+scope-aware audit withholding. Normal/fault comparisons preserve concrete
+deterministic merge decisions and natural TTL intents. These are proposals and
+approved effects, not a claim of Phase 4 publication or input consumption.
+
 ## 8. 只读闸口登记与撤销（实施后）
 
 按 [gate-proof.md](contracts/gate-proof.md) 在评测前冻结拟部署的完整enabled目标policy与当前gate_binding；baseline/direct/expansion只改隔离runner路径选择。一个013.2报告覆盖一个scope的六查询。首轮/重放的gate_binding及环境字段须一致；当前data_hash含普通源authority和published证据，013内部效果/rebuild不自使其失效，snapshot_hash仍是完整评测输入。
