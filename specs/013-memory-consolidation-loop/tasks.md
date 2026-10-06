@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；104项实现任务均未开始。实施前依执行约定复核当前文档。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过隔离验证，等待独立评审；T018-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，全部未勾选；31项可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1的17项已勾选，87项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -26,25 +26,25 @@
 ### 测试先行与契约
 
 - [x] T001 复核 `backend/alembic/versions/0094_memory_management_audit.py` 与当前 Alembic head，核对 012 事件/六投影、AgentBase、maintenance 和上传复用入口，在 `specs/013-memory-consolidation-loop/quickstart.md` 固定隔离环境、升级起点与新增 revision 路径。
-- [ ] T002 [P] 在 `backend/tests/contract/test_consolidation_schemas.py` 建立四份 Draft202012 Schema 的正反例与本地引用校验，覆盖四 action、v1/v2 event、013.2完整/不完整报告与gate_binding、登记013.gate.1路径/hash/过期字段、未知权限字段及 finite confidence；使用 `specs/013-memory-consolidation-loop/contracts/*.schema.json`，依赖 T001。
-- [ ] T003 [P] 在 `backend/tests/unit/test_consolidation_policy.py` 先写严格策略测试：旧默认关闭、enabled 必须显式配置、所有 research §2 范围/bool/NaN 拒绝、候选阈值关系、独立记忆词表与内置档案治理，依赖 T001。
-- [ ] T004 [P] 在 `backend/tests/unit/test_consolidation_selection.py` 先写窗口四态表测试：仅 active 合格 episodic，quarantined/retired/superseded 均排除，叠加 expired/incomplete/consumed；参考集也排除非法状态且不混作提炼源，覆盖 start 含/end 不含、高水位及稳定排序，依赖 T001。
-- [ ] T005 [P] 在 `backend/tests/integration/test_013_consolidation_admission.py` 先写真实 PG 资格测试：两 scope 独立、同 scope 活动唯一、busy 返回已有 run、TTL120s/heartbeat20s、接管 generation、旧 token 不得提交或释放新资格，依赖 T001。
-- [ ] T006 [P] 在 `backend/tests/integration/test_013_consolidation_audit.py` 先写 `(run_id, observation_seq)` append-only、累计状态查询、未知用量为 null、7 天 TTL 与资格/永久事件分离测试；覆盖普通trigger/distiller_window与内部support_maintenance/deterministic_propagation合法组合，后者null窗口/空input_event_ids与独立历史来源/失效proof，依赖 T001。
-- [ ] T007 [P] 在 `backend/tests/integration/test_013_consolidation_migration.py` 先写非空 012 升级测试，覆盖旧 flat consolidate、evidence/chunk 与 supersedes 基础边、历史 revision、默认列值、新约束及存在 v2 事件时禁止破坏性 downgrade，依赖 T001。
+- [x] T002 [P] 在 `backend/tests/contract/test_consolidation_schemas.py` 建立四份 Draft202012 Schema 的正反例与本地引用校验，覆盖四 action、v1/v2 event、013.2完整/不完整报告与gate_binding、登记013.gate.1路径/hash/过期字段、未知权限字段及 finite confidence；使用 `specs/013-memory-consolidation-loop/contracts/*.schema.json`，依赖 T001。
+- [x] T003 [P] 在 `backend/tests/unit/test_consolidation_policy.py` 先写严格策略测试：旧默认关闭、enabled 必须显式配置、所有 research §2 范围/bool/NaN 拒绝、候选阈值关系、独立记忆词表与内置档案治理，依赖 T001。
+- [x] T004 [P] 在 `backend/tests/unit/test_consolidation_selection.py` 先写窗口四态表测试：仅 active 合格 episodic，quarantined/retired/superseded 均排除，叠加 expired/incomplete/consumed；参考集也排除非法状态且不混作提炼源，覆盖 start 含/end 不含、高水位及稳定排序，依赖 T001。
+- [x] T005 [P] 在 `backend/tests/integration/test_013_consolidation_admission.py` 先写真实 PG 资格测试：两 scope 独立、同 scope 活动唯一、busy 返回已有 run、TTL120s/heartbeat20s、接管 generation、旧 token 不得提交或释放新资格，依赖 T001。
+- [x] T006 [P] 在 `backend/tests/integration/test_013_consolidation_audit.py` 先写 `(run_id, observation_seq)` append-only、累计状态查询、未知用量为 null、7 天 TTL 与资格/永久事件分离测试；覆盖普通trigger/distiller_window与内部support_maintenance/deterministic_propagation合法组合，后者null窗口/空input_event_ids与独立历史来源/失效proof，依赖 T001。
+- [x] T007 [P] 在 `backend/tests/integration/test_013_consolidation_migration.py` 先写非空 012 升级测试，覆盖旧 flat consolidate、evidence/chunk 与 supersedes 基础边、历史 revision、默认列值、新约束及存在 v2 事件时禁止破坏性 downgrade，依赖 T001。
 
 ### 共享实现
 
-- [ ] T008 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 定义不可变 WindowSnapshot/SourceVersion/ProposalBatch/CurrentSnapshot/Decision/CommitOutcome/TrustedContext 接口和四段签名，区分 episode 输入、参考、支持、批内 output 引用、approved/committed/pending；显式distiller_window与仅可信writer支持钩子构造的deterministic_propagation权限边界，依赖 T002。
-- [ ] T009 在 `backend/src/rag_mcp/services/memory_policy.py`、`backend/src/rag_mcp/models/domain_profile.py` 与 `backend/src/rag_mcp/config/domain_profiles.py` 实现 research §2 严格配置、域中立版本化记忆词表字段及旧默认；保留文档 graph_relations 与内置档案权限边界，依赖 T003、T008。
-- [ ] T010 在 `backend/src/rag_mcp/models/consolidation_run.py` 定义可变 ConsolidationEligibility 与追加式 ConsolidationRunObservation，完整 token、单调版本、PK/索引、状态与 usage 字段分离；固化trigger/execution_context组合及维护历史来源/当前失效proof/null窗口/空新输入约束；`created_by_run` 不 FK 短期审计，依赖 T005、T006、T008。
-- [ ] T011 在 `backend/alembic/versions/0095_memory_consolidation_loop.py` 新增运行表、append-only/maintenance-only purge guards、活动资格部分唯一索引、域字段及 entry/link additive 列；回填旧 link 并建立 UNIQUE(scope,revision,from,to,relation_type)，保留 revision/node_key/data；在 `backend/src/rag_mcp/models/memory_link.py` 同步建立最小typed ORM映射、`backend/src/rag_mcp/models/memory_views.py` 保留re-export，在 `backend/src/rag_mcp/models/memory_projection.py` 接入 state/context/candidate/pointer 列，依赖 T007、T009、T010。
-- [ ] T012 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现最小 admit/heartbeat/release/takeover 与提交 fence：scope→eligibility→writer lease→policy/targets/evidence 锁序、完整 token、live lease、锁后及最终发布前 `clock_timestamp()`、事务≤30s；普通distiller_window校验开关/配置，T060接入的可信支持维护仍复用同一资格/fence且只能通过专用proof校验；活动 DB 冲突明确 busy，不排队，依赖 T005、T011。
-- [ ] T013 在 `backend/src/rag_mcp/services/memory_reducer.py` 与 `backend/alembic/versions/0095_memory_consolidation_loop.py` 同步增加 `grant_type=consolidation_window` 的可信来源 guards、SQL/Python 重放及 window registry；封存窗口/源版本/参考/策略，不改变事实或消费输入，依赖 T008、T011、T012。
-- [ ] T014 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立可测 select_window，从 verified complete manifest 的日志前缀取状态，按半开窗口/高水位/预算/稳定顺序选择及净化 episode 和独立参考/support 读集，不读取 pending 投影，依赖 T004、T008、T009、T013。
-- [ ] T015 在 `backend/tests/integration/test_013_consolidation_windows.py` 与 `backend/src/rag_mcp/services/consolidation_runtime.py` 先补长期窗口测试再实现可信 window seal/重试读取：原窗口与源版本永久可恢复、截断不重定义窗口、失败/全驳回不推进消费、checkpoint 前未处理反连接扫描；完成结果逻辑在 T042/T048 接齐，依赖 T013、T014。
-- [ ] T016 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 接入追加观察及 ProviderUsageAccumulator：净化提案/理由、真实 transport 与缓存区分、actual/estimated/unavailable、未知 token/cost=null、资格取得/释放轨迹；不得修改旧观察，依赖 T006、T010、T012、T015。
-- [ ] T017 串行运行 T002–T007/T015 的契约、单元及隔离 PG 升级/窗口/资格/审计测试，修复失败并在 `specs/013-memory-consolidation-loop/quickstart.md` 登记命令及证据位置，依赖 T016。
+- [x] T008 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 定义不可变 WindowSnapshot/SourceVersion/ProposalBatch/CurrentSnapshot/Decision/CommitOutcome/TrustedContext 接口和四段签名，区分 episode 输入、参考、支持、批内 output 引用、approved/committed/pending；显式distiller_window与仅可信writer支持钩子构造的deterministic_propagation权限边界，依赖 T002。
+- [x] T009 在 `backend/src/rag_mcp/services/memory_policy.py`、`backend/src/rag_mcp/models/domain_profile.py` 与 `backend/src/rag_mcp/config/domain_profiles.py` 实现 research §2 严格配置、域中立版本化记忆词表字段及旧默认；保留文档 graph_relations 与内置档案权限边界，依赖 T003、T008。
+- [x] T010 在 `backend/src/rag_mcp/models/consolidation_run.py` 定义可变 ConsolidationEligibility 与追加式 ConsolidationRunObservation，完整 token、单调版本、PK/索引、状态与 usage 字段分离；固化trigger/execution_context组合及维护历史来源/当前失效proof/null窗口/空新输入约束；`created_by_run` 不 FK 短期审计，依赖 T005、T006、T008。
+- [x] T011 在 `backend/alembic/versions/0095_memory_consolidation_loop.py` 新增运行表、append-only/maintenance-only purge guards、活动资格部分唯一索引、域字段及 entry/link additive 列；回填旧 link 并建立 UNIQUE(scope,revision,from,to,relation_type)，保留 revision/node_key/data；在 `backend/src/rag_mcp/models/memory_link.py` 同步建立最小typed ORM映射、`backend/src/rag_mcp/models/memory_views.py` 保留re-export，在 `backend/src/rag_mcp/models/memory_projection.py` 接入 state/context/candidate/pointer 列，依赖 T007、T009、T010。
+- [x] T012 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现最小 admit/heartbeat/release/takeover 与提交 fence：scope→eligibility→writer lease→policy/targets/evidence 锁序、完整 token、live lease、锁后及最终发布前 `clock_timestamp()`、事务≤30s；普通distiller_window校验开关/配置，T060接入的可信支持维护仍复用同一资格/fence且只能通过专用proof校验；活动 DB 冲突明确 busy，不排队，依赖 T005、T011。
+- [x] T013 在 `backend/src/rag_mcp/services/memory_reducer.py` 与 `backend/alembic/versions/0095_memory_consolidation_loop.py` 同步增加 `grant_type=consolidation_window` 的可信来源 guards、SQL/Python 重放及 window registry；封存窗口/源版本/参考/策略，不改变事实或消费输入，依赖 T008、T011、T012。
+- [x] T014 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 实现独立可测 select_window，从 verified complete manifest 的日志前缀取状态，按半开窗口/高水位/预算/稳定顺序选择及净化 episode 和独立参考/support 读集，不读取 pending 投影，依赖 T004、T008、T009、T013。
+- [x] T015 在 `backend/tests/integration/test_013_consolidation_windows.py` 与 `backend/src/rag_mcp/services/consolidation_runtime.py` 先补长期窗口测试再实现可信 window seal/重试读取：原窗口与源版本永久可恢复、截断不重定义窗口、失败/全驳回不推进消费、checkpoint 前未处理反连接扫描；完成结果逻辑在 T042/T048 接齐，依赖 T013、T014。
+- [x] T016 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 接入追加观察及 ProviderUsageAccumulator：净化提案/理由、真实 transport 与缓存区分、actual/estimated/unavailable、未知 token/cost=null、资格取得/释放轨迹；不得修改旧观察，依赖 T006、T010、T012、T015。
+- [x] T017 串行运行 T002–T007/T015 的契约、单元及隔离 PG 升级/窗口/资格/审计测试，修复失败并在 `specs/013-memory-consolidation-loop/quickstart.md` 登记命令及证据位置，依赖 T016。
 
 **Checkpoint**: Phase 4 的提交资格/fencing 已就绪；尚未向用户暴露部分可写管线。
 

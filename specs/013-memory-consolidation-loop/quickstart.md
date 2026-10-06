@@ -1,6 +1,6 @@
 # Quickstart: 013 记忆巩固回路验收
 
-这是实施后的验证指南。本次规划未运行这些功能测试；新增013测试、runner与证据导出由tasks/implement阶段交付。契约见 [contracts/README.md](contracts/README.md)，策略/模型见 [data-model.md](data-model.md)。所有数据库写入验收串行，使用隔离数据库/Qdrant/data_root，不清空正式数据。
+Phase 1 (T001-T017) has executed evidence below. Later-phase commands remain planned until their tasks and review gates are complete. 契约见 [contracts/README.md](contracts/README.md)，策略/模型见 [data-model.md](data-model.md)。所有数据库写入验收串行，使用隔离数据库/Qdrant/data_root，不清空正式数据。
 
 ## 1. 环境与证据目录
 
@@ -42,21 +42,42 @@ reuse the source/ProcessingRun registration boundary in its later phase. Phase 1
 wire LLMs, automatic triggers, or memory-changing consolidation commands.
 
 Phase 1 evidence is recorded in `.superpowers/sdd/013-tasks/phase1-report.md`; preflight
-policy/reducer/AgentBase baseline: 15 focused tests passed. The comprehensive Phase 1
-commands and results are appended after T017 verification.
+policy/reducer/AgentBase baseline: 15 focused tests passed. T017 final verification on
+2026-10-06: 77 Phase 1 tests passed in 55.32s; 71 affected legacy memory/domain tests
+passed in 5.11s. No tests were skipped. Run the Phase 1 suite from the worktree root:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_schemas.py tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_selection.py tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_audit.py tests/integration/test_013_consolidation_migration.py tests/integration/test_013_consolidation_windows.py -q --tb=short
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_memory_policy_defaults.py tests/unit/test_domain_profile_sync.py tests/unit/test_domain_profile_seed.py tests/unit/test_memory_projection_equivalence.py tests/unit/test_memory_trajectory_authority.py tests/unit/test_memory_event_constraints.py tests/unit/test_memory_transaction.py tests/unit/test_memory_supersede.py tests/unit/test_memory_rollback.py tests/unit/test_migration_012_memory.py tests/contract/test_memory_schemas.py tests/contract/test_domain_profile_schema.py -q --tb=short
+```
+
+The fixture guards require a nonempty `CONSOLIDATION_ISOLATED_DATABASE` matching the
+database in the configured URL; the runner supplies this explicit opt-in. The populated
+upgrade test creates a fresh temporary 0094 database with legacy events, source/version/chunk,
+entry and link projections, then upgrades and verifies preserved authority/defaults.
+It does not depend on the disposable clone's current schema.
+
+The disposable clone now contains v2 control grants, so destructive downgrade is refused.
+The still-unreleased 0095 draft was synchronized there by the ignored
+`.superpowers/sdd/013-tasks/phase1_schema_sync.py`: observation sequence high water,
+explicit unknown usage default, and the strengthened window guard. Future migration edits
+must synchronize only the isolated clone or use a freshly prepared database.
+Runtime control commands own their transaction and reject any existing session transaction;
+callers must explicitly finish their reads or writes before admission, heartbeat, release,
+takeover, observation, purge, or commit fencing. Pending window publication raises an error
+while retaining recovery material and the previous complete manifest.
 
 Python≥3.12及backend依赖、PostgreSQL/Qdrant、已有embedding与可选真实LLM配置；DATABASE_URL/QDRANT_URL/DATA_ROOT指向隔离实例。至少一个合法可编辑域，不能修改内置档案绕过限制。当前writer/reader服务停止后运行lease测试；loopback请求不经代理。
 
-从仓库根目录执行：
+以下所有命令从隔离 worktree 的仓库根目录执行。runner 的环境覆盖仅对其自身及子进程有效，每个测试、迁移、评测和服务进程均经此入口启动；新终端也先运行 check。
 
 ```powershell
 $consolidationRunName = '013-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $consolidationEvidenceDir = Join-Path (Resolve-Path eval).Path ('runs/' + $consolidationRunName)
 New-Item -ItemType Directory -Path $consolidationEvidenceDir
 $env:CONSOLIDATION_EVIDENCE_DIR = $consolidationEvidenceDir
-$env:PYTHONPATH = 'src;../eval'
-Set-Location backend
-alembic upgrade head
+python .superpowers/sdd/013-tasks/isolation_runner.py check
+python .superpowers/sdd/013-tasks/isolation_runner.py alembic upgrade head
 ```
 
 新目录不能覆盖。迁移验证当前head后运行：从非空012库升级，旧flat consolidate/evidence/supersedes/历史revision仍可重放；typed列与authority一致，两scope资格独立，context默认无值，默认开关false。存在v2事件时禁止破坏性downgrade。
@@ -64,9 +85,9 @@ alembic upgrade head
 ## 2. 契约与独立阶段
 
 ```powershell
-python -m pytest tests/contract/test_consolidation_schemas.py tests/contract/test_consolidation_management_api.py -q
-python -m pytest tests/unit/agents/test_memory_distiller.py tests/unit/test_consolidation_selection.py tests/unit/test_consolidation_adjudicator.py -q
-python -m pytest tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_fallback.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_schemas.py tests/contract/test_consolidation_management_api.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/agents/test_memory_distiller.py tests/unit/test_consolidation_selection.py tests/unit/test_consolidation_adjudicator.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_fallback.py -q
 ```
 
 检查四action/附件、unknown权限字段拒绝、finite confidence与阈值等于/低于边界、硬保护effect全矩阵、域中立提示、不可信JSON、所有新增文本净化。fallback再校验，畸形fallback不得产生事件。同clock/policy下模型正常/故障/无模型的确定规则产出一致；TTL独立运行。
@@ -76,8 +97,8 @@ python -m pytest tests/unit/test_consolidation_policy.py tests/unit/test_consoli
 ## 3. 数据库资格、窗口、恢复
 
 ```powershell
-python -m pytest tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_windows.py -q
-python -m pytest tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_recovery.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_windows.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_recovery.py -q
 ```
 
 三触发在DB冲突处只有一个活动资格，其余明确busy+existing run；不同scope可独立执行。过期接管/进程崩溃/旧holder后到结果成功提交0。窗口start包含/end排除，稳定event排序，预算不是新窗口，检查点推进不吞掉驳回/失败/未处理；清理7天run后从window grants/完成结果恢复待处理资格。reference独立，quarantined/retired/superseded/expired/incomplete进入两集合均0。
@@ -89,8 +110,8 @@ python -m pytest tests/integration/test_013_consolidation_commit.py tests/integr
 ## 4. 派生投影、依赖与语境
 
 ```powershell
-python -m pytest tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_dependencies.py -q
-python -m pytest tests/unit/test_consolidation_context_visibility.py tests/unit/test_consolidation_link_expansion.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_dependencies.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_context_visibility.py tests/unit/test_consolidation_link_expansion.py -q
 ```
 
 先生成非空高级边和context/keywords，保存逐字段/来源/scope/六投影指纹；只在隔离副本清空投影和到期审计，full与snapshot+delta重建一致。rollback恢复上一批准context/link具体版本，模型/transport调用0；SQL与Python每步一致。
@@ -100,7 +121,7 @@ historical源正常TTL/归并/purge不使有效结论失效；必要支持被明
 ## 5. 人工晋升与管理面
 
 ```powershell
-python -m pytest tests/integration/test_013_consolidation_promotion.py tests/integration/test_013_consolidation_e2e.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_promotion.py tests/integration/test_013_consolidation_e2e.py -q
 ```
 
 合法hard-anchored semantic标候选；无corpus的soft procedure有完整源链但无候选。任何模型/维护/量阈值自动创建正身source=0。POST promote显式人工、同域复验，创建原上传链pending任务且保留memory；并发重复candidate_version只一个稳定task/source/initial run。调度前崩溃可恢复，失败重试同task/source，未发布不能报published。
@@ -109,7 +130,8 @@ python -m pytest tests/integration/test_013_consolidation_promotion.py tests/int
 
 ```powershell
 $env:INSTANCE_MODE = 'writer'
-python -m uvicorn rag_mcp.server:app --host 127.0.0.1 --port 18000
+python .superpowers/sdd/013-tasks/isolation_runner.py check
+python .superpowers/sdd/013-tasks/isolation_runner.py eval -m uvicorn rag_mcp.server:app --host 127.0.0.1 --port 18000
 ```
 
 使用现有scope列表选择可编辑测试scope并遵循原POST policy管理流程，提交显式consolidation配置后opt-in；缺配置拒绝、禁用拒绝要分别记录。按 [management-api.md](contracts/management-api.md) 手动触发202并轮询报告，阻塞运行后第二触发409带run_id。配置启用不直接授予扩展三闸许可。reader实例调用写操作沿MEMORY_WRITE_UNAVAILABLE拒绝，不注册新MCP工具。
@@ -119,11 +141,10 @@ python -m uvicorn rag_mcp.server:app --host 127.0.0.1 --port 18000
 停止验收服务再串行执行：
 
 ```powershell
-python -m pytest tests/integration/test_012_memory_e2e.py tests/integration/test_012_aoep_obligations.py tests/integration/test_013_consolidation_aoep.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_012_memory_e2e.py tests/integration/test_012_aoep_obligations.py tests/integration/test_013_consolidation_aoep.py -q
 $env:MEMORY_DIAGNOSTICS_OUTPUT = Join-Path $consolidationEvidenceDir 'read-diagnostics.json'
-python -m pytest -vv --tb=short --durations=30 -p memory_pytest_evidence --memory-evidence="$consolidationEvidenceDir/memory-trace.json" --junitxml="$consolidationEvidenceDir/backend-pytest.xml"
-Set-Location ..
-python eval/run_regression_011.py --output-dir "$consolidationEvidenceDir/regression"
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest -vv --tb=short --durations=30 -p memory_pytest_evidence --memory-evidence="$consolidationEvidenceDir/memory-trace.json" --junitxml="$consolidationEvidenceDir/backend-pytest.xml"
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_regression_011.py --output-dir "$consolidationEvidenceDir/regression"
 ```
 
 013证据fixture读取CONSOLIDATION_EVIDENCE_DIR，导出consolidation-trace.json、authority-snapshot.json和冻结data/版本清单；新路径契约见evaluation-contract。测试不能只输出预设pass。012八项维持原口径；AOEP权威边界、范围不扩张、来源保留、删除传播、可追溯rollback各至少2例。001–012其余评测/target-host/已有frontend checks按 [012 quickstart](../012-memory-foundation-write-read-loop/quickstart.md) 和eval/README.md补齐，生成新的012 acceptance与完整旧集证据。skip/missing不得算通过。
@@ -134,16 +155,15 @@ python eval/run_regression_011.py --output-dir "$consolidationEvidenceDir/regres
 
 ```powershell
 $env:AGENTIC_LLM_CACHE_PATH = Join-Path $consolidationEvidenceDir 'llm-cache'
-python eval/run_consolidation_comparison.py --dataset eval/consolidation_eval_dataset.json --snapshot "$consolidationEvidenceDir/authority-snapshot.json" --mode record --cache-manifest "$consolidationEvidenceDir/cache-manifest.json" --gate-variant consolidated_candidate_expansion --suite "$consolidationEvidenceDir/backend-pytest.xml" --trace "$consolidationEvidenceDir/consolidation-trace.json" --memory-acceptance "$consolidationEvidenceDir/012-acceptance.json" --regression "$consolidationEvidenceDir/regression/012_regression_summary.json" --output "$consolidationEvidenceDir/consolidation-record.json"
-python eval/run_consolidation_comparison.py --dataset eval/consolidation_eval_dataset.json --snapshot "$consolidationEvidenceDir/authority-snapshot.json" --mode replay --cache-manifest "$consolidationEvidenceDir/cache-manifest.json" --gate-variant consolidated_candidate_expansion --suite "$consolidationEvidenceDir/backend-pytest.xml" --trace "$consolidationEvidenceDir/consolidation-trace.json" --memory-acceptance "$consolidationEvidenceDir/012-acceptance.json" --regression "$consolidationEvidenceDir/regression/012_regression_summary.json" --output "$consolidationEvidenceDir/consolidation-replay.json"
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py --dataset eval/consolidation_eval_dataset.json --snapshot "$consolidationEvidenceDir/authority-snapshot.json" --mode record --cache-manifest "$consolidationEvidenceDir/cache-manifest.json" --gate-variant consolidated_candidate_expansion --suite "$consolidationEvidenceDir/backend-pytest.xml" --trace "$consolidationEvidenceDir/consolidation-trace.json" --memory-acceptance "$consolidationEvidenceDir/012-acceptance.json" --regression "$consolidationEvidenceDir/regression/012_regression_summary.json" --output "$consolidationEvidenceDir/consolidation-record.json"
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py --dataset eval/consolidation_eval_dataset.json --snapshot "$consolidationEvidenceDir/authority-snapshot.json" --mode replay --cache-manifest "$consolidationEvidenceDir/cache-manifest.json" --gate-variant consolidated_candidate_expansion --suite "$consolidationEvidenceDir/backend-pytest.xml" --trace "$consolidationEvidenceDir/consolidation-trace.json" --memory-acceptance "$consolidationEvidenceDir/012-acceptance.json" --regression "$consolidationEvidenceDir/regression/012_regression_summary.json" --output "$consolidationEvidenceDir/consolidation-replay.json"
 ```
 
 追加其他旧组报告到--regression参数；单一六组summary不是整个001–012证据。两轮保存各query三path指标/来源/失败、成本/延迟。K5、MRR与nDCG均相对≥3%，HitRate/Recall/Precision非降；相对零基线不可计算不能pass。次轮缓存成功/失败一致100%、真实网络0、非延迟漂移≤1%，硬安全零容差。损坏/miss/version mismatch不能回源补齐后宣称过闸。
 
 ```powershell
-Set-Location backend
-python -m pytest tests/unit/test_consolidation_comparison_report.py tests/integration/test_013_consolidation_llm_faults.py -q
-python -m pytest tests/unit/test_consolidation_gate.py tests/unit/test_consolidation_link_expansion.py tests/contract/test_consolidation_recall_extensions.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_comparison_report.py tests/integration/test_013_consolidation_llm_faults.py -q
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_gate.py tests/unit/test_consolidation_link_expansion.py tests/contract/test_consolidation_recall_extensions.py -q
 ```
 
 报告质量/安全/回归全pass才default_enable_eligible；报告不发布policy。质量未过/证据缺失两个默认开关false，能力保留；任一hard失败阻断发布。规划检查通过不能代替上述运行证据。
