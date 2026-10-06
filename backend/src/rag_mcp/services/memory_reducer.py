@@ -5,6 +5,8 @@ import json
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
 
 
 _REDUCER_SEAL = object()
@@ -65,6 +67,39 @@ def _scoped_target(entries, memory_id, scope):
     return target
 
 
+def validate_window_control(event):
+    payload = event.get('payload') or {}
+    if (event.get('actor') != 'management' or event.get('authority', {}).get('source') != 'consolidation_control'
+        or payload.get('control_adjudication') != {'decision': 'seal_window', 'effect': 'control_only', 'rule_version': '013.window.1'}):
+        raise PermissionError('trusted consolidation control required')
+    keys = {'payload_version', 'grant_type', 'start', 'end', 'frozen_at', 'high_water_mark', 'source_refs',
+            'reference_refs', 'support_refs', 'original_window_id', 'captured_policy', 'captured_vocabulary',
+            'policy_hash', 'vocabulary_hash', 'control_adjudication', 'eligibility_token'}
+    if set(payload) != keys or payload['payload_version'] != 2 or not payload['source_refs']:
+        raise ValueError('invalid consolidation window seal')
+    token = payload['eligibility_token']
+    if set(token) != {'eligibility_id', 'scope_id', 'run_id', 'holder_instance_id', 'writer_lease_id', 'eligibility_version'}:
+        raise ValueError('invalid consolidation window token')
+    for key in ('eligibility_id', 'run_id', 'holder_instance_id'):
+        UUID(token[key])
+    if token['scope_id'] != event['knowledge_scope_id']:
+        raise ValueError('SCOPE_MISMATCH')
+    for key in ('writer_lease_id', 'eligibility_version'):
+        if isinstance(token[key], bool) or not isinstance(token[key], int) or token[key] <= 0:
+            raise ValueError('invalid consolidation window token')
+    start, end, frozen = (datetime.fromisoformat(payload[key]) for key in ('start', 'end', 'frozen_at'))
+    if any(value.tzinfo is None for value in (start, end, frozen)) or start > end or end != frozen:
+        raise ValueError('invalid consolidation window timeline')
+    high_water = payload['high_water_mark']
+    if isinstance(high_water, bool) or not isinstance(high_water, int) or not 0 < high_water < event['event_id']:
+        raise ValueError('invalid consolidation window high water')
+    from rag_mcp.services.memory_policy import MemoryPolicy
+    policy = MemoryPolicy.model_validate(payload['captured_policy'])
+    if not policy.consolidation_enabled or policy.consolidation is None:
+        raise ValueError('invalid consolidation window policy')
+    return payload
+
+
 def reduce_events(events, *, initial_state=None):
     history = sorted(deepcopy(list(events)), key=lambda item: item["event_id"])
     if len({event["event_id"] for event in history}) != len(history):
@@ -74,6 +109,9 @@ def reduce_events(events, *, initial_state=None):
     entries = initial_state["entries"] if initial_state is not None else {}
     salience = initial_state["salience"] if initial_state is not None else {}
     bindings = {int(key): row for key, row in initial_state["bindings"].items()} if initial_state is not None else {}
+    consolidation_state = initial_state['consolidation_state'] if initial_state is not None else {
+        'window_seals': {}, 'potential_results': {}, 'potential_source_outcomes': {},
+        'potential_checkpoint': None, 'unresolved_windows': []}
     for index, event in enumerate(history):
         eid = event["aggregate_id"]
         scope = event["knowledge_scope_id"]
@@ -146,7 +184,12 @@ def reduce_events(events, *, initial_state=None):
             # Preserve all access events, including post-point use. New identities
             # removed by rollback retain salience audit but cannot supply facts.
         elif kind == "grant":
-            if "binding_id" in payload:
+            if payload.get('grant_type') == 'consolidation_window':
+                seal = validate_window_control(event)
+                consolidation_state['window_seals'][str(event['event_id'])] = {
+                    **deepcopy(seal), 'window_id': event['event_id'], 'knowledge_scope_id': scope}
+                consolidation_state['unresolved_windows'].append(event['event_id'])
+            elif "binding_id" in payload:
                 bindings[payload["binding_id"]] = {
                     **{key: payload[key] for key in ("binding_id", "binding_kind", "binding_value", "priority", "status")},
                     "knowledge_scope_id": scope}
@@ -180,7 +223,7 @@ def reduce_events(events, *, initial_state=None):
             links[f"{mid}/supersedes"] = {**row, "from_id": mid, "to_id": row["supersedes_memory_id"], "relation": "supersedes"}
         summary.setdefault(branch, []).append(deepcopy(row))
     state = {"entries": entries, "dense": dense, "links": links, "summary": summary,
-             "files": files, "salience": salience, "bindings": bindings}
+             "files": files, "salience": salience, "bindings": bindings, 'consolidation_state': consolidation_state}
     return ReducerState(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str), _REDUCER_SEAL)
 
 

@@ -171,6 +171,7 @@ class RuntimeMaintenanceLog(Base):
     purged_maintenance_logs: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
+    purged_consolidation_runs: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
     )
