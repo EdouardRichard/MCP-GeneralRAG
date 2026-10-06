@@ -229,6 +229,36 @@ scope-aware audit withholding. Normal/fault comparisons preserve concrete
 deterministic merge decisions and natural TTL intents. These are proposals and
 approved effects, not a claim of Phase 4 publication or input consumption.
 
+## Phase 4 verification (2026-10-07, T038-T052)
+
+Phase 4 implementation evidence is in `.superpowers/sdd/013-tasks/phase4-report.md`;
+the independent review verdict (PASS) is in `.superpowers/sdd/013-tasks/phase4-review.md`.
+Implementation commit `61c1c57` adds migrations 0096_consolidation_authority,
+0097_consolidation_publish_fence and 0098_consolidation_integrity (0095-0098 are
+deployed and byte-frozen; later SQL corrections require 0099+ successors).
+Applied migration SHA256: 0096 `254F3F7891E946B1043270043E57861AFE1527F1782D4241055513D87C966DE2`,
+0097 `3FCC689F0D1D30C2742ADB44925C5CFA2D052C7DBC26E59CA2CABCB19BE03426`,
+0098 `B1D3A45102ED321661EF0DB81F7ACC3A210B332BCBFA65885C248A990204FC0E`.
+
+Root final verification: full isolated coverage collected 2069 tests, 2068 passed;
+the sole failure is the pre-existing unrelated
+`tests/unit/orchestration/test_agentic_metrics.py::test_record_agentic_retrieval_run_writes_row`.
+The Phase 4 focused command collected 734 tests: 734 passed in 742.60s, exit 0.
+
+Independent re-verification of the Phase 4 matrix (this session, serial, isolated
+runner; commit/parity/recovery/rebuild/context plus all Phase 4 matrix files and
+the populated 012 upgrade):
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_complete_matrix.py tests/integration/test_013_consolidation_final_review.py tests/integration/test_013_consolidation_hash_matrix.py tests/integration/test_013_consolidation_history_matrix.py tests/integration/test_013_consolidation_lawful_merge.py tests/integration/test_013_consolidation_live_boundaries.py tests/integration/test_013_consolidation_observation_matrix.py tests/integration/test_013_consolidation_operation_matrix.py tests/integration/test_013_consolidation_permanent_matrix.py tests/integration/test_013_consolidation_phase4_boundaries.py tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_recovery.py tests/integration/test_013_consolidation_remaining_matrix.py tests/integration/test_013_consolidation_replay_parity.py tests/integration/test_013_consolidation_migration.py tests/unit/test_consolidation_context_visibility.py tests/unit/test_consolidation_equivalence_normalization.py -q --tb=short -p no:cacheprovider
+```
+
+Observed: **159 passed in 748.49s**, exit 0, no skips. Environment note: the
+isolation runner now passes `env=dict(os.environ)` to child processes because
+Windows child processes otherwise inherit the stale process environment block
+(NO_PROXY containing `[::1]` broke httpx proxy-mount parsing for the Qdrant
+client); the runner remains a local ignored tool.
+
 ## 8. 只读闸口登记与撤销（实施后）
 
 按 [gate-proof.md](contracts/gate-proof.md) 在评测前冻结拟部署的完整enabled目标policy与当前gate_binding；baseline/direct/expansion只改隔离runner路径选择。一个013.2报告覆盖一个scope的六查询。首轮/重放的gate_binding及环境字段须一致；当前data_hash含普通源authority和published证据，013内部效果/rebuild不自使其失效，snapshot_hash仍是完整评测输入。

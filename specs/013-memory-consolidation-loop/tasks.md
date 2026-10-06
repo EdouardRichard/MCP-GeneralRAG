@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证，等待root独立评审；T038-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；T053-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–3的37项已勾选，67项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–4的52项已勾选，52项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -104,30 +104,30 @@
 
 ### 测试先行
 
-- [ ] T038 [P] [US3] 在 `backend/tests/integration/test_013_consolidation_commit.py` 先写提交 barrier 测试：propose 后 quarantine/retire/supersede/expire、scope/证据/策略/配额/词表变化、资格到期或 lease 丢失均重裁决；事件/关系/link/context 失败整组回滚、外部投影失败 pending 不报成功，依赖 T037。
-- [ ] T039 [P] [US3] 在 `backend/tests/integration/test_013_consolidation_replay_parity.py` 先写 v1 与 v2 create/merge/invalidate/derive/control grant 的 Python/SQL 逐事件 parity、content→content_text 持久字段兼容、原始confidence/五元/非空源链、单aggregate/group 完整性测试，依赖 T037。
-- [ ] T040 [P] [US7] 在 `backend/tests/integration/test_013_consolidation_recovery.py` 先写独立组部分完成、共享源整组 pending、稳定 group key 重试、审计 TTL 后恢复、checkpoint 不吞未成功源、rollback 新 state_event_id 允许合法重试测试，依赖 T037。
-- [ ] T041 [P] [US5] 在 `backend/tests/unit/test_consolidation_context_visibility.py` 与 `backend/tests/integration/test_013_consolidation_projection_rebuild.py` 先写非空获批摘要/有序keywords/版本/来源的 full、snapshot+delta、TTL后重建、rollback 逐字段/六投影指纹一致和模型调用0；context有无正文hash/embedding输入/候选排序恒等，依赖 T037。
+- [X] T038 [P] [US3] 在 `backend/tests/integration/test_013_consolidation_commit.py` 先写提交 barrier 测试：propose 后 quarantine/retire/supersede/expire、scope/证据/策略/配额/词表变化、资格到期或 lease 丢失均重裁决；事件/关系/link/context 失败整组回滚、外部投影失败 pending 不报成功，依赖 T037。
+- [X] T039 [P] [US3] 在 `backend/tests/integration/test_013_consolidation_replay_parity.py` 先写 v1 与 v2 create/merge/invalidate/derive/control grant 的 Python/SQL 逐事件 parity、content→content_text 持久字段兼容、原始confidence/五元/非空源链、单aggregate/group 完整性测试，依赖 T037。
+- [X] T040 [P] [US7] 在 `backend/tests/integration/test_013_consolidation_recovery.py` 先写独立组部分完成、共享源整组 pending、稳定 group key 重试、审计 TTL 后恢复、checkpoint 不吞未成功源、rollback 新 state_event_id 允许合法重试测试，依赖 T037。
+- [X] T041 [P] [US5] 在 `backend/tests/unit/test_consolidation_context_visibility.py` 与 `backend/tests/integration/test_013_consolidation_projection_rebuild.py` 先写非空获批摘要/有序keywords/版本/来源的 full、snapshot+delta、TTL后重建、rollback 逐字段/六投影指纹一致和模型调用0；context有无正文hash/embedding输入/候选排序恒等，依赖 T037。
 
 ### US3 权威与提交
 
-- [ ] T042 [US3] 在 `backend/src/rag_mcp/services/memory_reducer.py` 与 `backend/alembic/versions/0095_memory_consolidation_loop.py` 同步实现 v2 四 operation、group 完整性/唯一 root、六轴/永久批准材料、SQL `memory_log_state()`/source guards/verification receipt；纯 registry 只计算 potential outcomes/checkpoint，不读 manifest，v1旧事件保持兼容，依赖 T039。
-- [ ] T043 [US3] 在 `backend/src/rag_mcp/services/memory_projection_store.py` 接入获批 relational/typed-link/context/candidate registries 的六投影物化/inspect/receipt，保留 revision 与旧完整 manifest；仅可信 reducer 产物可写，不建立第七事实源，依赖 T011、T041、T042。
-- [ ] T044 [US3] 在 `backend/src/rag_mcp/services/memory_service.py` 实现 commit_approved：锁后读取最新状态并调用同一纯裁决器，分配永久ID/解析proposal_ref、可信组原子追加+关系/link/context物化+六投影验证/发布；提交前/最终发布前复验完整资格/lease，普通上下文复验当前开关/配置，T060接入的维护上下文复验可信来源/当前支持失效proof/仅invalidate白名单；raw/apply_event外部直写继续拒绝，依赖 T012、T026、T038、T042、T043。
-- [ ] T045 [US3] 在 `backend/src/rag_mcp/services/memory_validators.py` 实现 distilled 五元与永久 episode/memory/create/state event/hash 链复验及012 content_text/submission_meta/provenance_validation/injection_flags/session/agent/task/decay/tags 时间字段 canonicalization；corpus证据可显式空但源链非空、推断保留且无候选，依赖 T034、T039、T044。
+- [X] T042 [US3] 在 `backend/src/rag_mcp/services/memory_reducer.py` 与 `backend/alembic/versions/0095_memory_consolidation_loop.py` 同步实现 v2 四 operation、group 完整性/唯一 root、六轴/永久批准材料、SQL `memory_log_state()`/source guards/verification receipt；纯 registry 只计算 potential outcomes/checkpoint，不读 manifest，v1旧事件保持兼容，依赖 T039。
+- [X] T043 [US3] 在 `backend/src/rag_mcp/services/memory_projection_store.py` 接入获批 relational/typed-link/context/candidate registries 的六投影物化/inspect/receipt，保留 revision 与旧完整 manifest；仅可信 reducer 产物可写，不建立第七事实源，依赖 T011、T041、T042。
+- [X] T044 [US3] 在 `backend/src/rag_mcp/services/memory_service.py` 实现 commit_approved：锁后读取最新状态并调用同一纯裁决器，分配永久ID/解析proposal_ref、可信组原子追加+关系/link/context物化+六投影验证/发布；提交前/最终发布前复验完整资格/lease，普通上下文复验当前开关/配置，T060接入的维护上下文复验可信来源/当前支持失效proof/仅invalidate白名单；raw/apply_event外部直写继续拒绝，依赖 T012、T026、T038、T042、T043。
+- [X] T045 [US3] 在 `backend/src/rag_mcp/services/memory_validators.py` 实现 distilled 五元与永久 episode/memory/create/state event/hash 链复验及012 content_text/submission_meta/provenance_validation/injection_flags/session/agent/task/decay/tags 时间字段 canonicalization；corpus证据可显式空但源链非空、推断保留且无候选，依赖 T034、T039、T044。
 
 ### US5 语境与可重建性
 
-- [ ] T046 [US5] 在 `backend/src/rag_mcp/services/memory_service.py` 与 `backend/src/rag_mcp/services/memory_projection_store.py` 完成 context 逐附件批准、具体文本/有序keywords及版本永久事件存储与物化；derive 不改正文/hash/kind/provenance/证据/纠正链，模型故障或拒绝保留旧合法值，不凭 fallback 造摘要，依赖 T025、T041、T045。
-- [ ] T047 [US5] 在 `backend/src/rag_mcp/runtime/projection_rebuild.py` 接齐 full/snapshot+delta 高级 link/context/候选/潜在消费 registry，从永久具体批准材料复制，清空非空投影与到期审计后恢复六投影/receipt，重建不调用模型且只在完整发布后开放消费，依赖 T041、T046。
+- [X] T046 [US5] 在 `backend/src/rag_mcp/services/memory_service.py` 与 `backend/src/rag_mcp/services/memory_projection_store.py` 完成 context 逐附件批准、具体文本/有序keywords及版本永久事件存储与物化；derive 不改正文/hash/kind/provenance/证据/纠正链，模型故障或拒绝保留旧合法值，不凭 fallback 造摘要，依赖 T025、T041、T045。
+- [X] T047 [US5] 在 `backend/src/rag_mcp/runtime/projection_rebuild.py` 接齐 full/snapshot+delta 高级 link/context/候选/潜在消费 registry，从永久具体批准材料复制，清空非空投影与到期审计后恢复六投影/receipt，重建不调用模型且只在完整发布后开放消费，依赖 T041、T046。
 
 ### US2 / US7 接线与恢复
 
-- [ ] T048 [US7] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 与 `backend/src/rag_mcp/services/memory_service.py` 实现完整组 pending 恢复与 verified complete 前缀消费判定，先取得新资格并重验保护、保留原窗口/未处理反连接与未消费源；audit TTL 后从永久window/结果恢复，不重复产出或强行批准已失效旧结果，依赖 T040、T044、T047。
-- [ ] T049 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 接通 select→propose→adjudicate→commit 四段，彼此注入独立可测边界；运行外持LLM、事务内重裁决、只传获批 effects，所有成功/降级/无变化/部分失败路径有明确结果，依赖 T027、T035、T044、T045、T048。
-- [ ] T050 [US7] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 从真实决定/发布结果追加累计观察，accepted≠committed，output IDs 仅 complete、pending另列，empty/all_rejected/partial/interrupted 与实际 usage/reason 可区分，不 UPDATE旧状态，依赖 T016、T049。
-- [ ] T051 [US3] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_governance.py` 与新迁移补齐 rollback 的 registry/content/history 恢复，受影响 entry 的 state_event_id=rollback_event_id、creation身份不变、历史group键不删，恢复结果可合法重试，依赖 T040、T042、T048、T050。
-- [ ] T052 [US3] 串行运行 commit/parity/recovery/非空 rebuild/context 测试与 populated012升级测试，验证 quarantined 提交再排除点、源链100%、pending不可读、同组幂等与LLM重建0；在 `specs/013-memory-consolidation-loop/quickstart.md` 记录阶段证据，依赖 T051。
+- [X] T048 [US7] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 与 `backend/src/rag_mcp/services/memory_service.py` 实现完整组 pending 恢复与 verified complete 前缀消费判定，先取得新资格并重验保护、保留原窗口/未处理反连接与未消费源；audit TTL 后从永久window/结果恢复，不重复产出或强行批准已失效旧结果，依赖 T040、T044、T047。
+- [X] T049 [US2] 在 `backend/src/rag_mcp/orchestration/consolidation_pipeline.py` 接通 select→propose→adjudicate→commit 四段，彼此注入独立可测边界；运行外持LLM、事务内重裁决、只传获批 effects，所有成功/降级/无变化/部分失败路径有明确结果，依赖 T027、T035、T044、T045、T048。
+- [X] T050 [US7] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 从真实决定/发布结果追加累计观察，accepted≠committed，output IDs 仅 complete、pending另列，empty/all_rejected/partial/interrupted 与实际 usage/reason 可区分，不 UPDATE旧状态，依赖 T016、T049。
+- [X] T051 [US3] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_governance.py` 与新迁移补齐 rollback 的 registry/content/history 恢复，受影响 entry 的 state_event_id=rollback_event_id、creation身份不变、历史group键不删，恢复结果可合法重试，依赖 T040、T042、T048、T050。
+- [X] T052 [US3] 串行运行 commit/parity/recovery/非空 rebuild/context 测试与 populated012升级测试，验证 quarantined 提交再排除点、源链100%、pending不可读、同组幂等与LLM重建0；在 `specs/013-memory-consolidation-loop/quickstart.md` 记录阶段证据，依赖 T051。
 
 **Checkpoint**: 手动内测完整管线可验收，正式自动入口尚未开放；高级关系词表/消费端在下一 Phase 接齐。
 
