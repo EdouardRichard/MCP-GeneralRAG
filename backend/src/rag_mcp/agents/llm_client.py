@@ -27,13 +27,69 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import re
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class LLMCallReceipt:
+    output: dict | None = None
+    reason: str | None = None
+    transport_calls: int = 0
+    cache_hits: int = 0
+    prompt_chars: int = 0
+    completion_chars: int = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost_usd: float | None = None
+
+
+# Installed inside the provider worker, never shared between concurrent calls.
+# The observer receives only accounting, never a DB handle or eligibility token.
+receipt_observer = ContextVar('llm_receipt_observer', default=None)
+
+
+def _emit_receipt(receipt):
+    observer = receipt_observer.get()
+    if observer is not None:
+        observer(replace(receipt, output=None))
+    return receipt
+
+
+def _strict_object(text):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate JSON key')
+            result[key] = value
+        return result
+
+    def invalid_constant(_):
+        raise ValueError('nonfinite JSON')
+
+    obj = json.loads(text, object_pairs_hook=unique, parse_constant=invalid_constant)
+    if not isinstance(obj, dict):
+        raise TypeError('JSON object required')
+    json.dumps(obj, allow_nan=False)
+    return obj
+
+
+def safe_failure_code(value):
+    return isinstance(value, str) and (value in {
+        'MODEL_CONFIGURATION_REQUIRED', 'MODEL_SCHEMA_INVALID', 'MODEL_JSON_INVALID',
+        'MODEL_RESPONSE_TOO_LARGE', 'INPUT_CONTENT_UNSAFE', 'INPUT_BUDGET_EXCEEDED',
+        'SCOPE_MISMATCH', 'AGENT_EXECUTION_FAILED', 'PROVIDER_TIMEOUT',
+        'PROVIDER_NETWORK_ERROR', 'PROVIDER_RESPONSE_INVALID',
+    } or re.fullmatch(r'PROVIDER_HTTP_[1-5][0-9]{2}', value) is not None)
 
 # Markdown code-fence marker (three backticks), built without a literal
 # backtick character in this source line.
@@ -116,6 +172,90 @@ class LLMClient:
     @property
     def model(self) -> str:
         return self._model
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._base_url and self._model)
+
+    def chat_json_receipt(self, system_prompt, user_payload, *, timeout_s=None):
+        """Strict whole-package parsing with call-local, sanitized diagnostics.
+
+        Existing retrieval chat_json/cache semantics stay unchanged. Strict cache
+        entries have a separate namespace so salvaged legacy objects cannot pass.
+        """
+        if not self.configured:
+            return _emit_receipt(LLMCallReceipt(reason='MODEL_CONFIGURATION_REQUIRED'))
+        user_text = user_payload if isinstance(user_payload, str) else json.dumps(user_payload, ensure_ascii=False)
+        path = (Path(self._cache_dir) / 'strict-v1' / (self._cache_key(system_prompt, user_text) + '.json')) if self._cache_dir else None
+        if path:
+            try:
+                entry = _strict_object(path.read_text(encoding='utf-8'))
+                if entry.get('parser') == 'strict-v1' and 'reason' in entry:
+                    if entry['reason'] is not None and not safe_failure_code(entry['reason']):
+                        raise ValueError('invalid cached reason')
+                    if entry.get('reason') is None and not isinstance(entry.get('output'), dict):
+                        raise ValueError('invalid cached output')
+                    self.cache_hits += 1
+                    return _emit_receipt(LLMCallReceipt(output=entry.get('output'), reason=entry['reason'], cache_hits=1))
+            except (OSError, ValueError, TypeError, RecursionError):
+                # Read-through cache misses carry no response body diagnostics.
+                pass
+        self.cache_misses += 1
+        receipt = LLMCallReceipt()
+        body = {'model': self._model, 'messages': [{'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_text}], 'temperature': 0.0}
+        headers = {'Content-Type': 'application/json'}
+        if self._api_key:
+            headers['Authorization'] = 'Bearer ' + self._api_key
+        try:
+            with httpx.Client(timeout=timeout_s or self._timeout_s) as http:
+                receipt = LLMCallReceipt(transport_calls=1, prompt_chars=len(system_prompt) + len(user_text))
+                self.calls += 1
+                self.prompt_chars += receipt.prompt_chars
+                _emit_receipt(receipt)
+                response = http.post(self._base_url + '/chat/completions', json=body, headers=headers)
+            if response.status_code != 200:
+                receipt = replace(receipt, reason=f'PROVIDER_HTTP_{response.status_code}')
+            else:
+                try:
+                    envelope = response.json()
+                    content = envelope['choices'][0]['message']['content']
+                    if not isinstance(content, str):
+                        raise TypeError('invalid content')
+                except (ValueError, TypeError, KeyError, IndexError):
+                    receipt = replace(receipt, reason='PROVIDER_RESPONSE_INVALID')
+                else:
+                    receipt = replace(receipt, completion_chars=len(content))
+                    usage = envelope.get('usage') or {}
+                    for source, target in (('prompt_tokens', 'input_tokens'), ('completion_tokens', 'output_tokens')):
+                        value = usage.get(source) if isinstance(usage, dict) else None
+                        if type(value) is int and value >= 0:
+                            receipt = replace(receipt, **{target: value})
+                    cost = usage.get('cost_usd') if isinstance(usage, dict) else None
+                    if type(cost) in (int, float) and math.isfinite(cost) and cost >= 0:
+                        receipt = replace(receipt, cost_usd=cost)
+                    if len(content) > 1000000:
+                        receipt = replace(receipt, reason='MODEL_RESPONSE_TOO_LARGE')
+                    else:
+                        try:
+                            receipt = replace(receipt, output=_strict_object(content))
+                        except (ValueError, TypeError, RecursionError):
+                            receipt = replace(receipt, reason='MODEL_JSON_INVALID')
+        except httpx.TimeoutException:
+            receipt = replace(receipt, reason='PROVIDER_TIMEOUT')
+        except httpx.RequestError:
+            receipt = replace(receipt, reason='PROVIDER_NETWORK_ERROR')
+        except Exception:  # noqa: BLE001 - external failures have sanitized stable reason codes
+            receipt = replace(receipt, reason='PROVIDER_RESPONSE_INVALID')
+        self.completion_chars += receipt.completion_chars
+        if path:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({'parser': 'strict-v1', 'output': receipt.output,
+                                            'reason': receipt.reason}, allow_nan=False), encoding='utf-8')
+            except (OSError, ValueError, TypeError):
+                logger.warning('LLMClient strict cache write failed')
+        return _emit_receipt(receipt)
 
     # ------------------------------------------------------------------
     # Response cache (T070, SC-008)

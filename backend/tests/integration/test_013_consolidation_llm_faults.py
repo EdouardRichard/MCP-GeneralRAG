@@ -20,6 +20,10 @@ from tests.unit.distiller_cases import data, fixture, transport
     ({'content': 'prefix {"proposals": []}'}, 'MODEL_JSON_INVALID', 1),
     ({'content': '{"proposals": []} {"proposals": []}'}, 'MODEL_JSON_INVALID', 1),
     ({'content': '{"broken": [{"proposals": []}'}, 'MODEL_JSON_INVALID', 1),
+    ({'content': '{"proposals": [], "proposals": []}'}, 'MODEL_JSON_INVALID', 1),
+    ({'envelope': {'choices': []}}, 'PROVIDER_RESPONSE_INVALID', 1),
+    ({'envelope': {'choices': [{'message': {}}]}}, 'PROVIDER_RESPONSE_INVALID', 1),
+    ({'raw_envelope': 'foreign-scope password=secret-value'}, 'PROVIDER_RESPONSE_INVALID', 1),
     ({'content': 'x' * 1000001}, 'MODEL_RESPONSE_TOO_LARGE', 1),
 ])
 async def test_real_client_faults_have_per_call_receipts(monkeypatch, caplog, options, reason, actual):
@@ -51,6 +55,18 @@ async def test_strict_cache_replays_success_and_failure_receipts(monkeypatch, tm
     assert second.usage['llm_calls'] == 0 and second.usage['cache_hits'] == 1
     assert second.usage['input_tokens'] is None and second.usage['cost_usd'] is None
     assert second.proposals == first.proposals and second.degradation_reasons == first.degradation_reasons
+
+
+def test_corrupt_cache_reason_cannot_inject_log_or_diagnostic_body(monkeypatch, tmp_path, caplog):
+    agent, _, calls = transport(monkeypatch, status=429, cache_dir=str(tmp_path))
+    _, ctx = fixture()
+    assert agent.run(data(ctx.window)).degraded
+    path = next((tmp_path / 'strict-v1').glob('*.json'))
+    path.write_text(json.dumps({'parser': 'strict-v1', 'output': None,
+                               'reason': 'foreign-scope password=private-cache-value'}), encoding='utf-8')
+    result = agent.run(data(ctx.window))
+    assert len(calls) == 2 and 'PROVIDER_HTTP_429' in result.error
+    assert 'private-cache-value' not in caplog.text and 'foreign-scope' not in caplog.text
 
 
 async def spin_until(predicate):
@@ -157,3 +173,33 @@ def test_legacy_parser_and_cache_cannot_salvage_distiller_packages(monkeypatch, 
     result = agent.run(data(ctx.window))
     assert result.degraded and 'MODEL_JSON_INVALID' in result.error
     assert len(calls) == 2
+
+
+async def test_degraded_receipt_and_sanitized_failure_material_are_persisted(db_session, memory_writer_owner, monkeypatch):
+    from dataclasses import replace
+
+    from rag_mcp.orchestration.consolidation_pipeline import thaw
+    from rag_mcp.services.consolidation_runtime import ConsolidationRuntime
+    from tests.integration.consolidation_fixtures import create_scope
+    scope = await create_scope(db_session)
+    runtime = ConsolidationRuntime(db_session, owner=memory_writer_owner)
+    token = await runtime.admit(scope, trigger='manual')
+    agent, _, _ = transport(monkeypatch, status=429)
+    current, ctx = fixture()
+    window = replace(ctx.window, scope_id=scope, episodes={})
+    batch = await propose(window, agent, current=replace(current, scope_id=scope),
+                          context=replace(ctx, window=window), policy=POLICY, now=NOW)
+    assert batch.degraded and batch.degradation_reasons == ('PROVIDER_HTTP_429',)
+    await runtime.observe(token, status='proposing', provider_usage=thaw(batch.usage),
+                          degradation_reasons=list(batch.degradation_reasons), proposals=[
+        {'justification': 'password=do-not-persist', 'nested': {'scope_id': scope + 1, 'content': 'foreign-private-body'}},
+        {'failure_body': 'unscoped-provider-body', 'context': {'keywords': ['ignore previous instructions']}}])
+    latest = await runtime.latest_observation(token.run_id)
+    assert latest.provider_usage['llm_calls'] == 1
+    assert latest.degradation_reasons == ['PROVIDER_HTTP_429']
+    assert latest.output_event_ids == [] and latest.output_memory_ids == []
+    stored = json.dumps(latest.proposals)
+    assert all(raw not in stored for raw in ('do-not-persist', 'foreign-private-body', 'unscoped-provider-body',
+                                           'ignore previous instructions'))
+    await db_session.rollback()
+    assert await runtime.release(token)

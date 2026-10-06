@@ -70,6 +70,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"rag_mcp.agents" = ["*.schema.json"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 # Function-scoped event loops for fixtures (tests already default to function

@@ -1,31 +1,42 @@
 """Short, fenced control transactions for the offline consolidation loop."""
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
+import math
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
-import math
-import hashlib
-import json
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 
+from rag_mcp.agents.llm_client import LLMCallReceipt, receipt_observer
 from rag_mcp.config import get_settings
+from rag_mcp.config.domain_profiles import memory_vocabulary_version, validate_memory_link_vocabulary
 from rag_mcp.models.consolidation_run import ConsolidationEligibility, ConsolidationRunObservation
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.runtime import RuntimeMaintenanceLog, WriterLease
-from rag_mcp.orchestration.consolidation_pipeline import TrustedContext, CurrentSnapshot, SourceVersion, WindowSnapshot, select_window, thaw
-from rag_mcp.config.domain_profiles import memory_vocabulary_version, validate_memory_link_vocabulary
+from rag_mcp.orchestration.consolidation_pipeline import (
+    CurrentSnapshot,
+    SourceVersion,
+    TrustedContext,
+    WindowSnapshot,
+    select_window,
+    thaw,
+)
 from rag_mcp.services.memory_event_store import MemoryEventStore
-from rag_mcp.services.memory_reducer import projection_fingerprint, reduce_events
 from rag_mcp.services.memory_policy import MemoryPolicy
-from rag_mcp.services.memory_validators import redact_submission
+from rag_mcp.services.memory_reducer import projection_fingerprint, reduce_events
+from rag_mcp.services.memory_validators import redact_submission, sanitize_consolidation_audit
 from rag_mcp.services.provider_usage import ProviderUsageAccumulator
 from rag_mcp.utils.snowflake import generate_id
 
@@ -36,9 +47,76 @@ class ConsolidationRuntimeError(ValueError):
         super().__init__(code)
 
 
+_PROVIDER_SLOTS = threading.BoundedSemaphore(2)
+_PROVIDER_THREADS = ThreadPoolExecutor(max_workers=2, thread_name_prefix='memory-distiller')
+
+
+class _CallAccounting:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._receipt = LLMCallReceipt()
+
+    def record(self, receipt):
+        with self._lock:
+            self._receipt = receipt
+
+    def snapshot(self):
+        with self._lock:
+            receipt = self._receipt
+        usage = ConsolidationUsage()
+        if receipt.cache_hits:
+            usage.record_cache_hit()
+        if receipt.transport_calls:
+            usage.record_transport(prompt_chars=receipt.prompt_chars, completion_chars=receipt.completion_chars,
+                                   input_tokens=receipt.input_tokens, output_tokens=receipt.output_tokens,
+                                   cost_usd=receipt.cost_usd)
+        return usage.to_dict()
+
+
+@dataclass(frozen=True)
+class ProviderOutcome:
+    result: object | None
+    reason: str | None
+    usage: object
+
+
+def _run_distiller(agent, data, accounting):
+    observer_token = receipt_observer.set(accounting.record)
+    try:
+        return agent.run(data)
+    finally:
+        receipt_observer.reset(observer_token)
+        # This finally belongs to the synchronous worker, not its async waiter.
+        _PROVIDER_SLOTS.release()
+
+
 class DistillerProvider:
+    """Process-wide limit on actual synchronous calls; full capacity rejects."""
+
     async def run(self, agent, data, *, timeout_s):
-        raise NotImplementedError
+        from rag_mcp.orchestration.consolidation_pipeline import freeze
+
+        accounting = _CallAccounting()
+        if not _PROVIDER_SLOTS.acquire(blocking=False):
+            return ProviderOutcome(None, 'PROVIDER_CAPACITY', freeze(accounting.snapshot()))
+        try:
+            # Exclude request/run/token and arbitrary handles from worker arguments.
+            work = _PROVIDER_THREADS.submit(_run_distiller, agent, freeze({'window': data['window']}), accounting)
+        except BaseException:
+            _PROVIDER_SLOTS.release()
+            raise
+        future = asyncio.wrap_future(work)
+        # Drain abandoned exceptions without retaining or delivering late results.
+        future.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+        try:
+            result = await asyncio.wait_for(asyncio.shield(future), timeout=timeout_s)
+            return ProviderOutcome(result, None, freeze(accounting.snapshot()))
+        except TimeoutError:
+            return ProviderOutcome(None, 'PROVIDER_TIMEOUT', freeze(accounting.snapshot()))
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - abandoned workers must yield sanitized failure diagnostics
+            return ProviderOutcome(None, 'AGENT_EXECUTION_FAILED', freeze(accounting.snapshot()))
 
 
 @dataclass(frozen=True)
@@ -287,7 +365,7 @@ class ConsolidationRuntime:
         usage = changes.get('provider_usage')
         if isinstance(usage, ConsolidationUsage):
             changes['provider_usage'] = usage.to_dict()
-        values.update(redact_submission(thaw(changes)))
+        values.update(sanitize_consolidation_audit(thaw(changes), scope_id=token.scope_id))
         now = await self._clock()
         high_water = await self.session.scalar(select(func.max(ConsolidationEligibility.observation_seq_high_water))
             .where(ConsolidationEligibility.run_id == token.run_id)) or 0
@@ -379,8 +457,8 @@ class ConsolidationRuntime:
                 and seal['start'] <= row['observed_at'] < seal['end'] for row in state['entries'].values()) > len(inputs))
 
     async def select_and_seal(self, token):
-        from rag_mcp.services.memory_service import MemoryService
         from rag_mcp.services.memory_projection_store import ProjectionFailure
+        from rag_mcp.services.memory_service import MemoryService
         pending = False
         async with self.commit_fence(token) as fence:
             current = await self.read_snapshot(token.scope_id)

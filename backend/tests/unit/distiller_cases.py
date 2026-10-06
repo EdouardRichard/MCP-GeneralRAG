@@ -23,7 +23,7 @@ def data(window):
     return {'window': window, 'run_id': 'run-one', 'request_id': 'request-one'}
 
 
-def transport(monkeypatch, *, content=None, status=200, error=None, envelope=None, cache_dir=None):
+def transport(monkeypatch, *, content=None, status=200, error=None, envelope=None, cache_dir=None, raw_envelope=None):
     calls = []
     original = httpx.Client
 
@@ -31,6 +31,8 @@ def transport(monkeypatch, *, content=None, status=200, error=None, envelope=Non
         calls.append(json.loads(request.content))
         if error:
             raise error
+        if raw_envelope is not None:
+            return httpx.Response(status, text=raw_envelope)
         body = envelope if envelope is not None else {
             'choices': [{'message': {'content': content if content is not None else json.dumps({'proposals': [proposal()]})}}],
             'usage': {'prompt_tokens': 17, 'completion_tokens': 11}}

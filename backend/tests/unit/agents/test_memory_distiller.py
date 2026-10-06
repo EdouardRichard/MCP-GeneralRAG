@@ -64,3 +64,26 @@ def test_empty_model_package_is_success_but_missing_client_is_degraded(monkeypat
     result = MemoryDistiller().run(data(ctx.window))
     assert result.degraded and result.output == {'proposals': []}
     assert 'MODEL_CONFIGURATION_REQUIRED' in result.error
+
+
+def test_model_prompt_schema_policy_versions_change_payload_identity(monkeypatch):
+    import rag_mcp.agents.memory_distiller as module
+    agent, client, calls = transport(monkeypatch, content='{"proposals": []}')
+    _, ctx = fixture()
+    agent.run(data(ctx.window))
+    monkeypatch.setattr(module, 'DISTILLER_PROMPT_VERSION', '013.distiller.next')
+    agent.run(data(ctx.window))
+    monkeypatch.setattr(agent, 'NODE_SCHEMA', {**agent.NODE_SCHEMA, '$id': 'urn:next'})
+    agent.run(data(ctx.window))
+    policy = thaw(ctx.window.policy)
+    policy['consolidation']['max_proposals'] = 1
+    agent.run(data(replace(ctx.window, policy=policy)))
+    client._model = 'model-v2'
+    next_agent = MemoryDistiller(client)
+    next_agent.run(data(ctx.window))
+    users = [json.loads(call['messages'][1]['content']) for call in calls]
+    assert len({call['messages'][1]['content'] for call in calls}) == 5
+    assert users[0]['versions']['prompt'] != users[1]['versions']['prompt']
+    assert users[1]['versions']['schema'] != users[2]['versions']['schema']
+    assert users[2]['versions']['policy'] != users[3]['versions']['policy']
+    assert users[4]['versions']['model'] == calls[4]['model'] == 'model-v2'

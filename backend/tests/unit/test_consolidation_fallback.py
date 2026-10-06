@@ -7,7 +7,6 @@ from rag_mcp.orchestration.consolidation_pipeline import adjudicate_ttl, propose
 from tests.unit.consolidation_cases import NOW, POLICY, decide, proposal
 from tests.unit.distiller_cases import fixture, transport
 
-
 INVALID = [None, {}, {'proposals': [{}]}, {'proposals': [proposal(action='unknown')]},
            {'proposals': [proposal(confidence=float('nan'))]}, {'proposals': [proposal(confidence=float('inf'))]},
            {'proposals': [proposal(confidence=2)]}, {'proposals': [proposal(), {}]},

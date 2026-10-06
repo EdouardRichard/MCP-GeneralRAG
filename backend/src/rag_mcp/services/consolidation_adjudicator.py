@@ -506,6 +506,8 @@ def _core(p, current, policy, quota, context, now):
         raise Rejection('AUTHORITY_FIELDS_FORBIDDEN')
     _confidence(p.get('confidence'), config.min_confidence)
     versions, support_versions = _source_versions(p, current, context, now, config)
+    _safe({k: p.get(k) for k in ('content', 'title', 'justification',
+                               'equivalence_basis', 'contradiction_basis')})
     refs = p.get('source_refs', ())
     action = p.get('action')
     proof = {'origin': 'llm_self', 'confidence': p['confidence'], 'threshold': config.min_confidence,
@@ -536,7 +538,6 @@ def _core(p, current, policy, quota, context, now):
         if (p.get('kind') != kind or not isinstance(p.get('content'), str) or not p['content'].strip()
             or len(p['content']) > 4000):
             raise Rejection('GENERATED_CONTENT_UNSAFE')
-        _safe({k: p.get(k) for k in ('content', 'title', 'justification')})
         value = {'kind': kind, 'provenance': 'distilled', 'confidence': p['confidence'],
                  'content_text': p['content'], 'content_hash': sha256(p['content'].encode()).hexdigest(),
                  'title': p.get('title'), 'inference_meta': {**meta, 'origin': 'llm_self'},

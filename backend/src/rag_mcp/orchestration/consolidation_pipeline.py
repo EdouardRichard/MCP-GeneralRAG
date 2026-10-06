@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Protocol
@@ -112,9 +112,12 @@ class ProposalBatch:
     deterministic_proposals: tuple = ()
     degraded: bool = False
     degradation_reasons: tuple[str, ...] = ()
+    ttl_intents: tuple = ()
+    model_and_version: str = ''
+    usage: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
-        for key in ('proposals', 'deterministic_proposals', 'degradation_reasons'):
+        for key in ('proposals', 'deterministic_proposals', 'degradation_reasons', 'ttl_intents', 'usage'):
             object.__setattr__(self, key, freeze(getattr(self, key)))
 
 
@@ -178,11 +181,61 @@ class TrustedContext:
 
 
 class Propose(Protocol):
-    def __call__(self, window: WindowSnapshot, distiller: Any) -> ProposalBatch: ...
+    async def __call__(self, window: WindowSnapshot, distiller: Any, *, current: CurrentSnapshot,
+                       context: Any, policy: Any, now: datetime, provider: Any = None) -> ProposalBatch: ...
 
 
 async def propose(window, distiller, *, current, context, policy, now, provider=None):
-    raise NotImplementedError
+    """Prepare independent rules first, then accept only a complete model package.
+
+    No effect is applied here. Both proposal sets still require pure adjudication;
+    TTL intents use the same adjudicator's existing governed lifecycle path.
+    """
+    from jsonschema import Draft202012Validator, ValidationError
+
+    from rag_mcp.agents.llm_client import safe_failure_code
+    from rag_mcp.agents.memory_distiller import MemoryDistiller
+    from rag_mcp.services.consolidation_runtime import ConsolidationUsage, DistillerProvider
+
+    rules = deterministic_proposals(current, context=context, policy=policy, now=now)
+    intents = ttl_intents(current, now=now)
+    config = policy.consolidation
+    reasons, proposals = [], ()
+    usage = ConsolidationUsage().to_dict()
+    model = distiller.model_and_version if distiller else ''
+    if config is None:
+        reasons.append('CONSOLIDATION_CONFIGURATION_REQUIRED')
+    elif not policy.consolidation_enabled:
+        reasons.append('CONSOLIDATION_DISABLED')
+    elif config.max_llm_calls == 0:
+        reasons.append('MODEL_BUDGET_DISABLED')
+    elif distiller is None:
+        reasons.append('MODEL_CONFIGURATION_REQUIRED')
+    elif current.scope_id != window.scope_id or context.window != window:
+        reasons.append('SCOPE_MISMATCH')
+    else:
+        outcome = await (provider or DistillerProvider()).run(
+            distiller, {'window': replace(window, policy=policy.model_dump())}, timeout_s=config.llm_timeout_seconds)
+        usage = outcome.usage
+        if outcome.reason:
+            reasons.append(outcome.reason)
+        else:
+            result = outcome.result
+            if result.degraded or not result.schema_valid:
+                # AgentBase may attach a prefix; never propagate arbitrary exception/body text.
+                code = (result.error or '').removeprefix('execute() raised: ')
+                reasons.append(code if safe_failure_code(code) else 'AGENT_EXECUTION_FAILED')
+            try:
+                validate_contract(result.output, Draft202012Validator(MemoryDistiller.NODE_SCHEMA))
+                if len(result.output['proposals']) > config.max_proposals:
+                    raise ValueError('proposal budget exceeded')
+            except (ValueError, TypeError, RecursionError, ValidationError):
+                reasons.append('FALLBACK_INVALID' if result.degraded else 'MODEL_SCHEMA_INVALID')
+                package = {'proposals': []}
+            else:
+                package = result.output
+            proposals = package['proposals']
+    return ProposalBatch(proposals, rules, bool(reasons), tuple(dict.fromkeys(reasons)), intents, model, usage)
 
 
 class SelectWindow(Protocol):
@@ -291,7 +344,7 @@ def adjudicate_ttl(intent, current, *, now):
 def select_window(current: CurrentSnapshot, *, policy, now, start=None, token=None,
                   consumed_versions=(), incomplete_memory_ids=(), original_window=None) -> WindowSnapshot:
     """Select bounded read sets from an already verified authority prefix."""
-    from rag_mcp.services.memory_validators import redact_submission, detect_submission
+    from rag_mcp.services.memory_validators import detect_submission, redact_submission
 
     config = policy.consolidation
     if config is None:

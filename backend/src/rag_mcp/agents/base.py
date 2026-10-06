@@ -89,6 +89,9 @@ class AgentBase(ABC):
         """
         ...
 
+    def _exception_detail(self, exc: Exception) -> str:
+        return str(exc)
+
     @abstractmethod
     def fallback(self, context: dict[str, Any]) -> dict[str, Any]:
         """Deterministic equivalent output when schema validation fails (SC-011).
@@ -147,14 +150,15 @@ class AgentBase(ABC):
             raw_output = self.execute(context)
         except Exception as exc:
             # Agent execution itself failed: fall back immediately
-            logger.warning("Agent %s execute() raised: %s", self.ROLE, exc)
+            detail = self._exception_detail(exc)
+            logger.warning("Agent %s execute() raised: %s", self.ROLE, detail)
             fallback_output = self._safe_fallback(context)
             return AgentResult(
                 output=fallback_output,
                 schema_valid=False,
                 model_and_version=self._model_and_version,
                 degraded=True,
-                error=f"execute() raised: {exc}",
+                error=f"execute() raised: {detail}",
             )
 
         result = self.validate_output(raw_output)
@@ -176,5 +180,5 @@ class AgentBase(ABC):
         try:
             return self.fallback(context)
         except Exception as exc:
-            logger.error("Agent %s fallback() also raised: %s", self.ROLE, exc)
+            logger.error("Agent %s fallback() also raised: %s", self.ROLE, self._exception_detail(exc))
             return {}

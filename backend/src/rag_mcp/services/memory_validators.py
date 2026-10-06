@@ -149,12 +149,13 @@ def _credential_type(field):
 
 
 def _redact_tree(value):
+    from collections.abc import Mapping
     if isinstance(value, str):
         return _SHORT_CREDENTIAL.sub(lambda match: f"{match[1]}{match[3]}<{_credential_type(match[2])}>{match[5]}", redact_credentials(value))
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_redact_tree(item) for item in value]
-    if isinstance(value, dict):
-        return {key: f"<{_credential_type(key)}>" if key.lower() in {"password", "passwd", "pwd", "token", "api_key", "api-key", "client_secret", "secret"}
+    if isinstance(value, Mapping):
+        return {key: f"<{_credential_type(key)}>" if isinstance(key, str) and key.lower() in {"password", "passwd", "pwd", "token", "api_key", "api-key", "client_secret", "secret"}
                 and item is not None else _redact_tree(item) for key, item in value.items()}
     return value
 
@@ -176,9 +177,44 @@ def redact_submission(payload):
     return _redact_tree(payload)
 
 
+def sanitize_consolidation_audit(payload, *, scope_id):
+    """Keep same-scope diagnostics, withholding raw failures and unsafe text."""
+    from collections.abc import Mapping
+
+    def scoped(value):
+        if isinstance(value, Mapping):
+            if any(str(value[key]) != str(scope_id) for key in ('scope_id', 'knowledge_scope_id') if key in value):
+                return {'reason_code': 'SCOPE_MISMATCH'}
+            return {key: '<failure body withheld>' if key in ('failure_body', 'response_body', 'raw_error')
+                    else scoped(item) for key, item in value.items()}
+        if isinstance(value, (tuple, list)):
+            return [scoped(item) for item in value]
+        if isinstance(value, str):
+            try:
+                if detect_submission({'content': value}).status != 'active':
+                    return '<unsafe text withheld>'
+            except ValueError:
+                return '<unverified text withheld>'
+        return value
+
+    return scoped(redact_submission(payload))
+
+
 def detect_submission(clean):
-    untrusted = {key: clean.get(key) for key in ("content", "title", "tags", "agent_id", "task_context", "inference_meta")}
-    checked = sanitize_memory(json.dumps(untrusted, ensure_ascii=False))
+    # Scan every text leaf, including nested context, reasons, keywords and links.
+    # Existing callers also pass arbitrary frozen DTO mappings and tuples.
+    checked = sanitize_memory(json.dumps(_redact_tree(clean), ensure_ascii=False, allow_nan=False))
+    authority = re.search(
+        r'\b(?:switch|change)\s+(?:the\s+)?scope\s+to\b|'
+        r'\bgrant\s+(?:writer|admin|hard)\s+(?:permission|authority)\b|'
+        r'\b(?:write|create)\s+hard\s+memor|'
+        r'\benable\s+(?:consolidation\s+)?policy\b|'
+        r'\bpromote\s+memor\w*\s+automatically\b',
+        json.dumps(_redact_tree(clean), ensure_ascii=False), re.IGNORECASE)
+    if authority:
+        return SanitizedMemory(clean.get('content', ''),
+                               {'suspicious': True, 'risk_level': 'high',
+                                'matched_patterns': ['memory_authority_override']}, 'quarantined')
     return SanitizedMemory(clean.get("content", ""), checked.injection_flags, checked.status)
 
 
