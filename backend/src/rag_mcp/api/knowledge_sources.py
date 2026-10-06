@@ -1,8 +1,5 @@
 """REST API routes for knowledge source management (FR-004, FR-010, FR-011, US1, US4)."""
 
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,8 +9,6 @@ from rag_mcp.schemas.knowledge_source import (
     KnowledgeSourceListResponse,
     KnowledgeSourceResponse,
 )
-from rag_mcp.parsers.registry import RegistryFormatError, upload_size_limit_message
-from rag_mcp.utils.hashing import hash_bytes
 
 router = APIRouter(prefix="/api/knowledge-sources", tags=["knowledge-sources"])
 
@@ -50,14 +45,58 @@ def _get_qdrant_store():
     return _qdrant_store
 
 
+async def _observe_promotion(session, source_id: int) -> None:
+    """Append the actual publication/attempt result for a promoted source (T074)."""
+    from rag_mcp.services.memory_service import MemoryService
+
+    try:
+        await MemoryService(session).observe_promotion(source_id=source_id)
+    except Exception:  # observation must never break ingestion
+        logger.exception("Promotion observation failed for source %s", source_id)
+
+
+async def _run_promotion_observation(source_id: int) -> None:
+    from rag_mcp.db import get_session_factory
+
+    factory = get_session_factory()
+    try:
+        async with factory() as session:
+            await _observe_promotion(session, source_id)
+    except Exception:  # observation must never break the caller
+        logger.exception("Promotion observation task failed for source %s", source_id)
+
+
+def _schedule_promotion_observation(source_id: int) -> None:
+    if not get_settings().ingestion_background:
+        return
+    try:
+        asyncio.get_running_loop().create_task(_run_promotion_observation(source_id))
+    except RuntimeError:
+        logger.warning("No running event loop; skipping promotion observation")
+
+
+async def _pending_initial_run(session, source_id: int):
+    """The prebuilt pending initial attempt, if the source still has one."""
+    from sqlalchemy import select
+
+    from rag_mcp.models.processing_run import ProcessingRun
+
+    return await session.scalar(select(ProcessingRun.run_id).where(
+        ProcessingRun.source_id == source_id, ProcessingRun.run_type == "initial",
+        ProcessingRun.status == "pending").order_by(ProcessingRun.run_id).limit(1))
+
+
 async def _run_ingestion(
-    source_id: int, graph_ready: bool = False, retry: bool = False
+    source_id: int, graph_ready: bool = False, retry: bool = False, initial_run_id: int | None = None
 ) -> None:
     """Run the ingestion pipeline for a source in a background task.
 
     Uses its own DB session (independent of the request-scoped session).
     graph_ready forwards the user's 004 capability declaration (FR-013);
     retry selects reprocess() (user-triggered rebuild) over ingest().
+    initial_run_id consumes the prebuilt pending run registered by the shared
+    registration step (013 T069/T070) instead of creating a second initial run;
+    a crash-recovered promotion task resolves its own pending initial attempt.
     """
     from rag_mcp.db import get_session_factory
     from rag_mcp.services.ingestion_service import IngestionService
@@ -73,13 +112,20 @@ async def _run_ingestion(
             if retry:
                 await service.reprocess(source_id, graph_ready=graph_ready)
             else:
-                await service.ingest(source_id, graph_ready=graph_ready)
+                prebuilt = initial_run_id or await _pending_initial_run(session, source_id)
+                await service.ingest(source_id, graph_ready=graph_ready, processing_run_id=prebuilt)
+            await _observe_promotion(session, source_id)
     except Exception:
         logger.exception("Ingestion failed for source %s", source_id)
+        try:
+            async with factory() as session:
+                await _observe_promotion(session, source_id)
+        except Exception:  # observation must never mask the ingestion failure
+            logger.exception("Promotion failure observation failed for source %s", source_id)
 
 
 def _schedule_ingestion(
-    source_id: int, graph_ready: bool = False, retry: bool = False
+    source_id: int, graph_ready: bool = False, retry: bool = False, initial_run_id: int | None = None
 ) -> None:
     """Schedule ingestion as a fire-and-forget background task.
 
@@ -92,7 +138,7 @@ def _schedule_ingestion(
         return
     try:
         asyncio.get_running_loop().create_task(
-            _run_ingestion(source_id, graph_ready=graph_ready, retry=retry)
+            _run_ingestion(source_id, graph_ready=graph_ready, retry=retry, initial_run_id=initial_run_id)
         )
         logger.info("Scheduled ingestion for source %s", source_id)
     except RuntimeError:
@@ -313,9 +359,9 @@ def _detect_format(filename: str, content: bytes | None = None) -> str:
     declaration, or a non-OpenAPI .json/.yaml/.yml when no generic entry is
     registered).
     """
-    from rag_mcp.parsers.registry import FormatHandlerRegistry
+    from rag_mcp.services.knowledge_source_registration import detect_format
 
-    return FormatHandlerRegistry.instance().detect_format(filename, content)
+    return detect_format(filename, content)
 
 
 @router.post("", response_model=KnowledgeSourceResponse, status_code=201)
@@ -329,60 +375,27 @@ async def upload_knowledge_source(
     Args:
         scope_id: Knowledge scope ID to associate the source with.
         file: Uploaded file (multipart/form-data).
+
+    Upload and explicit human promotion share the same registration steps
+    (T069): raw object, uploaded KnowledgeSource, exactly one pending initial
+    ProcessingRun. Upload keeps its original validation, transaction and
+    response behaviour and schedules ingestion only after commit.
     """
-    from rag_mcp.models.knowledge_source import KnowledgeSource
-    from rag_mcp.utils.snowflake import generate_id
+    from rag_mcp.services.knowledge_source_registration import RegistrationError, register_uploaded_source
 
-    # Read content first (needed for content-based format detection, FR-010)
     content = await file.read()
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="Empty file uploaded")
-
-    # 008 (FR-015/T016): unified upload size ceiling (fail fast).
-    max_size = get_settings().max_upload_size_bytes
-    if len(content) > max_size:
-        raise HTTPException(
-            status_code=413,
-            detail=upload_size_limit_message(max_size),
-        )
-
-    # Validate format (extension + content based, FR-010)
     try:
-        fmt = _detect_format(file.filename or "", content)
-    except RegistryFormatError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        registration = await register_uploaded_source(session, scope_id=scope_id, content=content,
+                                                      filename=file.filename or "unknown")
+    except RegistrationError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
 
-    content_hash = hash_bytes(content)
-    settings = get_settings()
-
-    # Save raw file to data_root
-    source_id = generate_id()
-    save_dir = Path(settings.data_root) / str(scope_id) / str(source_id)
-    save_dir.mkdir(parents=True, exist_ok=True)
-    save_path = save_dir / (file.filename or "unknown")
-    save_path.write_bytes(content)
-
-    # Create database record
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    source = KnowledgeSource(
-        source_id=source_id,
-        knowledge_scope_id=scope_id,
-        filename=file.filename or "unknown",
-        content_hash=content_hash,
-        format=fmt,
-        size_bytes=len(content),
-        status="uploaded",
-        created_at=now,
-        updated_at=now,
-    )
-    session.add(source)
-    await session.flush()
+    source = registration.source
     await session.commit()
 
-    # Trigger background ingestion pipeline (async, non-blocking)
-    _schedule_ingestion(source_id)
+    # Trigger background ingestion pipeline (async, non-blocking); the prebuilt
+    # pending initial run registered above is consumed, not duplicated.
+    _schedule_ingestion(source.source_id, initial_run_id=registration.initial_run.run_id)
 
     return KnowledgeSourceResponse(
         source_id=str(source.source_id),
@@ -507,6 +520,9 @@ async def reprocess_knowledge_source(
 
     # Trigger background ingestion pipeline (same as upload path)
     _schedule_ingestion(source_id, graph_ready=graph_ready, retry=True)
+    # Explicit reprocess appends its actual (reset) observation for a promoted
+    # source; the ingestion task later appends the real attempt/publication.
+    _schedule_promotion_observation(source_id)
 
     return {
         "message": "Reprocessing triggered",

@@ -13,7 +13,12 @@ from rag_mcp.models.knowledge_version import KnowledgeVersion
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.orchestration.consolidation_pipeline import CommitOutcome, CurrentSnapshot, ProposalBatch, thaw
-from rag_mcp.services.consolidation_adjudicator import AdjudicationContext, adjudicate_batch, stable_key
+from rag_mcp.services.consolidation_adjudicator import (
+    AdjudicationContext,
+    adjudicate_batch,
+    candidate_version,
+    stable_key,
+)
 from rag_mcp.services.consolidation_runtime import ConsolidationRuntimeError
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_projection_store import ProjectionFailure
@@ -118,6 +123,8 @@ def lower_group(group, decisions, batch, context, policy, current, token, now):
         'memory_id': allocated[e['aggregate_id']['output_key']], 'source_event_id': identifier,
         'state_event_id': identifier, 'content_hash': e['value']['content_hash']}
         for e, identifier in zip(group.event_plan, event_ids, strict=True) if e['operation'] == 'create'}
+    content_hashes = {allocated[e['aggregate_id']['output_key']]: e['value']['content_hash']
+                      for e in group.event_plan if e['operation'] == 'create'}
     approved_outputs = {key: next(ref for ref in outputs.values() if ref['memory_id'] == mid)
                         for key, mid in allocated.items()}
 
@@ -175,9 +182,14 @@ def lower_group(group, decisions, batch, context, policy, current, token, now):
         attributions = [{key: fact[key] for key in ('evidence_id', 'source_id', 'version_id', 'version', 'position', 'content_hash')}
                         for fact in decision.proof.get('support_versions', ()) if fact.get('evidence_id')]
         if value.get('promotion_candidate'):
-            effect['candidate'] = {'promote_candidate_at': now.isoformat(), 'candidate_version': stable_key(
-                {'memory_id': aggregate_id, 'event_id': event_id, 'attributions': attributions}),
-                'evidence_attributions': attributions}
+            anchors = value.get('evidence_attributions') or decision.proof.get('support_versions', ())
+            candidate_attributions = [{key: fact[key] for key in ('evidence_id', 'source_id', 'version_id', 'version',
+                                                                 'position', 'content_hash')}
+                                      for fact in anchors if fact.get('evidence_id')]
+            effect['candidate'] = {'promote_candidate_at': now.isoformat(),
+                'candidate_version': candidate_version(aggregate_id, event_id, content_hashes.get(aggregate_id),
+                                                       candidate_attributions, decision.decision_id),
+                'evidence_attributions': candidate_attributions}
         if operation in ('merge', 'invalidate'):
             replacement = _references(value.get('replacement_id'), allocated)
             effect['lifecycle'] = {'status': 'superseded' if replacement else 'retired',

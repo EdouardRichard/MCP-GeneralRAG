@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import BigInteger, cast, func, select, true
 from sqlalchemy.dialects.postgresql import JSONB
@@ -85,6 +85,95 @@ class BindingCommand(ScopeCommand):
     binding_value: str = Field(min_length=1, max_length=1024)
     priority: int = 0
     status: Literal["active", "disabled"] = "active"
+
+
+class PromoteCommand(ScopeCommand):
+    scope_id: int = Field(gt=0, strict=True)
+    memory_id: int = Field(gt=0, strict=True)
+    candidate_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+def _promotion_error(exception):
+    """Promotion management errors keep their own REST reasons and status."""
+    from rag_mcp.services.memory_governance import PromotionUnavailable
+
+    if isinstance(exception, LookupError):
+        return HTTPException(404, detail={"code": "MEMORY_PROMOTION_NOT_FOUND"})
+    if isinstance(exception, PromotionUnavailable):
+        return HTTPException(503, detail={"code": "MEMORY_PROMOTION_UNAVAILABLE"})
+    code = str(exception).split(":", 1)[0].strip()
+    if code in {"MEMORY_CANDIDATE_VERSION_CHANGED", "MEMORY_CANDIDATE_NOT_ELIGIBLE"}:
+        return HTTPException(409, detail={"code": code, "message": str(exception)})
+    if isinstance(exception, PermissionError):
+        return HTTPException(403, detail={"code": code or "MEMORY_ROLLBACK_FORBIDDEN"})
+    return _http_error(exception)
+
+
+def _schedule_promotion_ingestion(source_id: int, initial_run_id: int | None = None) -> None:
+    from rag_mcp.api.knowledge_sources import _schedule_ingestion
+
+    _schedule_ingestion(source_id, initial_run_id=initial_run_id)
+
+
+@router.get("/promotion-candidates", dependencies=[Depends(require_writer)])
+async def list_promotion_candidates(scope_ref: str = Query(min_length=1), limit: int = Query(default=50, ge=1, le=100),
+                                    offset: int = Query(default=0, ge=0),
+                                    session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """Writer management candidate window; reader never exposes control surfaces."""
+    try:
+        scope_id = await MemoryScopeResolver(session).resolve(scope_ref)
+        report = await _service(session).promotion_candidates(scope_id=scope_id, limit=limit, offset=offset)
+    except ValueError as exception:
+        raise _http_error(exception) from None
+    items = []
+    for item in report["items"]:
+        items.append({**item, "memory_id": str(item["memory_id"]),
+                      "certificate": "inference", "promotion_pointer": item["promotion_pointer"]})
+    return {"scope_id": str(scope_id), "items": items, "total": report["total"]}
+
+
+@router.post("/promote", dependencies=[Depends(require_writer)])
+async def promote_candidate(data: PromoteCommand, response: Response,
+                            session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """Explicit human promotion: registration, pointer and pending run commit together."""
+    try:
+        result = await _service(session).promote_candidate(scope_id=data.scope_id, memory_id=data.memory_id,
+                                                           candidate_version=data.candidate_version,
+                                                           actor="management", reason=data.reason)
+    except (ValueError, PermissionError, LookupError) as exception:
+        raise _promotion_error(exception) from None
+    response.status_code = 200 if result["reused"] else 202
+    if not result["reused"]:
+        _schedule_promotion_ingestion(int(result["source_id"]), int(result["initial_processing_run_id"]))
+    return {"schema_version": 1, "scope_id": str(result["scope_id"]), "memory_id": str(result["memory_id"]),
+            "candidate_version": result["candidate_version"], "task_id": result["task_id"],
+            "source_id": str(result["source_id"]),
+            "initial_processing_run_id": str(result["initial_processing_run_id"]),
+            "status": result["status"], "version_id": None, "request_id": result["request_id"],
+            "reused": result["reused"]}
+
+
+@router.get("/promotions/{task_id}", dependencies=[Depends(require_writer)])
+async def promotion_report(task_id: int, scope_ref: str = Query(min_length=1),
+                           session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """Stable promotion task report; status only from actual source/run/version facts."""
+    try:
+        scope_id = await MemoryScopeResolver(session).resolve(scope_ref)
+        report = await _service(session).promotion_status(task_id=task_id, scope_id=scope_id)
+    except LookupError as exception:
+        raise _promotion_error(exception) from None
+    except ValueError as exception:
+        raise _http_error(exception) from None
+    return {"schema_version": 1, "scope_id": str(scope_id), "task_id": report["task_id"],
+            "memory_id": str(report["memory_id"]), "candidate_version": report["candidate_version"],
+            "source_id": str(report["source_id"]),
+            "initial_processing_run_id": str(report["initial_processing_run_id"]),
+            "attempt_run_ids": [str(item) for item in report["attempt_run_ids"]],
+            "status": report["status"],
+            "published_version_id": (str(report["published_version_id"])
+                                     if report["published_version_id"] is not None else None),
+            "result": report["result"],
+            "authority_event_ids": [str(item) for item in report["authority_event_ids"]]}
 
 
 @router.get("/scopes")

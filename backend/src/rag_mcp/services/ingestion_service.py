@@ -216,7 +216,8 @@ class IngestionService:
     # Public API
     # ------------------------------------------------------------------
 
-    async def ingest(self, source_id: int, graph_ready: bool = False) -> None:
+    async def ingest(self, source_id: int, graph_ready: bool = False, *,
+                     processing_run_id: int | None = None) -> None:
         """Run initial ingestion for a KnowledgeSource.
 
         Creates a ProcessingRun with run_type='initial' and executes
@@ -228,12 +229,17 @@ class IngestionService:
                 version should declare the graph_ready capability. Publishing
                 still requires the graph relations to be ready; otherwise the
                 version is NOT published and the run fails (FR-013).
+            processing_run_id: Optional prebuilt pending run (013 T070) created
+                by the shared registration step. It is consumed instead of
+                creating a second initial run and must belong to the same
+                source and scope while still pending.
 
         Raises:
-            ValueError: If the source does not exist.
+            ValueError: If the source does not exist or the prebuilt run is not
+                a valid same-source pending initial attempt.
         """
         await self._run_pipeline(source_id, run_type="initial",
-                                 request_graph_ready=graph_ready)
+                                 request_graph_ready=graph_ready, processing_run_id=processing_run_id)
 
     async def reprocess(self, source_id: int, graph_ready: bool = False) -> None:
         """Re-process a previously failed or completed KnowledgeSource.
@@ -258,7 +264,8 @@ class IngestionService:
     # ------------------------------------------------------------------
 
     async def _run_pipeline(
-        self, source_id: int, run_type: str, request_graph_ready: bool = False
+        self, source_id: int, run_type: str, request_graph_ready: bool = False,
+        processing_run_id: int | None = None,
     ) -> None:
         """Execute the full ingestion pipeline with error handling.
 
@@ -269,8 +276,13 @@ class IngestionService:
         # 1. Load KnowledgeSource
         source = await self._load_source(source_id)
 
-        # 2. Create ProcessingRun
-        run = await self._create_processing_run(source_id, run_type)
+        # 2. Consume exactly one verified prebuilt pending initial run when one
+        #    exists (013 T069/T070); otherwise create this attempt. A second
+        #    initial run is never added for the same stable promotion task.
+        if processing_run_id is None and run_type == "initial":
+            processing_run_id = await self._pending_initial_run_id(source_id)
+        run = (await self._load_prebuilt_run(source_id, processing_run_id)
+               if processing_run_id is not None else await self._create_processing_run(source_id, run_type))
 
         try:
             # Mark source as processing
@@ -651,6 +663,30 @@ class IngestionService:
         )
         self._session.add(run)
         await self._session.flush()
+        return run
+
+    async def _pending_initial_run_id(self, source_id: int):
+        """The pending initial attempt of this source, if the registration left one."""
+        return await self._session.scalar(
+            select(ProcessingRun.run_id).where(
+                ProcessingRun.source_id == source_id, ProcessingRun.run_type == "initial",
+                ProcessingRun.status == "pending").order_by(ProcessingRun.run_id).limit(1))
+
+    async def _load_prebuilt_run(self, source_id: int, run_id: int) -> ProcessingRun:
+        """Consume exactly one verified pending initial run (013 T070).
+
+        The run must belong to the same source (and therefore scope) and still
+        be pending; anything else fails closed instead of silently adding a
+        second initial attempt for the stable promotion task.
+        """
+        if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid prebuilt processing run")
+        run = (await self._session.execute(
+            select(ProcessingRun).where(ProcessingRun.run_id == run_id)
+            .with_for_update().execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+        if (run is None or run.source_id != source_id or run.run_type != "initial" or run.status != "pending"):
+            raise ValueError("MEMORY_WRITE_UNAVAILABLE: invalid prebuilt processing run")
         return run
 
     async def _read_raw_bytes(self, source: KnowledgeSource) -> bytes:

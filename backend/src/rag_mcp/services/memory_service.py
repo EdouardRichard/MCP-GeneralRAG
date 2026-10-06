@@ -10,10 +10,13 @@ from rag_mcp.errors import MemoryContentConflictError
 from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
+from rag_mcp.models.knowledge_source import KnowledgeSource
+from rag_mcp.models.knowledge_version import KnowledgeVersion
 from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_management_audit import MemoryManagementAudit
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
+from rag_mcp.models.processing_run import ProcessingRun
 from rag_mcp.models.session import MemorySession
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
 from rag_mcp.services.memory_event_store import MemoryEventStore
@@ -67,6 +70,109 @@ class MemoryService:
     async def commit_approved(self, decisions, token, *, runtime, batch, context):
         from rag_mcp.services.consolidation_commit import commit_approved
         return await commit_approved(self, decisions, token, runtime=runtime, batch=batch, context=context)
+
+    async def promotion_candidates(self, *, scope_id, limit=50, offset=0):
+        """Derived candidate read model with current promotability (T073).
+
+        Candidates come from authoritative approved markers; every item is
+        re-verified against the current corpus anchors so an already marked but
+        no longer eligible candidate stays visible for audit without claiming it
+        is still promotable.
+        """
+        from rag_mcp.services.consolidation_adjudicator import candidate_eligibility
+        from rag_mcp.services.consolidation_commit import read_evidence
+        from rag_mcp.services.memory_policy import MemoryPolicy
+
+        scope = await self.session.get(KnowledgeScope, scope_id)
+        if scope is None or scope.status != "active":
+            raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+        profile = await self.session.get(DomainProfile, scope.domain_key)
+        policy = MemoryPolicy.model_validate((profile.memory_policy if profile else None) or {})
+        threshold = policy.consolidation.candidate_min_confidence if policy.consolidation else 1.0
+        state = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
+        marked = [row for row in state["entries"].values() if row.get("candidate_version")]
+        identifiers = {str(reference) for row in marked for reference in row.get("evidence_refs") or ()}
+        facts = await read_evidence(self.session, identifiers) if identifiers else {}
+        items = []
+        for row in sorted(marked, key=lambda item: (item.get("observed_at") or "", item["memory_id"]), reverse=True):
+            eligible, reasons = candidate_eligibility(row, facts, scope_id=scope_id, threshold=threshold)
+            items.append({"memory_id": row["memory_id"], "kind": row.get("kind"),
+                          "provenance": row.get("provenance"), "confidence": row.get("confidence"),
+                          "promote_candidate_at": row.get("promote_candidate_at"),
+                          "candidate_version": row.get("candidate_version"),
+                          "evidence_attributions": [dict(item) for item in
+                                                    (row.get("candidate_basis") or {}).get("evidence_attributions", ())],
+                          "promotable": eligible, "ineligibility_reasons": list(reasons),
+                          "promotion_pointer": row.get("promotion_pointer")})
+        return {"scope_id": scope_id, "items": items[offset:offset + limit], "total": len(items)}
+
+    async def promote_candidate(self, *, scope_id, memory_id, candidate_version, actor, reason, request_id=None):
+        """Explicit human promotion short transaction (T072)."""
+        from rag_mcp.services.memory_governance import MemoryGovernance
+
+        return await MemoryGovernance(self).promote(scope_id=scope_id, memory_id=memory_id,
+                                                    candidate_version=candidate_version, actor=actor,
+                                                    reason=reason, request_id=request_id)
+
+    async def promotion_status(self, *, task_id, scope_id):
+        """Stable promotion task report derived from actual facts (T073)."""
+        from rag_mcp.models.chunk import Chunk
+
+        if isinstance(task_id, str) and task_id.isdecimal():
+            task_id = int(task_id)
+        if isinstance(task_id, bool) or not isinstance(task_id, int) or task_id <= 0:
+            raise LookupError("MEMORY_PROMOTION_NOT_FOUND")
+        history = await MemoryEventStore(self.session).replay(scope_id)
+        request = next((event for event in history if event["event_id"] == task_id
+                        and event["event_type"] == "grant"
+                        and event["payload"].get("grant_type") in ("promotion_requested", "promotion_observed")), None)
+        if request is None:
+            raise LookupError("MEMORY_PROMOTION_NOT_FOUND")
+        state = reduce_events(history)
+        entry = state["entries"].get(request["payload"]["memory_id"]) or {}
+        pointer = entry.get("promotion_pointer") or request["payload"]["pointer"]
+        source = await self.session.get(KnowledgeSource, pointer["source_id"], populate_existing=True)
+        runs = (await self.session.execute(select(ProcessingRun).where(
+            ProcessingRun.source_id == pointer["source_id"]).order_by(ProcessingRun.run_id))).scalars().all()
+        attempt_run_ids = [run.run_id for run in runs] or list(pointer["attempt_run_ids"])
+        published_version_id = None
+        if source is not None and source.status == "published":
+            published_version_id = await self.session.scalar(
+                select(KnowledgeVersion.version_id)
+                .join(Chunk, Chunk.version_id == KnowledgeVersion.version_id)
+                .where(Chunk.source_id == pointer["source_id"], KnowledgeVersion.status == "published")
+                .order_by(KnowledgeVersion.version_number.desc()).limit(1))
+        if source is None:
+            status = "failed" if pointer["result"] else "accepted"
+        elif published_version_id is not None:
+            status = "published"
+        elif source.status in ("failed", "deleted"):
+            status = "failed"
+        elif source.status == "processing" or any(run.status == "running" for run in runs):
+            status = "processing"
+        elif pointer["status"] == "failed" and pointer["result"]:
+            status = "failed"
+        else:
+            status = "uploaded"
+        return {"task_id": str(task_id), "memory_id": pointer["memory_id"],
+                "candidate_version": pointer["candidate_version"], "source_id": pointer["source_id"],
+                "initial_processing_run_id": pointer["initial_processing_run_id"],
+                "attempt_run_ids": attempt_run_ids, "status": status,
+                "published_version_id": published_version_id, "result": pointer["result"],
+                "authority_event_ids": list(pointer["authority_event_ids"])}
+
+    async def observe_promotion(self, *, source_id, status=None, result=None):
+        """Append a permanent promotion_observed grant for real attempts (T074).
+
+        Uploaded, processing and failed never report published: the recorded
+        status comes from the actual source/run/version facts unless an explicit
+        pre-dispatch failure is being recorded. Regular uploads have no
+        promotion request and are left untouched. The original request pointer
+        is never mutated; a new permanent observation extends its history.
+        """
+        from rag_mcp.services.memory_governance import MemoryGovernance
+
+        return await MemoryGovernance(self).observe_promotion(source_id=source_id, status=status, result=result)
 
     async def recover_consolidation(self, token, *, runtime):
         from rag_mcp.services.consolidation_commit import recover_consolidation

@@ -666,13 +666,77 @@ def _attachments(p, core, current, policy, vocabulary, context, now, *, determin
         except Rejection as error:
             yield reject(str(error))
     if output is not None:
-        if (output['kind'] == 'semantic' and output['evidence_refs']
-            and output['confidence'] >= config.candidate_min_confidence):
+        try:
+            if config is None or not policy.consolidation_enabled:
+                raise Rejection('POLICY_CHANGED')
+            subject = {'status': 'active', 'kind': output['kind'], 'provenance': output.get('provenance'),
+                       'confidence': output.get('confidence'), 'evidence_refs': list(output.get('evidence_refs') or ()),
+                       'candidate_basis': output.get('candidate_basis')}
+            eligible, reasons = candidate_eligibility(subject, context.support_facts, scope_id=current.scope_id,
+                                                      threshold=config.candidate_min_confidence)
+            if not eligible:
+                raise Rejection(reasons[0])
+            attributions = tuple(_support(str(reference), current, context, None)
+                                 for reference in output.get('evidence_refs') or ())
             yield accept(({'operation': 'derive', 'aggregate_id': output['memory_id'],
-                           'value': {'promotion_candidate': True}},),
+                           'value': {'promotion_candidate': True,
+                                     'evidence_attributions': [dict(item) for item in attributions]}},),
                          proof={'origin': 'deterministic_rule', 'rule_id': 'candidate_eligibility'})
-        else:
-            yield reject('CANDIDATE_NOT_ELIGIBLE')
+        except Rejection as error:
+            yield reject(str(error))
+
+
+CANDIDATE_RULE_VERSION = '013.candidate.1'
+_ATTRIBUTION_KEYS = ('evidence_id', 'source_id', 'version_id', 'version', 'position', 'content_hash')
+
+
+def candidate_version(memory_id, event_id, content_hash, attributions, decision_id):
+    """Stable candidate identity: memory creation, approved content and anchors."""
+    return stable_key({'memory_id': memory_id, 'event_id': event_id, 'content_hash': content_hash,
+                       'attributions': [dict(item) for item in attributions],
+                       'decision_id': decision_id, 'rule': CANDIDATE_RULE_VERSION})
+
+
+def candidate_eligibility(entry, facts, *, scope_id, threshold):
+    """Re-verify one marked candidate against current facts.
+
+    Returns ``(eligible, reasons)``; never reads a store and never mutates.
+    Every corpus anchor must re-verify as a same-scope published citation with
+    position and content attribution, and must still match the fingerprints the
+    candidate version was derived from.
+    """
+    if not isinstance(entry, Mapping) or entry.get('status') != 'active' or entry.get('kind') != 'semantic':
+        return False, ('CANDIDATE_NOT_ELIGIBLE',)
+    if entry.get('provenance') in (None, 'hard'):
+        return False, ('CANDIDATE_NOT_ELIGIBLE',)
+    confidence = entry.get('confidence')
+    if (isinstance(confidence, bool) or not isinstance(confidence, (int, float))
+            or not math.isfinite(confidence) or not 0 <= confidence <= 1 or confidence < threshold):
+        return False, ('CANDIDATE_NOT_ELIGIBLE',)
+    anchors = [str(reference) for reference in entry.get('evidence_refs') or ()]
+    if not anchors:
+        return False, ('CANDIDATE_NOT_ELIGIBLE',)
+    recorded = {str(item.get('evidence_id')): item
+                for item in (entry.get('candidate_basis') or {}).get('evidence_attributions', ())}
+    if recorded and set(recorded) != set(anchors):
+        return False, ('ATTRIBUTION_FAILED',)
+    for identifier in anchors:
+        fact = (facts or {}).get(identifier)
+        if (not isinstance(fact, Mapping) or fact.get('status') != 'published'
+                or fact.get('source_status') != 'published'):
+            return False, ('EVIDENCE_UNAVAILABLE',)
+        if any(fact.get(key) != scope_id for key in ('knowledge_scope_id', 'source_scope_id', 'version_scope_id')):
+            return False, ('SCOPE_MISMATCH',)
+        if (fact.get('attributed') is not True or not fact.get('position') or not fact.get('content_hash')
+                or not fact.get('source_id') or not fact.get('version_id')
+                or isinstance(fact.get('version'), bool) or not isinstance(fact.get('version'), int)
+                or fact['version'] < 1):
+            return False, ('ATTRIBUTION_FAILED',)
+        captured = recorded.get(identifier)
+        if captured is not None and any(str(captured.get(key)) != str(fact.get(key))
+                                        for key in ('source_id', 'version_id', 'version', 'position', 'content_hash')):
+            return False, ('ATTRIBUTION_FAILED',)
+    return True, ()
 
 
 def adjudicate(proposal, current, policy, vocabulary, quota, context, now, *, deterministic=False):

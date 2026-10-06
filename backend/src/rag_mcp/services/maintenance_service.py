@@ -214,6 +214,78 @@ class MaintenanceService:
         return counts
 
 
+async def resume_promotions(session, *, scopes=None, schedule=None, now=None, service=None):
+    """Resume only already human-authorized, undispatched promotion pointers (T075).
+
+    Revalidates scope and current candidate eligibility before dispatching; an
+    invalidated candidate is recorded as a failed task and never scheduled. It
+    never creates a promotion request for a candidate: a task exists only
+    because an explicit writer human request already created it.
+    """
+    from rag_mcp.models.domain_profile import DomainProfile
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.models.knowledge_source import KnowledgeSource
+    from rag_mcp.models.memory_projection import MemoryEntry
+    from rag_mcp.models.processing_run import ProcessingRun
+    from rag_mcp.services.consolidation_adjudicator import candidate_eligibility
+    from rag_mcp.services.consolidation_commit import read_evidence
+    from rag_mcp.services.memory_event_store import MemoryEventStore
+    from rag_mcp.services.memory_policy import MemoryPolicy
+    from rag_mcp.services.memory_reducer import reduce_events
+    from rag_mcp.services.memory_service import MemoryService
+
+    if get_settings().instance_mode != "writer":
+        raise PermissionError("MEMORY_WRITE_UNAVAILABLE")
+    if scopes is not None and (not scopes or any(not isinstance(sid, int) or isinstance(sid, bool) or sid <= 0
+                                                 for sid in scopes)):
+        raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+    statement = select(MemoryEntry.knowledge_scope_id).where(MemoryEntry.promotion_pointer.isnot(None)).distinct()
+    if scopes is not None:
+        statement = statement.where(MemoryEntry.knowledge_scope_id.in_(scopes))
+    scope_ids = sorted((await session.execute(statement)).scalars().all())
+    service = service or MemoryService(session)
+    dispatch = schedule or _default_promotion_schedule
+    resumed, failed = [], []
+    for scope_id in scope_ids:
+        scope = await session.get(KnowledgeScope, scope_id)
+        if scope is None or scope.status != "active":
+            continue
+        profile = await session.get(DomainProfile, scope.domain_key)
+        policy = MemoryPolicy.model_validate((profile.memory_policy if profile else None) or {})
+        threshold = policy.consolidation.candidate_min_confidence if policy.consolidation else 1.0
+        state = reduce_events(await MemoryEventStore(session).replay(scope_id))
+        for row in sorted(state["entries"].values(), key=lambda item: item["memory_id"]):
+            pointer = row.get("promotion_pointer")
+            if not pointer or pointer["status"] != "uploaded":
+                continue
+            run = await session.get(ProcessingRun, pointer["initial_processing_run_id"])
+            source = await session.get(KnowledgeSource, pointer["source_id"])
+            if (run is None or run.status != "pending" or source is None or source.status != "uploaded"):
+                continue   # already dispatched, published, or otherwise not resumable
+            identifiers = {str(reference) for reference in row.get("evidence_refs") or ()}
+            facts = await read_evidence(session, identifiers) if identifiers else {}
+            eligible, reasons = candidate_eligibility(row, facts, scope_id=scope_id, threshold=threshold)
+            if eligible:
+                dispatch(pointer["source_id"])
+                resumed.append({"task_id": pointer["task_id"], "memory_id": row["memory_id"],
+                                "source_id": pointer["source_id"],
+                                "initial_processing_run_id": pointer["initial_processing_run_id"]})
+            else:
+                await service.observe_promotion(source_id=pointer["source_id"], status="failed",
+                                                result="MEMORY_CANDIDATE_NOT_ELIGIBLE")
+                failed.append({"task_id": pointer["task_id"], "memory_id": row["memory_id"],
+                               "source_id": pointer["source_id"],
+                               "initial_processing_run_id": pointer["initial_processing_run_id"],
+                               "reason": reasons[0] if reasons else "MEMORY_CANDIDATE_NOT_ELIGIBLE"})
+    return {"resumed": resumed, "failed": failed}
+
+
+def _default_promotion_schedule(source_id):
+    from rag_mcp.api.knowledge_sources import _schedule_ingestion
+
+    _schedule_ingestion(source_id)
+
+
 async def purge_expired_memory_runtime(session, now=None):
     from rag_mcp.models.memory_recall_run import MemoryRecallRun
     from rag_mcp.models.session import MemorySession

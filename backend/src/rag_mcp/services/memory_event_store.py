@@ -30,6 +30,12 @@ class MemoryEventStore:
             event.payload = {**payload, "provenance_validation": validation}
         elif event.event_type in {"grant", "rollback"} and event.actor != "management":
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
+        if event.event_type == "grant" and event.payload.get("grant_type") in (
+                "promotion_requested", "promotion_observed"):
+            from rag_mcp.services.memory_validators import validate_promotion_pointer
+
+            validate_promotion_pointer({column.name: getattr(event, column.name)
+                                        for column in MemoryEvent.__table__.columns})
 
     async def append(self, event, *, flush=True):
         await self._validate(event)

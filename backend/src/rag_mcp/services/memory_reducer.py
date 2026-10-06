@@ -304,6 +304,25 @@ def reduce_events(events, *, initial_state=None):
                 # control keeps the exact 0095 SQL/Python replay parity shape.
                 consolidation_state.setdefault('propagation_seals', {})[str(event['event_id'])] = {
                     **deepcopy(seal), 'seal_id': event['event_id'], 'knowledge_scope_id': scope}
+            elif payload.get('grant_type') in ('promotion_requested', 'promotion_observed'):
+                # The permanent grant carries the projected pointer snapshot; only
+                # the trusted management promotion transaction may append it, and
+                # an observation must extend the exact task identity it belongs to.
+                from rag_mcp.services.memory_validators import validate_promotion_pointer
+                validate_promotion_pointer(event)
+                target = _scoped_target(entries, eid, scope)
+                previous = target.get('promotion_pointer')
+                pointer = deepcopy(payload['pointer'])
+                if payload['grant_type'] == 'promotion_requested':
+                    if previous is not None and previous.get('candidate_version') == pointer['candidate_version']:
+                        raise ValueError('duplicate promotion request')
+                elif (previous is None or previous.get('task_id') != pointer['task_id']
+                      or previous.get('candidate_version') != pointer['candidate_version']
+                      or previous.get('source_id') != pointer['source_id']
+                      or previous.get('initial_processing_run_id') != pointer['initial_processing_run_id']
+                      or pointer['authority_event_ids'][:-1] != list(previous.get('authority_event_ids', ()))):
+                    raise ValueError('promotion observation does not extend the existing task')
+                target['promotion_pointer'] = pointer
             elif "binding_id" in payload:
                 bindings[payload["binding_id"]] = {
                     **{key: payload[key] for key in ("binding_id", "binding_kind", "binding_value", "priority", "status")},

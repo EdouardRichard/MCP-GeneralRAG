@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；T065-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；Phase 6 T065-T076已实现并通过308项串行验收（含012迁移往返回归修复：0096-0103 downgrade 仅在保留013 authority时拒绝），迁移0101-0103已应用；T077-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–5的64项已勾选，40项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–6的76项已勾选，28项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -165,21 +165,21 @@
 
 ### US6 测试先行
 
-- [ ] T065 [P] [US6] 在 `backend/tests/unit/test_consolidation_candidates.py` 先写active semantic/≥0.95策略阈值/同域published硬锚逐条位置内容归因、candidate_version、无锚procedure与硬锚distilled不升hard、失效后不可晋升测试，依赖 T064。
-- [ ] T066 [P] [US6] 在 `backend/tests/contract/test_consolidation_management_api.py` 先写候选列表/POST promote/GET promotions 的writer-only、scope/version/reason/extra-forbid、202首次/200重复、404跨域、409失效、503写不可用契约，依赖 T064。
-- [ ] T067 [P] [US6] 在 `backend/tests/integration/test_013_consolidation_promotion.py` 先写巩固/维护/量阈值自动source=0、原记忆保留、并发重复只一task/source/initial pending run、注册/调度崩溃恢复、显式重试同task/source与新attempt、未发布状态及上传旧流程兼容测试，依赖 T064。
+- [X] T065 [P] [US6] 在 `backend/tests/unit/test_consolidation_candidates.py` 先写active semantic/≥0.95策略阈值/同域published硬锚逐条位置内容归因、candidate_version、无锚procedure与硬锚distilled不升hard、失效后不可晋升测试，依赖 T064。
+- [X] T066 [P] [US6] 在 `backend/tests/contract/test_consolidation_management_api.py` 先写候选列表/POST promote/GET promotions 的writer-only、scope/version/reason/extra-forbid、202首次/200重复、404跨域、409失效、503写不可用契约，依赖 T064。
+- [X] T067 [P] [US6] 在 `backend/tests/integration/test_013_consolidation_promotion.py` 先写巩固/维护/量阈值自动source=0、原记忆保留、并发重复只一task/source/initial pending run、注册/调度崩溃恢复、显式重试同task/source与新attempt、未发布状态及上传旧流程兼容测试，依赖 T064。
 
 ### US6 实现
 
-- [ ] T068 [US6] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 与 `backend/src/rag_mcp/services/memory_service.py` 实现候选附件批准与promote_candidate_at/version/basis派生，必要锚归因复验且不改provenance，不调用upload/ingestion；拒绝标记有审计无effect，依赖 T065、T067。
-- [ ] T069 [US6] 在 `backend/src/rag_mcp/services/knowledge_source_registration.py` 抽取受净化内容→稳定raw文件→uploaded KnowledgeSource→预建pending ProcessingRun 的必要共享注册步骤，并令 `backend/src/rag_mcp/api/knowledge_sources.py` 复用，保留现有上传/版本发布/清理行为、不HTTP自调用，依赖 T067、T068。
-- [ ] T070 [US6] 在 `backend/src/rag_mcp/services/ingestion_service.py` 支持校验使用预建同source/scope pending ProcessingRun，不再生成第二初始run；existing失败重试可增加attempt但不增加稳定晋升task/source，依赖 T067、T069。
-- [ ] T071 [US6] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_projection_store.py` 与新迁移同步实现永久promotion_requested/observed管理grant与唯一(scope,memory,candidate_version)，stable task_id=request grant event_id、source/initial run/后续attempt/version/result指针可重放，依赖 T042、T067、T070。
-- [ ] T072 [US6] 在 `backend/src/rag_mcp/services/memory_governance.py` 实现显式人工晋升短事务：current writer/actor/reason/scope/candidate/anchors重验，共享注册与pointer同事务、提交后调度；唯一冲突返原task/source/initial run不重调度，新正文/source/task/status权限不由请求提供，依赖 T068、T069、T070、T071。
-- [ ] T073 [US6] 在 `backend/src/rag_mcp/api/memory.py` 实现候选列表、promote与promotions报告路由和当前promotable复验，复用require_writer/live lease、明确实际状态、原记忆保留、跨域404；不注册MCP晋升入口，依赖 T066、T072。
-- [ ] T074 [US6] 在 `backend/src/rag_mcp/api/knowledge_sources.py` 与 `backend/src/rag_mcp/services/memory_governance.py` 将既有显式reprocess/真实publication结果追加promotion_observed，uploaded/processing/failed不报published，记忆rollback保留外部知识动作历史不声称撤销出版，依赖 T070、T071、T073。
-- [ ] T075 [US6] 在 `backend/src/rag_mcp/services/maintenance_service.py` 恢复仅已有人为授权pointer的未调度任务，调度前复验候选/scope，失效记失败；同stable task/source恢复，不为候选自动创建新请求，依赖 T072、T074。
-- [ ] T076 [US6] 串行运行候选/API/人工晋升故障与旧上传兼容测试，检查任务/attempt区分和自动正身0，清理到期run后重建候选/指针，在 `specs/013-memory-consolidation-loop/quickstart.md` 登记晋升证据，依赖 T075。
+- [X] T068 [US6] 在 `backend/src/rag_mcp/services/consolidation_adjudicator.py` 与 `backend/src/rag_mcp/services/memory_service.py` 实现候选附件批准与promote_candidate_at/version/basis派生，必要锚归因复验且不改provenance，不调用upload/ingestion；拒绝标记有审计无effect，依赖 T065、T067。
+- [X] T069 [US6] 在 `backend/src/rag_mcp/services/knowledge_source_registration.py` 抽取受净化内容→稳定raw文件→uploaded KnowledgeSource→预建pending ProcessingRun 的必要共享注册步骤，并令 `backend/src/rag_mcp/api/knowledge_sources.py` 复用，保留现有上传/版本发布/清理行为、不HTTP自调用，依赖 T067、T068。
+- [X] T070 [US6] 在 `backend/src/rag_mcp/services/ingestion_service.py` 支持校验使用预建同source/scope pending ProcessingRun，不再生成第二初始run；existing失败重试可增加attempt但不增加稳定晋升task/source，依赖 T067、T069。
+- [X] T071 [US6] 在 `backend/src/rag_mcp/services/memory_reducer.py`、`backend/src/rag_mcp/services/memory_projection_store.py` 与新迁移同步实现永久promotion_requested/observed管理grant与唯一(scope,memory,candidate_version)，stable task_id=request grant event_id、source/initial run/后续attempt/version/result指针可重放，依赖 T042、T067、T070。
+- [X] T072 [US6] 在 `backend/src/rag_mcp/services/memory_governance.py` 实现显式人工晋升短事务：current writer/actor/reason/scope/candidate/anchors重验，共享注册与pointer同事务、提交后调度；唯一冲突返原task/source/initial run不重调度，新正文/source/task/status权限不由请求提供，依赖 T068、T069、T070、T071。
+- [X] T073 [US6] 在 `backend/src/rag_mcp/api/memory.py` 实现候选列表、promote与promotions报告路由和当前promotable复验，复用require_writer/live lease、明确实际状态、原记忆保留、跨域404；不注册MCP晋升入口，依赖 T066、T072。
+- [X] T074 [US6] 在 `backend/src/rag_mcp/api/knowledge_sources.py` 与 `backend/src/rag_mcp/services/memory_governance.py` 将既有显式reprocess/真实publication结果追加promotion_observed，uploaded/processing/failed不报published，记忆rollback保留外部知识动作历史不声称撤销出版，依赖 T070、T071、T073。
+- [X] T075 [US6] 在 `backend/src/rag_mcp/services/maintenance_service.py` 恢复仅已有人为授权pointer的未调度任务，调度前复验候选/scope，失效记失败；同stable task/source恢复，不为候选自动创建新请求，依赖 T072、T074。
+- [X] T076 [US6] 串行运行候选/API/人工晋升故障与旧上传兼容测试，检查任务/attempt区分和自动正身0，清理到期run后重建候选/指针，在 `specs/013-memory-consolidation-loop/quickstart.md` 登记晋升证据，依赖 T075。
 
 **Checkpoint**: 只有人工管理请求可创建稳定晋升任务；候选、知识source摄入与published三个阶段分别可查。
 

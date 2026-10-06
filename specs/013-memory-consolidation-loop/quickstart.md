@@ -328,3 +328,163 @@ exact budgets are unit-proven and the integration proof uses the patched budget.
 A publish-hot-path performance follow-up is recommended before Phase 8 hard
 evidence. `recover_consolidation` keeps a pending maintenance group as pending
 (no dedicated null-window retry) — Phase 7 scope.
+
+## Phase 6 verification (2026-10-07, T065-T076)
+
+Phase 6 added candidate marking plus the explicit human promotion loop. 0095-0100
+stayed byte-frozen; three successors were applied to the isolated database:
+`0101_promotion_pointer` (permanent `promotion_requested`/`promotion_observed`
+grants, the `memory_log_state` pointer projection, `guard_promotion_event()` and
+the partial unique index `uq_promotion_request`), `0102_promotion_guard_identity`
+(conditions the guard's task-identity check so an observation keeps the original
+stable task while appending its own event id) and `0103_promotion_guard_skip`
+(makes the guard's early return explicit for ordinary management grants whose
+payload has no `grant_type`, which SQL three-valued logic previously let fall
+through into the promotion shape checks). Isolated head is
+`0103_promotion_guard_skip`.
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_candidates.py tests/contract/test_consolidation_management_api.py tests/integration/test_013_consolidation_promotion.py tests/unit/test_consolidation_adjudicator.py tests/unit/test_consolidation_links.py tests/unit/test_consolidation_policy.py tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_live_boundaries.py tests/integration/test_013_consolidation_migration.py tests/integration/test_013_consolidation_history_matrix.py tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_audit.py tests/contract/test_knowledge_sources_api.py -q --tb=short -p no:cacheprovider
+```
+
+Observed (serial, no concurrent writer): RED first —
+`tests/unit/test_consolidation_candidates.py` **18 failed, 2 passed in 0.15s**
+(behavior failures, not import errors); then GREEN on the same bytes:
+`tests/unit/test_consolidation_candidates.py tests/unit/test_consolidation_adjudicator.py`
+**206 passed in 0.66s**; `tests/integration/test_013_consolidation_promotion.py`
+**8 passed in 77.82s**; `tests/contract/test_consolidation_management_api.py`
+**3 passed in 18.88s**; the combined acceptance batch above **331 passed, 1 failed
+in 376.59s**, where the single failure was the populated-012 upgrade test asserting
+the `cannot downgrade` refusal text — the new migrations now say
+`cannot downgrade promotion authority; use compatible forward deployment`, and the
+migration file alone re-ran **2 passed in 10.57s**.
+
+Final serial acceptance on the final bytes — the union of every 013 unit, contract
+and integration suite plus the Phase 6 files, the memory contract tests and the
+legacy upload contract test:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_candidates.py tests/unit/test_consolidation_adjudicator.py tests/unit/test_consolidation_links.py tests/unit/test_consolidation_policy.py tests/unit/test_consolidation_selection.py tests/unit/test_consolidation_context_visibility.py tests/unit/test_consolidation_deterministic_rules.py tests/unit/test_consolidation_equivalence_normalization.py tests/unit/test_consolidation_fallback.py tests/unit/test_consolidation_gate.py tests/unit/test_consolidation_hard_protection.py tests/unit/test_consolidation_injection_boundary.py tests/unit/test_consolidation_link_expansion.py tests/unit/test_consolidation_proposal_graph.py tests/contract/test_consolidation_management_api.py tests/contract/test_consolidation_schemas.py tests/contract/test_consolidation_recall_extensions.py tests/contract/test_memory_management_api.py tests/contract/test_memory_schemas.py tests/contract/test_memory_byte_compat.py tests/contract/test_memory_error_registry.py tests/contract/test_memory_scope_contract.py tests/contract/test_knowledge_sources_api.py tests/integration/test_013_consolidation_promotion.py tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_live_boundaries.py tests/integration/test_013_consolidation_migration.py tests/integration/test_013_consolidation_history_matrix.py tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_audit.py tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_complete_matrix.py tests/integration/test_013_consolidation_dependencies.py tests/integration/test_013_consolidation_final_review.py tests/integration/test_013_consolidation_hash_matrix.py tests/integration/test_013_consolidation_lawful_merge.py tests/integration/test_013_consolidation_llm_faults.py tests/integration/test_013_consolidation_observation_matrix.py tests/integration/test_013_consolidation_operation_matrix.py tests/integration/test_013_consolidation_permanent_matrix.py tests/integration/test_013_consolidation_phase4_boundaries.py tests/integration/test_013_consolidation_recovery.py tests/integration/test_013_consolidation_remaining_matrix.py tests/integration/test_013_consolidation_replay_parity.py tests/integration/test_013_consolidation_windows.py -q --tb=short -p no:cacheprovider
+```
+
+Observed **943 passed in 1127.62s (18:47)**, exit 0, no skips. That run carried the
+eight-case promotion file; the ninth case (audit-TTL purge and projection rebuild)
+was added immediately after and `tests/integration/test_013_consolidation_promotion.py`
+re-ran **9 passed in 87.39s**. Regression after the guard fix:
+`tests/integration/test_012_live_maintenance.py tests/integration/test_012_memory_rest.py`
+plus the Phase 6 candidates/management/promotion/migration files **42 passed in
+181.19s**. No assertion was weakened.
+
+What the Phase 6 evidence establishes:
+
+- Candidate marking is an adjudicated attachment: only an active semantic
+  distilled entry at or above the configured threshold whose every same-scope
+  published corpus anchor re-verifies (position, content hash, source/version
+  identity) is marked, `candidate_version` binds memory creation, approved
+  content hash, anchor fingerprints and the approval decision, and a withdrawn or
+  changed anchor leaves the marked candidate visible but not promotable. Marking
+  changes no provenance/confidence and creates zero `KnowledgeSource` rows and
+  zero promotion tasks.
+- Only the explicit writer management request `POST /api/memories/promote`
+  (with actor/reason/scope/candidate_version) creates the stable promotion task.
+  Consolidation, maintenance (`run_memory_maintenance`, `resume_promotions`) and
+  the volume/threshold hint paths created 0 automatic promotion sources in the
+  acceptance run.
+- Registration is shared with upload: sanitized markdown raw object, uploaded
+  `KnowledgeSource`, exactly one pending `ProcessingRun(initial)`, permanent
+  `promotion_requested` pointer with `task_id = request grant event_id` and the
+  partial unique `(scope, memory, candidate_version)` index; upload keeps its 201
+  response, size/hash/format fields, raw path convention, empty/oversized/
+  unsupported-format errors, and the prebuilt run is consumed rather than
+  duplicated (`IngestionService.ingest(processing_run_id=...)`).
+- Duplicate and concurrent identical requests converge on the same
+  task/source/initial run (`reused=true`, no second attempt); a crash between
+  registration and scheduling is recovered by `resume_promotions`, which
+  revalidates scope and candidate first, resumes only already human-authorized
+  pointers, and records `failed` + `MEMORY_CANDIDATE_NOT_ELIGIBLE` without
+  dispatching when the candidate is no longer eligible.
+- Status only ever reflects actual facts: uploaded/processing/failed never report
+  published; a real ingestion publishes and appends `promotion_observed` with the
+  published version id; an explicit retry adds a new attempt run while the stable
+  task and source stay identical and the original request pointer is never
+  mutated; a memory rollback keeps the external publication history and never
+  claims it was undone. Audit TTL purge (`purge_expired_observations`) deletes only
+  expired run observations, and a full projection rebuild re-materialises the same
+  `candidate_version`, anchor attributions and promotion pointer from the permanent
+  log. No MCP promotion tool is registered.
+
+Lint on the changed files: `phase3_lint_delta.py 42fddb1` reports
+`{"new_findings": [], "preexisting_findings": 71}`.
+
+Applied migration hashes (SHA256):
+`0101_promotion_pointer` =
+`68A9BDEC8849BD3434947791BA746516027F017E89540C0B78DD293EBB04301D`;
+`0102_promotion_guard_identity` =
+`14CFE0F713CD94DA80F0B5907690BC1FE980A15594CB7B2354A64FA5746D0D65`;
+`0103_promotion_guard_skip` =
+`9593E16A692A035F8F1DCD61D9C267BDBFA1BDB42ADDF85420725BD4818F082F`.
+`0103`'s hash was taken after a cosmetic import-order fix (`phase3_lint_delta`);
+its executed `upgrade()` body is unchanged from the applied one.
+
+Pre-existing failure observed while regression-testing (not a Phase 6 defect; fixed
+by the Phase 6 downgrade fix below):
+`tests/integration/test_012_migration_roundtrip.py::test_retention_migration_empty_database_roundtrip`
+downgrades a fresh database to `0088_memory_db_replay`, but `0096_consolidation_authority`
+(committed with Phase 3, present at `42fddb1`) already raises unconditionally in
+its `downgrade()`, so that path cannot succeed for any head at or above `0096`.
+Phase 6 only changes which refusal message is reached first.
+
+### Phase 6 downgrade fix (2026-10-07, T007 regression)
+
+`0096`–`0103` had made `downgrade()` unconditionally refuse, which is stricter than
+T007 ("no *destructive* downgrade **while** 013 authority is retained") and blocked
+both the 012 roundtrip above and the Phase 8 "001–012 do not downgrade" acceptance.
+Only `downgrade()` changed; every `upgrade()`, `revision` and `down_revision` stayed
+byte-identical (8/8 `upgrade()` SHA256 unchanged, see the evidence note for hashes).
+
+- New shared guard `backend/alembic/_consolidation_downgrade.py`
+  (`assert_no_consolidation_authority(stage)`) is the first statement of each
+  downgrade and refuses only while 013 authority survives: a v2
+  `payload_version='2'` event, a `promotion_requested`/`promotion_observed` grant,
+  a `consolidation_eligibilities`/`consolidation_runs` row, or a
+  `memory_entries.promotion_pointer`/`candidate_version`. Probes use
+  `to_regclass`/`pg_attribute`, so they are safe anywhere in the reverse chain.
+  The module sits next to `versions/` on purpose: alembic 1.19.1 loads every
+  `*.py` under `alembic/versions` as a revision script and aborts on one that does
+  not declare `revision`/`down_revision`.
+- `0103 → 0102 → 0101 → 0100 → 0099 → 0098 → 0097 → 0096` now really unwind:
+  reversed `replace_function`/`.replace` fragments (machine-checked as the exact
+  inverse of each frozen `upgrade()`), the promotion pointer projection branch, the
+  propagation grant branch, the 0098 publication/canonical/hash guards, the
+  restored `uq_memory_entries_scope_hash` constraint and the exact 0097
+  `verify_consolidation_publication()` body, plus the matching trigger/function
+  drops. `0095` was left untouched.
+- Evidence (serial, no concurrent writer): `tests/integration/test_012_migration_roundtrip.py`
+  **1 passed in 10.12s** (was 1 failed in 6.62s);
+  `tests/integration/test_013_consolidation_migration.py` **2 passed in 11.44s**
+  (including the refusal assertion); `alembic upgrade head` twice **exit 0** with
+  current/head `0103_promotion_guard_skip`; a direct check refused the downgrade
+  with `cannot downgrade consolidation authority at 0103_promotion_guard_skip:
+  database still retains v2 consolidation events` while one v2 event was retained,
+  and let the same downgrade reach `0094_memory_management_audit` once it was
+  removed. Per-migration detail and full before/after hashes:
+  `.superpowers/sdd/013-tasks/phase6-downgrade-fix.md`.
+
+### Lead final verification of Phase 6 (2026-10-07)
+
+Independently re-run by the Lead on the final bytes, serial, no concurrent
+writer, isolated head `0103_promotion_guard_skip`:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_candidates.py tests/contract/test_consolidation_management_api.py tests/integration/test_012_migration_roundtrip.py tests/integration/test_013_consolidation_migration.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_promotion.py tests/unit/test_consolidation_adjudicator.py tests/unit/test_consolidation_links.py tests/unit/test_consolidation_policy.py tests/integration/test_013_consolidation_commit.py tests/integration/test_013_consolidation_live_boundaries.py tests/integration/test_013_consolidation_history_matrix.py tests/integration/test_013_consolidation_projection_rebuild.py tests/integration/test_013_consolidation_audit.py tests/contract/test_knowledge_sources_api.py -q --tb=short -p no:cacheprovider
+```
+
+Observed: **26 passed in 40.31s** (candidates, management-API contract, 012
+migration roundtrip, 013 migration including the refusal assertion) and **308
+passed in 353.62s** (Phase 6 promotion integration plus the 013/012 regression
+slice), both exit 0, no skips. After these edits the file hashes of the eight
+repaired migrations changed (only `downgrade()` bodies; `upgrade()` bytes
+verified unchanged) — the applied `upgrade()` hashes above remain the authority
+for what the isolated database actually ran.
+

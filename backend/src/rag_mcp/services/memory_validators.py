@@ -104,6 +104,114 @@ def _confidence(value):
         raise ValueError("MEMORY_PROVENANCE_INVALID")
 
 
+PROMOTION_GRANTS = ('promotion_requested', 'promotion_observed')
+PROMOTION_STATUSES = frozenset(('accepted', 'uploaded', 'processing', 'failed', 'published'))
+PROMOTION_POINTER_FIELDS = frozenset((
+    'task_id', 'request_event_id', 'memory_id', 'candidate_version', 'scope_id', 'actor', 'reason', 'request_id',
+    'source_id', 'initial_processing_run_id', 'content_hash', 'filename', 'format', 'requested_at',
+    'evidence_attributions', 'status', 'published_version_id', 'result', 'attempt_run_ids',
+    'authority_event_ids', 'attempts'))
+
+
+def _positive_integer(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _hex64(value):
+    return isinstance(value, str) and len(value) == 64 and all(character in '0123456789abcdef' for character in value)
+
+
+def validate_promotion_pointer(event):
+    """Trusted-shape check for the permanent promotion grants (T071).
+
+    Only the management promotion transaction may append these grants, and the
+    recorded pointer snapshot is what the projection replays; a forged or
+    malformed pointer fails closed instead of rewriting a task identity.
+    """
+    payload = event.get('payload') or {}
+    grant = payload.get('grant_type')
+    if grant not in PROMOTION_GRANTS:
+        raise ValueError('invalid promotion grant')
+    keys = {'payload_version', 'grant_type', 'memory_id', 'source_id', 'request_id', 'pointer'}
+    if grant == 'promotion_requested':
+        keys |= {'candidate_version', 'reason'}
+    if set(payload) != keys or payload.get('payload_version') != 2:
+        raise ValueError('invalid promotion grant')
+    if (event.get('event_type') != 'grant' or event.get('actor') != 'management'
+            or (event.get('authority') or {}).get('source') != 'management'
+            or event.get('scope_meta') != {'knowledge_scope_id': event.get('knowledge_scope_id')}):
+        raise PermissionError('trusted promotion control required')
+    pointer = payload['pointer']
+    if not isinstance(pointer, dict) or set(pointer) != PROMOTION_POINTER_FIELDS:
+        raise ValueError('invalid promotion pointer')
+    if (pointer['task_id'] != str(pointer['request_event_id'])
+            or (grant == 'promotion_requested' and pointer['task_id'] != str(event['event_id']))
+            or pointer['memory_id'] != event['aggregate_id']
+            or pointer['scope_id'] != event['knowledge_scope_id']
+            or pointer['source_id'] != payload['source_id']):
+        raise ValueError('invalid promotion pointer identity')
+    if pointer['status'] not in PROMOTION_STATUSES:
+        raise ValueError('invalid promotion status')
+    if not _hex64(pointer['candidate_version']):
+        raise ValueError('invalid promotion candidate version')
+    if grant == 'promotion_requested' and pointer['candidate_version'] != payload['candidate_version']:
+        raise ValueError('invalid promotion candidate version')
+    if (not _positive_integer(pointer['initial_processing_run_id']) or not _positive_integer(pointer['source_id'])
+            or not _positive_integer(pointer['request_event_id']) or not _positive_integer(pointer['memory_id'])
+            or not _positive_integer(pointer['scope_id'])):
+        raise ValueError('invalid promotion pointer identity')
+    if grant == 'promotion_requested' and pointer['reason'] != payload['reason']:
+        raise ValueError('invalid promotion reason')
+    if not isinstance(pointer['reason'], str) or not 1 <= len(pointer['reason']) <= 4000:
+        raise ValueError('invalid promotion reason')
+    if pointer['actor'] != 'management' or pointer['request_id'] != payload['request_id']:
+        raise ValueError('invalid promotion requester')
+    try:
+        UUID(pointer['request_id'])
+    except (TypeError, ValueError, AttributeError):
+        raise ValueError('invalid promotion requester') from None
+    for key in ('content_hash', 'filename', 'format'):
+        if not isinstance(pointer[key], str) or not pointer[key]:
+            raise ValueError('invalid promotion content identity')
+    if (not isinstance(pointer['requested_at'], str)
+            or datetime.fromisoformat(pointer['requested_at']).tzinfo is None):
+        raise ValueError('invalid promotion timestamp')
+    if pointer['result'] is not None and not isinstance(pointer['result'], str):
+        raise ValueError('invalid promotion result')
+    for key in ('attempt_run_ids', 'authority_event_ids'):
+        values = pointer[key]
+        if not isinstance(values, list) or not values or any(not _positive_integer(value) for value in values):
+            raise ValueError('invalid promotion attempt identity')
+    if (pointer['authority_event_ids'][-1] != event['event_id']
+            or pointer['initial_processing_run_id'] not in pointer['attempt_run_ids']):
+        raise ValueError('invalid promotion authority history')
+    if pointer['status'] == 'published':
+        if not _positive_integer(pointer['published_version_id']):
+            raise ValueError('invalid promotion publication proof')
+    elif pointer['published_version_id'] is not None:
+        raise ValueError('invalid promotion publication proof')
+    attempts = pointer['attempts']
+    if (not isinstance(attempts, list) or not attempts
+            or any(not isinstance(attempt, dict) or set(attempt) != {'run_id', 'run_type', 'status', 'observed_at',
+                                                                     'event_id'}
+                   or not _positive_integer(attempt['run_id']) or attempt['run_type'] not in ('initial', 'retry')
+                   or not isinstance(attempt['status'], str) or not _positive_integer(attempt['event_id'])
+                   or not isinstance(attempt['observed_at'], str)
+                   or datetime.fromisoformat(attempt['observed_at']).tzinfo is None for attempt in attempts)):
+        raise ValueError('invalid promotion attempts')
+    if [attempt['run_id'] for attempt in attempts] != pointer['attempt_run_ids']:
+        raise ValueError('invalid promotion attempts')
+    attributions = pointer['evidence_attributions']
+    if not isinstance(attributions, list) or any(
+            not isinstance(item, dict)
+            or set(item) != {'evidence_id', 'source_id', 'version_id', 'version', 'position', 'content_hash'}
+            or not str(item['evidence_id']).strip() or not str(item['source_id']).strip()
+            or not str(item['version_id']).strip() or not str(item['position']).strip()
+            or not str(item['content_hash']).strip() for item in attributions):
+        raise ValueError('invalid promotion attribution')
+    return pointer
+
+
 def validate_memory(payload):
     if payload.get("kind") not in {"episodic", "semantic", "procedural"}:
         raise ValueError("MEMORY_KIND_INVALID")
