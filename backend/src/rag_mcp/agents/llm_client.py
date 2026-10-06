@@ -88,8 +88,17 @@ def safe_failure_code(value):
         'MODEL_CONFIGURATION_REQUIRED', 'MODEL_SCHEMA_INVALID', 'MODEL_JSON_INVALID',
         'MODEL_RESPONSE_TOO_LARGE', 'INPUT_CONTENT_UNSAFE', 'INPUT_BUDGET_EXCEEDED',
         'SCOPE_MISMATCH', 'AGENT_EXECUTION_FAILED', 'PROVIDER_TIMEOUT',
-        'PROVIDER_NETWORK_ERROR', 'PROVIDER_RESPONSE_INVALID',
+        'PROVIDER_NETWORK_ERROR', 'PROVIDER_RESPONSE_INVALID', 'GENERATED_CONTENT_UNSAFE',
     } or re.fullmatch(r'PROVIDER_HTTP_[1-5][0-9]{2}', value) is not None)
+
+
+def _cache_validation_reason(output, validate_output):
+    """A trusted validator may reject or fail, never leak its diagnostic body."""
+    try:
+        reason = validate_output(output)
+    except Exception:  # noqa: BLE001 - validator failures must not persist the unvalidated package
+        return 'AGENT_EXECUTION_FAILED'
+    return reason if reason is None or safe_failure_code(reason) else 'AGENT_EXECUTION_FAILED'
 
 # Markdown code-fence marker (three backticks), built without a literal
 # backtick character in this source line.
@@ -177,11 +186,13 @@ class LLMClient:
     def configured(self) -> bool:
         return bool(self._base_url and self._model)
 
-    def chat_json_receipt(self, system_prompt, user_payload, *, timeout_s=None):
+    def chat_json_receipt(self, system_prompt, user_payload, *, timeout_s=None, validate_output=None):
         """Strict whole-package parsing with call-local, sanitized diagnostics.
 
         Existing retrieval chat_json/cache semantics stay unchanged. Strict cache
         entries have a separate namespace so salvaged legacy objects cannot pass.
+        The caller supplies a trusted complete-package validator for persistence;
+        its rejection is stored and replayed as a failure with no original output.
         """
         if not self.configured:
             return _emit_receipt(LLMCallReceipt(reason='MODEL_CONFIGURATION_REQUIRED'))
@@ -191,12 +202,37 @@ class LLMClient:
             try:
                 entry = _strict_object(path.read_text(encoding='utf-8'))
                 if entry.get('parser') == 'strict-v1' and 'reason' in entry:
-                    if entry['reason'] is not None and not safe_failure_code(entry['reason']):
-                        raise ValueError('invalid cached reason')
-                    if entry.get('reason') is None and not isinstance(entry.get('output'), dict):
-                        raise ValueError('invalid cached output')
+                    cached_reason = entry['reason']
+                    if cached_reason is not None:
+                        if not safe_failure_code(cached_reason):
+                            trusted = {'parser': 'strict-v1', 'output': None, 'reason': 'AGENT_EXECUTION_FAILED'}
+                            path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                            raise ValueError('invalid cached reason')
+                        else:
+                            trusted = {'parser': 'strict-v1', 'output': None, 'reason': cached_reason}
+                            if entry != trusted:
+                                path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                            self.cache_hits += 1
+                            return _emit_receipt(LLMCallReceipt(reason=cached_reason, cache_hits=1))
+                    if not isinstance(entry.get('output'), dict):
+                        trusted = {'parser': 'strict-v1', 'output': None, 'reason': 'MODEL_SCHEMA_INVALID'}
+                        path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                        self.cache_hits += 1
+                        return _emit_receipt(LLMCallReceipt(
+                            reason='MODEL_SCHEMA_INVALID', cache_hits=1))
+                    if validate_output is not None:
+                        validation_reason = _cache_validation_reason(entry['output'], validate_output)
+                        if validation_reason:
+                            trusted = {'parser': 'strict-v1', 'output': None, 'reason': validation_reason}
+                            path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                            self.cache_hits += 1
+                            return _emit_receipt(LLMCallReceipt(
+                                reason=validation_reason, cache_hits=1))
+                    trusted = {'parser': 'strict-v1', 'output': entry['output'], 'reason': None}
+                    if entry != trusted:
+                        path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
                     self.cache_hits += 1
-                    return _emit_receipt(LLMCallReceipt(output=entry.get('output'), reason=entry['reason'], cache_hits=1))
+                    return _emit_receipt(LLMCallReceipt(output=entry['output'], cache_hits=1))
             except (OSError, ValueError, TypeError, RecursionError):
                 # Read-through cache misses carry no response body diagnostics.
                 pass
@@ -241,12 +277,17 @@ class LLMClient:
                             receipt = replace(receipt, output=_strict_object(content))
                         except (ValueError, TypeError, RecursionError):
                             receipt = replace(receipt, reason='MODEL_JSON_INVALID')
+                        else:
+                            if validate_output is not None and path is not None:
+                                validation_reason = _cache_validation_reason(receipt.output, validate_output)
+                                if validation_reason:
+                                    receipt = replace(receipt, output=None, reason=validation_reason)
         except httpx.TimeoutException:
             receipt = replace(receipt, reason='PROVIDER_TIMEOUT')
         except httpx.RequestError:
             receipt = replace(receipt, reason='PROVIDER_NETWORK_ERROR')
         except Exception:  # noqa: BLE001 - external failures have sanitized stable reason codes
-            receipt = replace(receipt, reason='PROVIDER_RESPONSE_INVALID')
+            receipt = replace(receipt, output=None, reason='PROVIDER_RESPONSE_INVALID')
         self.completion_chars += receipt.completion_chars
         if path:
             try:

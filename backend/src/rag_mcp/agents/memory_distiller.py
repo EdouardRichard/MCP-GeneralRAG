@@ -46,6 +46,17 @@ class MemoryDistiller(AgentBase):
             return AgentResult(output, False, self.model_and_version, error='MODEL_SCHEMA_INVALID')
         return AgentResult(output, True, self.model_and_version)
 
+    def _generated_package_reason(self, output):
+        """Validate model output before it can enter a durable cache."""
+        try:
+            validate_contract(output, self._validator)
+        except (TypeError, ValueError, RecursionError, ValidationError):
+            return 'MODEL_SCHEMA_INVALID'
+        clean = redact_submission(output)
+        if clean != output or detect_submission(clean).status != 'active':
+            return 'GENERATED_CONTENT_UNSAFE'
+        return None
+
     def execute(self, context):
         if self._llm_client is None or not self._llm_client.configured:
             raise DistillerFailure('MODEL_CONFIGURATION_REQUIRED')
@@ -72,7 +83,8 @@ class MemoryDistiller(AgentBase):
         if len(canonical(untrusted)) > config.get('max_input_chars', 32000):
             raise DistillerFailure('INPUT_BUDGET_EXCEEDED')
         receipt = self._llm_client.chat_json_receipt(
-            DISTILLER_SYSTEM_PROMPT, canonical(payload), timeout_s=config.get('llm_timeout_seconds', 30))
+            DISTILLER_SYSTEM_PROMPT, canonical(payload), timeout_s=config.get('llm_timeout_seconds', 30),
+            validate_output=self._generated_package_reason)
         if receipt.reason:
             raise DistillerFailure(receipt.reason)
         return receipt.output
