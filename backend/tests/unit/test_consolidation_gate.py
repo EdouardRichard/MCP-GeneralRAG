@@ -18,9 +18,14 @@ from rag_mcp.services.consolidation_gate import (
     validate_gate_binding,
     validate_report,
 )
-
 from tests.unit.consolidation_gate import (  # shared 013.2 fixtures (T055/T090)
-    HASH, NOW, STAMP, binding, build_report, install_registry, metrics,
+    HASH,
+    NOW,
+    STAMP,
+    binding,
+    build_report,
+    install_registry,
+    metrics,
 )
 
 

@@ -222,7 +222,7 @@ def recompute_query_metrics(query, k) -> dict:
 
 def _observed_metrics(container, context):
     if not isinstance(container, Mapping):
-        raise ValueError(f'report {context} observation missing')
+        raise TypeError(f'report {context} observation missing')
     for metric in _RATE_KEYS:
         if container.get(metric) is None:
             raise ValueError(f'report {context} observation missing')

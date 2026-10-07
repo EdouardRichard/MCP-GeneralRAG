@@ -37,9 +37,11 @@ import httpx
 
 from rag_mcp.agents.consolidation_replay import (
     REPLAY_DENIED_REASON,
-    cache_key as _replay_cache_key,
     cache_write_frozen,
     transport_denied,
+)
+from rag_mcp.agents.consolidation_replay import (
+    cache_key as _replay_cache_key,
 )
 
 logger = logging.getLogger(__name__)

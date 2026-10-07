@@ -15,10 +15,11 @@ rewrites recorded bytes.
 import hashlib
 import json
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
-import rag_mcp.agents.llm_client as llm_client
+from rag_mcp.agents import llm_client
 from rag_mcp.agents.consolidation_replay import (
     CACHE_ENTRY_VERSION,
     REPLAY_DENIED_REASON,
@@ -54,8 +55,8 @@ class _Response:
 class _Transport:
     """Minimal httpx.Client stand-in that records every real transport attempt."""
 
-    calls: list = []
-    responses: list = []
+    calls: ClassVar[list] = []
+    responses: ClassVar[list] = []
 
     def __init__(self, *args, **kwargs):
         pass

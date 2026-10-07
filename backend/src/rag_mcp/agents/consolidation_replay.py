@@ -177,9 +177,7 @@ def audit_cache(cache_dir, manifest) -> dict:
         if status == 'ok':
             if sealed_parser != entry.get('parser') or record.get('parser_version') != entry.get('parser'):
                 status = 'version_mismatch'
-            elif record.get('entry_sha256') != _sha256(path.read_bytes()):
-                status = 'corrupt'
-            elif record.get('body_sha256') != body_digest(entry):
+            elif record.get('entry_sha256') != _sha256(path.read_bytes()) or record.get('body_sha256') != body_digest(entry):
                 status = 'corrupt'
         counts['keys'][key] = status
         if status == 'ok':
