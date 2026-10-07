@@ -297,3 +297,33 @@ Precision@5 0.2333 → 0.2667，`relative_gains{mrr 0.1429, ndcg 0.1621}` 均过
   `reindex_eval_qdrant.py` 重建（chunk_id 不变）。
 - 评测前会为数据集作用域内的 Java/DDL 已发布版本执行图关系重建并声明
   `graph_ready`（等价用户触发重建，FR-027；幂等）。
+
+## 013 consolidation benefit gate: current measured state (2026-10-07)
+
+`eval/run_consolidation_comparison.py` runs the frozen six-query comparison with
+six independent restorations (own PostgreSQL database, private data root, private
+Qdrant process) and a strict record -> replay cache. On the frozen dataset
+(`eval/consolidation_eval_dataset.json`) the honest measured state is:
+
+- `quarantined_inputs = 0`, `cross_scope_leaks = 0`, `soft_overturns_hard = 0`,
+  `automatic_promotions = 0`, `invalid_outputs_applied = 0`,
+  `stale_holder_commits = 0`, `incomplete_outputs_consumed = 0`,
+  `rebuild_llm_calls = 0`, `source_chain_complete_rate = 1.0`,
+  `projection_integrity_rate = 1.0`;
+- replay makes **0** real provider transport calls (`response_match_rate = 1.0`);
+- quality metrics are above the 3 % relative threshold, but the baseline arm is
+  depressed by reader-budget latency under host load, so **no benefit is
+  claimed**;
+- the one blocking observation is `schema_validity_rate`: the sealed cache shows
+  the failing attempt with `reason: MODEL_SCHEMA_INVALID` and **`output: null`**,
+  i.e. the real provider returned nothing within the 30 s model bound (the sibling
+  key is `PROVIDER_TIMEOUT`). `MemoryDistiller.validate_output` maps any
+  non-contract-valid output, including `None`, to `MODEL_SCHEMA_INVALID`, so
+  "provider returned nothing" and "provider returned invalid JSON" share a label;
+  the zero-tolerance safety gate counts either way.
+
+Consequence: the report stays `incomplete`, `default_enable_eligible=false`,
+`gate_binding=null`, and both `consolidation_enabled` / `link_expansion_enabled`
+remain `false`. Reaching `passed` needs either a re-frozen, smaller real scenario
+(the frozen 42 KB distiller prompt is what the provider times out on) or a
+provider that answers that prompt within the bound; neither is fabricated.
