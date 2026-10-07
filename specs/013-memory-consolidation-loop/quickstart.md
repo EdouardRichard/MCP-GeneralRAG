@@ -1085,3 +1085,34 @@ kept:
   models the 013 T070 pending-run lookup (`session.scalar.return_value = None`),
   so the legacy path still reaches `No chunks produced`; the "no KnowledgeVersion
   was added" assertion is unchanged.
+
+### T102 retry in a quiet window (2026-10-07, evidence t102-20261007g)
+
+A further real record->replay round was executed after the counter fix, in a
+quieter window (no other test process, no service running):
+
+```
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py \
+  --dataset eval/consolidation_eval_dataset.json --snapshot .../t095-20261007/authority-snapshot.json \
+  --mode record --cache-manifest .../t102-20261007g/cache-manifest-record.json \
+  --gate-variant consolidated_candidate_expansion --trace .../t099-20261007/consolidation-trace.json \
+  --memory-acceptance .../t100-012-20261007-host/012-acceptance.json \
+  --regression .../t101-20261007/regression/012_regression_summary.json \
+  --output .../t102-20261007g/comparison-record.json --run-id t102g \
+  --capsule-dir C:/t102/capsule --base C:/t102g/runs --restore --qdrant-port-base 19900
+```
+
+Result: `status incomplete`, `default_enable_eligible=false`, `gate_binding=null`,
+`quarantined_inputs=0` (the counter fix holds up on a fresh run),
+`schema_validity_rate=0.25` (one of four consolidated arms returned a model
+package the agent rejected as `MODEL_SCHEMA_INVALID`), all other hard counters
+0/1.0, `relative_gains` mrr 0.1429 / nDCG 0.1853 (>=3 %), quality gate `passed`,
+safety and regression `incomplete`. The replay round made **0** provider transport
+calls and matched the recorded cache.
+
+The only substantive blocker left is `schema_validity_rate == 1` under the frozen
+42 KB distiller prompt with the real provider. Closing it would require either a
+re-frozen, smaller-window real scenario (which cascades into the T095/T099/T100
+evidence and their hashes) or a provider that reliably returns schema-valid JSON
+for that prompt; neither was fabricated or forced. Both default switches remain
+false.
