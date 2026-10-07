@@ -1,0 +1,6 @@
+# Evaluation datasets are pinned by raw-byte SHA256 in contracts, so their
+# checkout line endings must be pinned too; core.autocrlf alone cannot satisfy
+# both forms.
+eval/eval_dataset.json text eol=crlf
+eval/agentic_eval_dataset.json -text
+eval/cross_reference_eval_dataset.json -text

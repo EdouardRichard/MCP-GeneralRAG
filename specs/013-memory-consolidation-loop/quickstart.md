@@ -665,6 +665,164 @@ weakened.
 Remaining known pre-existing failure unrelated to 013:
 `tests/unit/orchestration/test_agentic_metrics.py::test_record_agentic_retrieval_run_writes_row`
 (expected `partial`, observed `complete`) — it failed identically at the Phase 4
-head `ef51894` and at `2fc9610`; it is reported, not adjusted.
+head `ef51894` and at `2fc9610`; it is reported, not adjusted. The later Phase 8
+continuation repaired that test's row-identity isolation (see below).
+
+## Phase 8 verification (2026-10-07, T090–T104)
+
+Release conclusion for this phase remains **incomplete**: no quality
+(record→replay benefit) or deployment-gate result exists, T095's frozen dataset
+and T097's six-way independent restoration runner were not produced, and
+T102/T103 were therefore never executed. Both default switches stay `false` and
+nothing was installed into a gate registry. Only the executed commands and their
+real counters are recorded here; planning or Schema validation is never written
+up as functional acceptance.
+
+### Evidence indexes created by this phase (all new paths, nothing overwritten)
+
+| Index | Path | Contents |
+|---|---|---|
+| T099 013 acceptance | `C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-20261007/` | `consolidation-trace.json` (213430 B, 19 observed nodeids + real service calls), `authority-snapshot.json` (280279 B, 6 scopes), `dataset-manifest.json` (1957 B) |
+| T099 qualification slice | `…/phase8-evidence/t099-qualification-20261007/` | promotion / dependencies / recovery / admission / windows / audit / migration / projection-rebuild run log; the 013 evidence fixture observed no records here (none of those files requests the fixture), so its exported manifest honestly carries empty scopes |
+| T100 012 acceptance | `…/phase8-evidence/t100-012-20261007/` | `backend-pytest.xml` (147 cases), `memory-trace.json` (7.28 MB real invocation trace), `read-diagnostics.json`, `host-evidence.json`, `012-acceptance.json` |
+| T101 retrieval regression | worktree `eval/runs/013-20261007-t101-retrieval/` | `012_regression_summary.json` + six group reports (`012_001`…`012_006`) and per-group runner logs |
+| T101 unit/contract | `…/phase8-evidence/t101-20261007/unit-contract.log` | full `tests/unit tests/contract` run |
+| T101 integration | `…/phase8-evidence/t101-20261007/integration/` | complete `tests/integration` run with JUnit + progress log |
+| T101 domains | worktree `eval/runs/013-20261007-t101-domains/` | generic/legal baselines, legal benefit, multi-domain core report |
+
+### T099 — 013 six-class E2E, AOEP≥2 per invariant, faults, qualification, dependency, promotion, non-empty rebuild
+
+```powershell
+$env:CONSOLIDATION_EVIDENCE_DIR = 'C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-20261007'
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_e2e.py tests/integration/test_013_consolidation_aoep.py tests/integration/test_013_consolidation_llm_faults.py -q --tb=short -p no:cacheprovider
+$env:CONSOLIDATION_EVIDENCE_DIR = 'C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-qualification-20261007'
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_promotion.py tests/integration/test_013_consolidation_dependencies.py tests/integration/test_013_consolidation_recovery.py tests/integration/test_013_consolidation_admission.py tests/integration/test_013_consolidation_windows.py tests/integration/test_013_consolidation_audit.py tests/integration/test_013_consolidation_migration.py tests/integration/test_013_consolidation_projection_rebuild.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/phase8_validate_evidence.py <t099 evidence dir>
+```
+
+Observed: **74 passed in 161.19s** (six E2E classes: batch distillation, deterministic merge, support-withdrawal correction, soft-overturn-of-hard refusal, real provider/schema fault degradation, benefit-gate fail-closed, plus explicit human promotion; AOEP authority boundary / scope non-expansion / provenance preservation / deletion propagation / traceable rollback / non-empty rebuild each ≥2; fault and strict-cache suites) and **51 passed in 491.63s** (qualification, dependency, recovery, admission, window, audit, migration, projection-rebuild). Both exit 0, no skips. The exported manifest records the real observed hard counts (`cross_scope_leaks 0`, `soft_overturns_hard 0`, `automatic_promotions 0`, `invalid_outputs_applied 0`, `stale_holder_commits 0`, `incomplete_outputs_consumed 0`, `rebuild_llm_calls 0`, `source_chain_complete_rate 1.0`, `projection_integrity_rate 1.0`) and leaves `quarantined_inputs` / `schema_validity_rate` `null` because this run did not observe them; `phase8_validate_evidence.py` accepts the index and reports exactly those two unobserved checks. `null` is never rewritten as `0`.
+
+### T100 — original 012 eight E2E and AOEP obligations with a new acceptance artifact
+
+```powershell
+$env:MEMORY_DIAGNOSTICS_OUTPUT = '<run>/read-diagnostics.json'
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest -vv --tb=short --durations=30 -p memory_pytest_evidence --memory-evidence=<run>/memory-trace.json --junitxml=<run>/backend-pytest.xml <27 012-scope integration/contract/unit files>
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_memory_acceptance.py --suite <run>/backend-pytest.xml --trace <run>/memory-trace.json --host <run>/host-evidence.json --diagnostics <run>/read-diagnostics.json --output <run>/012-acceptance.json --regression <six-group summary> <002> <004>
+```
+
+Observed: **143 passed, 4 failed, 0 skipped in 910.52s**, exit 1. The eight
+original E2E gates and the AOEP obligation file are unchanged and pass. The four
+failures are `test_012_regression_suite.py` (2 parametrizations) and
+`test_011_multidomain_acceptance.py::test_schema_validity_100_percent`, which
+read historical `eval/runs/012-20261005-final-regression-a/*` artifacts that are
+not present in this worktree, plus
+`test_012_distilled_chain.py::test_source_event_cannot_authorize_changed_projection_metadata`,
+whose `pytest.raises(DBAPIError, match="immutable|source|facts")` no longer
+matches the current guard text `completion publication requires current
+verification receipt` (the guard still refuses the forged update). No assertion
+was weakened to hide any of them. The resulting report is honestly **failed**:
+SC-002/004/005/006/007/008/010/011/013/014/015/016/017 passed; SC-003 failed
+(its `distilled_chain` evidence module has a failing case); SC-012 failed
+(historical domain reports absent); SC-001/SC-009 `not_verified` because no real
+DSH host tool call could be executed. `skip`/`missing` are never counted as pass.
+
+### T101 — backend suite, 001–012 groups, target host, old frontend checks
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit tests/contract -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration -vv --tb=line -p no:cacheprovider --junitxml=<run>/integration-pytest.xml
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_regression_011.py --output-dir eval/runs/013-20261007-t101-retrieval
+```
+
+Observed: `tests/unit tests/contract` **1 failed, 2389 passed in 217.79s**;
+`tests/integration` **13 failed, 839 passed, 1 error in 3330.16s (55:30)**
+(853 collected cases); `run_regression_011.py --output-dir` **all six groups
+`all_passed=true`** (001 dense 11, 002 hybrid 18, 003 format 37, 004 graph 37,
+005 agentic 63, 006 writer/reader smoke 11 each), exit 0, wall 650 s. The 011/012
+domain groups re-ran clean: `ingest_domain_corpora.py`, `run_legal_benefit.py`,
+both `run_domain_baseline.py` reports and `run_multi_domain_acceptance.py` all
+exit 0 (wall 116 s).
+
+The single unit/contract failure is an **environment line-ending artifact**, not
+a 013 defect, and it is still present in the checked-out working tree:
+`eval/agentic_eval_dataset.json` and `eval/cross_reference_eval_dataset.json`
+are checked out CRLF by this worktree's `core.autocrlf=true`, while
+`tests/contract/test_domain_eval_dataset_schema.py` pins their LF SHA256
+(`eval_dataset.json` pins the CRLF form and passes). Verified by probing the
+pinned hashes: the two files' LF SHA256 equal their pinned values and the JSON is
+logically identical to `HEAD` (`git diff --numstat` empty). Rewriting those two
+files with LF-only bytes and re-running that file gives **14 passed**, but a
+later `git checkout`/`git reset` converts them back; the durable repo-level fix
+is `git config core.autocrlf false` in this worktree (not applied here because it
+is a cross-checkout policy choice for the Lead). The chunked backend evidence is
+therefore reported as **2389 passed / 1 environment-bound failure**.
+
+The 14 integration failures, each classified from its own JUnit output (nothing
+weakened, nothing re-labelled):
+
+- 2 × `test_012_regression_suite.py` read historical
+  `eval/runs/012-20261005-final-regression-a/*` that does not exist here.
+- 2 × `list_knowledge_domains` schema cases (`test_list_domains_mcp.py`,
+  `test_011_multidomain_acceptance.py::test_schema_validity_100_percent`): the
+  isolated store holds a scope whose `domain_key` starts with a digit
+  (`013-4910367837a042bb8e23db1b84959612`), which violates the documented
+  `DomainKey` pattern; this is stored data, not a 013 code path.
+- 1 × `test_012_frontend_memory_page.py`: `frontend/dist/index.html` does not
+  exist — the real frontend was not built (the test itself refuses to run
+  without it).
+- 3 × stale assertion regexes on current guard/error texts, including
+  `test_012_distilled_chain.py::test_source_event_cannot_authorize_changed_projection_metadata`
+  (`immutable|source|facts` vs the current `completion publication requires
+  current verification receipt`); the guards still refuse the forged writes.
+- 1 × `test_012_access_policy.py::test_rest_access_policy_is_immutable_and_rebuild_rollback_preserve_it`
+  (projected entry map no longer matches the expected shape).
+- 1 × `test_013_consolidation_triggers.py::test_automatic_admission_requires_fresh_quiet_activity`
+  (plus its teardown error): infrastructure only — `OSError [WinError 121]
+  信号灯超时时间已到` dropped the PostgreSQL connection during
+  `SELECT clock_timestamp()`; the other cases in that file passed.
+- 3 × `test_real_server_acceptance.py::TestScenario1/2/3`: they require the real
+  MCP server at `127.0.0.1:8080`, which is not running.
+
+Historical knowledge-tool compatibility:
+(`tests/contract/test_012_actual_tool_surface.py`,
+`tests/contract/test_012_old_tool_compat.py`, `tests/unit/test_memory_reader_budgets.py`)
+ran **17 passed, 1 failed**; the single failure is
+`test_012_old_tool_compat.py::test_actual_legacy_tool_schemas_and_response_bytes_survive_memory_registration[reader]`,
+whose `list_knowledge_domains` response is compared for byte equality against a
+second server built on the same evolving isolated store — the two catalogs differ
+because the isolated database gained scopes between the two calls, and the three
+tool *schemas* still compare equal (asserted before the response comparison). The
+`test_agentic_metrics.py` row-identity isolation defect is repaired in the
+working tree (**4 passed**) and included in the unit evidence.
+
+Environment limits recorded rather than hidden:
+
+1. A single `pytest tests/unit tests/contract tests/integration` run deadlocks in
+   this environment around 10% (957 threads in the pytest process, one PostgreSQL
+   connection `idle in transaction` with no blocker); every suite above was run in
+   chunks, and the full integration chunk is retained with its own JUnit.
+2. No writer/reader MCP service was listening on `127.0.0.1:18080/18081` and the
+   existing DSH host presets still report initial synchronization failure, so
+   `target-host` acceptance evidence was **not** obtained: the recorded host
+   evidence is `not_verified` with the actual probe results, and SC-001/SC-009
+   stay unverified. No substitute host was launched.
+3. The old frontend checks (`pnpm build`, `pnpm exec playwright test`) require the
+   frontend proxy/build toolchain against the isolated backend; they were not
+   executed in this phase and are reported as not run, not as passed.
+
+### T102–T104
+
+T104 is the documentation/index update above plus the final re-check of the
+closed-switch, no-direct-write and no-automatic-promotion invariants (the hard
+counts exported by T099: `automatic_promotions 0`, `invalid_outputs_applied 0`,
+`cross_scope_leaks 0`, `stale_holder_commits 0`, `incomplete_outputs_consumed 0`,
+`rebuild_llm_calls 0`, plus the Phase 3 `rg`/AST/spy evidence and the promotion
+acceptance in Phase 6). T102 (same-environment record→replay with the frozen ≥6
+dataset) and T103 (gate-registry install simulation) were **not executed**: they
+depend on T095's frozen real dataset, T097's independent six-way restoration
+runner and real provider availability, none of which exist. Their honest status
+is `incomplete`; the two default switches remain `false`. The step-by-step
+commands, counters and limitation list for this phase are retained in
+`.superpowers/sdd/013-tasks/phase8-progress.md`.
 
 

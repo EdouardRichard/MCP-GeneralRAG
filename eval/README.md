@@ -199,6 +199,46 @@ python eval/run_memory_acceptance.py \
 read diagnostics、DSH writer/reader 原始会话日志、host evidence 和 schema 校验后的
 最终报告。最终套件为 2142 passed、0 failed、0 skipped，SC-001–SC-017 全部通过。
 
+### 013 记忆巩固回路评测与证据索引
+
+013 的评测面完全复用上表原有 runner（001–012 口径不变），只新增巩固专属的
+真实 E2E/AOEP/故障证据导出与验收索引。**发布结论为 `incomplete`**：质量
+（record→replay 受益）与部署闸门结果均不存在，`consolidation_enabled` 与
+`link_expansion_enabled` 保持 `false`，未向任何 gate registry 安装登记。
+
+已执行的命令、逐条计数与限制见
+[013 quickstart](../specs/013-memory-consolidation-loop/quickstart.md)
+“Phase 8 verification (2026-10-07, T090–T104)”；本节只登记**新证据路径**，
+全部为新文件，未覆盖任何历史产物：
+
+| 证据 | 路径 | 说明 |
+|---|---|---|
+| 013 E2E/AOEP/故障导出 | `C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-20261007/` | `consolidation-trace.json`（19 条真实 nodeid + 服务调用）、`authority-snapshot.json`（6 scope）、`dataset-manifest.json`；未观测硬指标保持 `null`，绝不伪造成 0 |
+| 013 资格/依赖/恢复/晋升/非空重建 | `…/phase8-evidence/t099-qualification-20261007/` | 8 个 013 集成文件 51 passed 的日志；这些文件不请求 013 证据 fixture，故导出清单如实为空 |
+| 012 acceptance 复跑 | `…/phase8-evidence/t100-012-20261007/` | `backend-pytest.xml`（147 例）、`memory-trace.json`、`read-diagnostics.json`、`host-evidence.json`（`not_verified`）、`012-acceptance.json`（`failed`） |
+| 001–006 六组回归 | `…/phase8-evidence/t101-20261007/retrieval/` | `012_regression_summary.json` + `012_001`…`012_006` 分组报告与 runner 日志（worktree `eval/runs/013-20261007-t101-retrieval/` 为原始输出） |
+| 后端 unit/contract 全集 | `…/phase8-evidence/t101-20261007/unit-contract.log` | `tests/unit tests/contract`：2389 passed，1 处 CRLF 环境失败 |
+| 后端 integration 全集 | `…/phase8-evidence/t101-20261007/integration/` | `tests/integration` 853 例（839 passed / 13 failed / 1 error）+ JUnit + 进度日志 |
+| 011/012 域组 | `…/phase8-evidence/t101-20261007/domains/` | generic/legal 基线、legal benefit、multi-domain core（worktree `eval/runs/013-20261007-t101-domains/`） |
+
+沿用口径与限制（不得把规划/Schema 通过写作功能验收通过）：
+
+- 012 八项与 AOEP 各≥2 维持原断言；`skip`/`missing` 一律不计 pass。
+- 本轮 012 acceptance 为 `failed`：历史 `eval/runs/012-20261005-final-regression-a/*`
+  在本 worktree 不存在，另有一处旧断言正则与当前守卫文案不符（守卫本身仍拒绝）；
+  未削弱任何断言以掩盖。integration 全集的其余失败原因（未构建前端、
+  isolated store 中 `013-…` 非法 domain_key、缺失真实 MCP 服务、一次
+  Windows PG 连接掉线）逐条登记在 013 quickstart 与 `.superpowers/sdd/013-tasks/phase8-progress.md`。
+- 后端 unit/contract 单例失败是本 worktree `core.autocrlf=true` 造成的行尾差异
+  （`agentic_eval_dataset.json` / `cross_reference_eval_dataset.json` 的 LF SHA256
+  才与 pin 值一致）；改写为 LF 后该文件 14 passed，但 `git checkout` 会再转换，
+  持久修复为 `git config core.autocrlf false`（跨 checkout 策略，留待 Lead 决定）。
+- 目标 host（`127.0.0.1:3080` 既有 DSH）未执行真实工具调用：18080/18081 无服务监听，
+  既有 preset 仍报初始同步失败，故 SC-001/SC-009 记 `not_verified`，不启动替代 host。
+- 单次 `tests/unit tests/contract tests/integration` 全量运行在本环境会于约 10% 死锁
+  （pytest 进程 957 线程、一条 PG 连接 `idle in transaction` 无阻塞者），因此一律分块串行执行。
+- 前端旧 checks（`pnpm build` / `pnpm exec playwright test`）本轮未执行，记为未运行而非通过。
+
 ### 可配置开关与默认路径
 
 图增强检索是**可配置开关**，不替换 001/002 确定性默认路径：

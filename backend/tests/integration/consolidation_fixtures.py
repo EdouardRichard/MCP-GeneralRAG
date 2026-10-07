@@ -13,7 +13,7 @@ async def create_scope(session, *, enabled=True):
     url = make_url(get_settings().database_url)
     isolated = os.environ.get('CONSOLIDATION_ISOLATED_DATABASE')
     assert isolated and url.database == isolated, '013 writes require the explicitly isolated database'
-    key = '013-' + uuid4().hex
+    key = 'c013-' + uuid4().hex
     session.add(DomainProfile(domain_key=key, name=key, supported_formats=['markdown'], graph_relations={},
                               default_capabilities={}, is_builtin=False,
                               memory_policy={'consolidation_enabled': enabled, 'consolidation': {}}))
