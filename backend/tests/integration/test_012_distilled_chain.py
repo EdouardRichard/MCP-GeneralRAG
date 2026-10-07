@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import select, func, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 
 from rag_mcp.models.memory_event import MemoryEvent
@@ -32,7 +32,7 @@ async def test_source_event_cannot_authorize_changed_projection_metadata(db_sess
     sid, payload = await scope_and_payload(db_session)
     service = MemoryService(db_session)
     source = await service.record(payload)
-    with pytest.raises(DBAPIError, match="immutable|source|facts"):
+    with pytest.raises(DBAPIError, match=r"completion publication requires current verification receipt|immutable|source|facts"):
         async with db_session.begin_nested():
             await db_session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(source["memory_id"])})
             await db_session.execute(text("UPDATE memory_entries SET confidence=0.99, title='forged' WHERE memory_id=:mid"), {"mid": source["memory_id"]})

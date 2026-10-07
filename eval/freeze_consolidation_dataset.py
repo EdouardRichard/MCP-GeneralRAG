@@ -267,6 +267,11 @@ def build_dataset(*, scope_id: int, domain_key: str, events: dict[str, int], chu
                   version: str, snapshot_hash: str, cutoff: int, clock: str, frozen: dict) -> dict:
     architecture = chunk_for(chunks, 'Architecture Review')
     weekly = chunk_for(chunks, 'Weekly Sync')
+    # A *correction* query declares two physically distinct relevance units: the
+    # unit the correction superseded (historical) and the unit that holds now
+    # (current).  Each unit therefore owns exactly its own real event; a unit that
+    # declared both events could not be told apart from its sibling and would bind
+    # both aliases onto one memory.
     queries = [
         build_query('q_extract_fact_01', 'extract_fact_01',
                     'Which retrieval-scope rule did the 2026-08-25 Architecture Review fix?',
@@ -290,22 +295,22 @@ def build_dataset(*, scope_id: int, domain_key: str, events: dict[str, int], chu
                          'validity': 'historical',
                          'expected_content': 'The approved embedding upgrade for the next release is '
                                              'text-embedding-3-large.',
-                         'events': ['embedding_obsolete', 'embedding_current']},
+                         'events': ['embedding_obsolete']},
                         {'alias': 'ru-embedding-current', 'group': 'eq-embedding-current', 'validity': 'current',
                          'expected_content': 'The approved embedding upgrade for the next release is BAAI/bge-m3.',
-                         'events': ['embedding_obsolete', 'embedding_current']}]),
+                         'events': ['embedding_current']}]),
         build_query('q_correct_02', 'correct_02',
                     'Who owns the frontend management console rewrite, and who owned it before?',
                     'correction', scope_id, events, chunk=weekly, units=[
                         {'alias': 'ru-frontend-owner-superseded', 'group': 'eq-frontend-owner-superseded',
                          'validity': 'historical',
                          'expected_content': 'The frontend management console rewrite was owned by Wei Zhang.',
-                         'events': ['frontend_obsolete', 'frontend_current']},
+                         'events': ['frontend_obsolete']},
                         {'alias': 'ru-frontend-owner-current', 'group': 'eq-frontend-owner-current',
                          'validity': 'current',
                          'expected_content': 'The frontend management console rewrite (React + antd) is owned by '
                                              'Maria Rodriguez.',
-                         'events': ['frontend_obsolete', 'frontend_current']}]),
+                         'events': ['frontend_current']}]),
         build_query('q_merge_01', 'merge_01',
                     'How are domain format and vocabulary differences expressed?',
                     'merge', scope_id, events, chunk=architecture, units=[

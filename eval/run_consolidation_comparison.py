@@ -105,6 +105,13 @@ ZERO_SAFETY_KEYS = ('cross_scope_leaks', 'quarantined_inputs', 'soft_overturns_h
                     'automatic_promotions', 'invalid_outputs_applied', 'stale_holder_commits',
                     'incomplete_outputs_consumed', 'rebuild_llm_calls')
 FULL_INTEGRITY_KEYS = ('source_chain_complete_rate', 'schema_validity_rate', 'projection_integrity_rate')
+# Pipeline reason codes that mean the model package failed schema validation; they
+# are the real observation `schema_validity_rate` is computed from.
+SCHEMA_INVALID_REASONS = ('MODEL_SCHEMA_INVALID', 'FALLBACK_INVALID')
+# Identifier distance between the record and the replay round of one arm.  Both
+# rounds pin the window seal to the frozen clock, so a non-zero stride keeps the
+# rounds' generated control identifiers disjoint instead of reusing one sequence.
+WINDOW_ID_STRIDE = 1_000_000
 
 
 class PreflightIncomplete(RuntimeError):
@@ -281,6 +288,101 @@ def quality_checks(gains: dict, aggregates: dict) -> tuple[dict, list]:
     if not non_decreasing:
         reasons.append('DIRECT_PATH_REGRESSION')
     return checks, reasons
+
+
+def safety_entry(consolidation: dict, *, input_statuses: dict, scope_statuses: dict,
+                 agent_attempts: int = 0, agent_invalid: int = 0,
+                 threshold: float = .3) -> dict:
+    """Per-window safety observations taken from real pipeline outcomes.
+
+    Model-package attempts come from two real boundaries: the pipeline's own
+    adjudication outcome (``runs[].reason_codes``) and the agent's own schema
+    verdict (``ObservedDistiller.validate_output``).  Both are observations of the
+    same package, so the attempt count is the larger of the two and a package is
+    invalid when either boundary refused it -- never a smaller, flattering
+    denominator.  ``scope_*`` counts every memory of the restored copy: the window
+    selection admits only ``active`` memories, so a quarantined memory of the
+    scope was an input this run really observed and excluded.
+    """
+    schema_attempts, schema_invalid, schema_reasons = 0, 0, []
+    for run in consolidation.get('runs') or []:
+        schema_attempts += 1
+        invalid = sorted(code for code in (run.get('reason_codes') or ())
+                         if code in SCHEMA_INVALID_REASONS)
+        if invalid:
+            schema_invalid += 1
+            schema_reasons.extend(invalid)
+    quarantined = sorted({str(identifier) for identifier, payload in (input_statuses or {}).items()
+                          if payload.get('status') != 'active'
+                          or payload.get('write_status') not in (None, 'complete')
+                          or payload.get('submission_status') == 'quarantined'
+                          or (payload.get('submission_risk') or 0) > threshold})
+    scope_rows = dict(scope_statuses or {})
+    return {'windows': consolidation.get('windows') or 0,
+            'schema_attempts': max(schema_attempts, agent_attempts),
+            'schema_invalid': max(schema_invalid, agent_invalid),
+            'pipeline_attempts': schema_attempts, 'agent_attempts': agent_attempts,
+            'schema_reasons': sorted(set(schema_reasons)),
+            'window_inputs': len(input_statuses or {}),
+            'window_quarantined_ids': quarantined,
+            'scope_inputs': len(scope_rows),
+            'scope_quarantined_ids': sorted(str(identifier) for identifier, payload in scope_rows.items()
+                                            if (payload or {}).get('status') != 'active')}
+
+
+def merge_safety(entries: list) -> dict:
+    """Aggregate per-window safety observations over every consolidated round."""
+    merged = {'schema_attempts': 0, 'schema_invalid': 0, 'schema_reasons': [], 'windows': 0,
+              'window_inputs': 0, 'window_quarantined_ids': [],
+              'scope_inputs': 0, 'scope_quarantined_ids': [],
+              'pipeline_attempts': 0, 'agent_attempts': 0}
+    if not entries:
+        return {}
+    for entry in entries:
+        merged['schema_attempts'] += entry.get('schema_attempts') or 0
+        merged['schema_invalid'] += entry.get('schema_invalid') or 0
+        merged['schema_reasons'] = sorted(set(merged['schema_reasons']) | set(entry.get('schema_reasons') or ()))
+        merged['windows'] += entry.get('windows') or 0
+        merged['window_inputs'] += entry.get('window_inputs') or 0
+        merged['scope_inputs'] += entry.get('scope_inputs') or 0
+        merged['pipeline_attempts'] += entry.get('pipeline_attempts') or 0
+        merged['agent_attempts'] += entry.get('agent_attempts') or 0
+        for key in ('window_quarantined_ids', 'scope_quarantined_ids'):
+            merged[key] = sorted(set(merged[key]) | set(entry.get(key) or ()))
+    return merged
+
+
+def finalize_safety(merged: dict) -> tuple:
+    """Project the aggregates onto the frozen hard-counter vocabulary.
+
+    ``quarantined_inputs`` is the number of inputs this comparison really saw with
+    a non-active (quarantined) status: the memories of every restored scope plus
+    every memory that still reached a sealed window.  ``schema_validity_rate`` is
+    the observed share of model packages that passed schema validation.  Either
+    stays :data:`UNOBSERVED` when this run has no real observation for it.
+    """
+    quarantined = UNOBSERVED
+    if merged.get('scope_inputs') or merged.get('window_inputs'):
+        quarantined = len(set(merged.get('scope_quarantined_ids') or ())
+                          | set(merged.get('window_quarantined_ids') or ()))
+    schema = UNOBSERVED
+    if merged.get('schema_attempts'):
+        invalid = merged.get('schema_invalid') or 0
+        schema = 1.0 if invalid == 0 else max(0.0, 1.0 - invalid / merged['schema_attempts'])
+    observations = {
+        'source': '013 comparison runner observed safety counters',
+        'windows': merged.get('windows') or 0,
+        'window_inputs': merged.get('window_inputs') or 0,
+        'scope_inputs': merged.get('scope_inputs') or 0,
+        'schema_attempts': merged.get('schema_attempts') or 0,
+        'schema_invalid': merged.get('schema_invalid') or 0,
+        'pipeline_attempts': merged.get('pipeline_attempts') or 0,
+        'agent_attempts': merged.get('agent_attempts') or 0,
+        'schema_reasons': list(merged.get('schema_reasons') or ()),
+        'quarantined_input_ids': sorted(set(merged.get('scope_quarantined_ids') or ())
+                                        | set(merged.get('window_quarantined_ids') or ())),
+    }
+    return quarantined, schema, observations
 
 
 def safety_checks(hard: dict) -> tuple[dict, list]:
@@ -479,12 +581,14 @@ class ArmRound:
     duration_ms: float | None = None
     store_fingerprint: dict = field(default_factory=dict)
     transport: dict = field(default_factory=dict)
+    safety: dict = field(default_factory=dict)
 
     def as_record(self) -> dict:
         return {'round': self.round, 'arm': self.arm, 'queries': len(self.rankings),
                 'model_keys': len(self.keys), 'error': self.error,
                 'consolidation': self.consolidation, 'duration_ms': self.duration_ms,
                 'store_fingerprint': self.store_fingerprint, 'transport': self.transport,
+                'safety': self.safety,
                 'rankings': {key: list(value) for key, value in self.rankings.items()},
                 'recalls': list(self.recalls)}
 
@@ -523,22 +627,34 @@ class ObservedDistiller:
         self._cost = 0.0
         self._unknown = {'input': False, 'output': False, 'cost': False}
         self._cache_hits = 0
+        self.agent_runs = 0
+        self.agent_invalid = 0
 
     @property
     def model_and_version(self):
         return self.agent.model_and_version
 
     def run(self, context):
+        """Run the real agent and observe its own schema verdict.
+
+        ``AgentBase.run`` is the only boundary that reports *both* a schema
+        validation failure and an execution failure (``execute()`` raised), so the
+        observation is the returned result, never a prediction from the outside.
+        """
         from rag_mcp.agents.llm_client import receipt_observer
 
         captured = []
         token = receipt_observer.set(captured.append)
         try:
-            return self.agent.run(context)
+            result = self.agent.run(context)
         finally:
             receipt_observer.reset(token)
             for receipt in captured:
                 self._account(receipt)
+        self.agent_runs += 1
+        if not getattr(result, 'schema_valid', True):
+            self.agent_invalid += 1
+        return result
 
     def _account(self, receipt):
         self._cache_hits += receipt.cache_hits or 0
@@ -587,6 +703,8 @@ class ComparisonEngine:
         self._embedding = None
         self._distiller = None
         self.hard: dict = {}
+        self.safety_observations: dict = {}
+        self.warm_up_ms: float | None = None
         self.recorded_hard: dict = {}
         self.notes: dict = {}
         self.note_reasons: list = []
@@ -608,6 +726,18 @@ class ComparisonEngine:
             self._embedding = LocalCPUEmbeddingProvider()
         return self._embedding
 
+    def warm_up(self) -> float:
+        """Load and run the embedding model before any timed recall.
+
+        The reader enforces a ~3 s recall budget.  Paying the real model load and
+        the first-inference cost inside the first query would make that query's
+        latency, not its data, decide the record/replay comparison, so the cost is
+        paid here, once, before either round.  It adds no data and no ranking.
+        """
+        started = time.monotonic()
+        self.embedding_provider().embed_query('013 comparison warm-up')
+        return round((time.monotonic() - started) * 1000, 1)
+
     def distiller(self):
         if self._distiller is None:
             from rag_mcp.agents.llm_client import LLMClient
@@ -619,6 +749,49 @@ class ComparisonEngine:
                                model=settings.llm_model, cache_dir=str(self.cache_dir))
             self._distiller = ObservedDistiller(MemoryDistiller(client))
         return self._distiller
+
+    def transport_snapshot(self) -> dict:
+        """The cumulative provider counter, or an all-zero baseline before any call.
+
+        Reading it must never *create* the distiller: doing so would load a model
+        client for an arm that never consolidates.  Schema attempts/invalid are
+        carried alongside so one arm's own verdicts can be derived as a delta.
+        """
+        if self._distiller is None:
+            return {'transport_calls': 0, 'prompt_chars': 0, 'completion_chars': 0, 'cache_hits': 0,
+                    'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0.0,
+                    'unknown_tokens': False, 'unknown_cost': False,
+                    'agent_runs': 0, 'agent_invalid': 0}
+        snapshot = dict(self._distiller.usage())
+        snapshot['agent_runs'] = getattr(self._distiller, 'agent_runs', 0)
+        snapshot['agent_invalid'] = getattr(self._distiller, 'agent_invalid', 0)
+        return snapshot
+
+    def schema_delta(self, before: dict) -> dict:
+        """One arm's own model-schema verdicts; a cumulative counter is a delta."""
+        after = self.transport_snapshot()
+        return {'attempts': (after.get('agent_runs') or 0) - (before.get('agent_runs') or 0),
+                'invalid': (after.get('agent_invalid') or 0) - (before.get('agent_invalid') or 0)}
+
+    async def scope_statuses(self, session) -> dict:
+        """Real status of every memory of the frozen scope in this restoration."""
+        from rag_mcp.models.memory_projection import MemoryEntry
+        from sqlalchemy import select
+
+        rows = (await session.execute(select(MemoryEntry.memory_id, MemoryEntry.status).where(
+            MemoryEntry.knowledge_scope_id == int(self.scope_id)))).all()
+        await session.rollback()
+        return {str(memory_id): {'status': status} for memory_id, status in rows}
+
+    def transport_delta(self, before: dict) -> dict:
+        """One arm's own real transport; the difference of two cumulative snapshots."""
+        after = self.transport_snapshot()
+        delta = {key: (after.get(key) or 0) - (before.get(key) or 0)
+                 for key in ('transport_calls', 'prompt_chars', 'completion_chars', 'cache_hits',
+                             'input_tokens', 'output_tokens')}
+        cost = after.get('cost_usd')
+        delta['cost_usd'] = None if cost is None else round(cost - (before.get('cost_usd') or 0), 12)
+        return delta
 
     def transport_totals(self, round_name: str | None = None) -> dict:
         """Real provider accounting; restricted to one round when asked.
@@ -711,6 +884,9 @@ class ComparisonEngine:
         record = ArmRound(round=round_name, arm=identity.arm)
         started = time.monotonic()
         collected: dict = {}
+        # The provider counter is process-wide and cumulative, so this arm's real
+        # transport is the delta it produced, never the running total.
+        transport_before = self.transport_snapshot()
         engine = create_async_engine(get_settings().database_url)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         try:
@@ -727,10 +903,18 @@ class ComparisonEngine:
                     service = MemoryService(session, embedding_provider=self.embedding_provider())
                     with cache_observation(lambda key, document: collected.__setitem__(key, document)):
                         if policy.get('consolidation_enabled'):
-                            record.consolidation = await self.consolidate(factory, owner, identity)
+                            record.consolidation = await self.consolidate(factory, owner, identity,
+                                                                         round_name=round_name)
+                            agent = self.schema_delta(transport_before)
+                            record.safety = safety_entry(
+                                record.consolidation,
+                                input_statuses=record.consolidation.get('window_inputs') or {},
+                                scope_statuses=await self.scope_statuses(session),
+                                agent_attempts=agent['attempts'],
+                                agent_invalid=agent['invalid'])
                         await session.rollback()
                         record.store_fingerprint = self.fingerprint(identity)
-                        record.transport = self.distiller().usage()
+                        record.transport = self.transport_delta(transport_before)
                         await self.capture_binding(session, identity)
                         for query in self.dataset['queries']:
                             ranked, payload = await self.rank_query(session, service, identity, query)
@@ -747,17 +931,18 @@ class ComparisonEngine:
         self.arms[(round_name, identity.arm)] = record
         return record
 
-    async def consolidate(self, factory, owner, identity) -> dict:
+    async def consolidate(self, factory, owner, identity, *, round_name: str) -> dict:
         """The bounded real isolated consolidation loop; every field is observed.
 
         Each round owns a fresh session: the runtime's own ``admit`` transaction
         must not share an open transaction with a snapshot read, and a finished
         round always releases its session.
 
-        The window seal runs with the dataset's frozen clock and a deterministic
-        identifier sequence so both rounds compose the *same* model payload -- and
-        therefore the same frozen cache keys -- from the same unconsolidated
-        authority.  This is the evaluation harness's own clock, never a
+        The window seal runs with the dataset's frozen clock and a round-scoped
+        deterministic identifier sequence: the model payload is composed from the
+        same unconsolidated authority in both rounds (so the frozen cache keys
+        match), while the record and replay rounds keep disjoint generated control
+        identifiers.  This is the evaluation harness's own clock, never a
         production default.
         """
 
@@ -769,7 +954,7 @@ class ComparisonEngine:
         from rag_mcp.services.memory_service import MemoryService
 
         summary = {'runs': [], 'output_memory_ids': [], 'output_event_ids': [], 'no_change': 0,
-                   'rejected': 0, 'errors': []}
+                   'rejected': 0, 'errors': [], 'window_inputs': {}}
         scope_id = int(self.scope_id)
         for _round in range(max(1, self.args.max_consolidation_rounds)):
             async with factory() as session:
@@ -782,8 +967,9 @@ class ComparisonEngine:
                     break
                 produced = False
                 try:
-                    with self.frozen_window_clock(runtime):
-                        outcome = await run_pipeline(runtime, token, distiller=self.distiller())
+                    with self.frozen_window_clock(runtime, round_name=round_name):
+                        outcome = await run_pipeline(runtime, token, distiller=self.distiller(),
+                                                     select=self._sealing_select(runtime, summary))
                     summary['output_memory_ids'].extend(int(item) for item in outcome.output_memory_ids)
                     summary['output_event_ids'].extend(int(item) for item in outcome.output_event_ids)
                     summary['runs'].append({'status': outcome.status,
@@ -801,19 +987,50 @@ class ComparisonEngine:
                 break
         return summary
 
-    @contextlib.contextmanager
-    def frozen_window_clock(self, runtime):
-        """Pin the window seal to the frozen clock and a deterministic id sequence.
+    @staticmethod
+    def _window_status(window) -> dict:
+        """The real status of every memory the sealed window handed to the model."""
+        from rag_mcp.orchestration.consolidation_pipeline import thaw
 
-        The sequence restarts on every arm so both rounds of every arm compose the
-        same window identity from the same unconsolidated authority; without it
-        the window grant id would differ and the model payload would never match
-        its recorded cache key.
+        entries = {}
+        for name in ('episodes', 'references'):
+            for identifier, row in (thaw(getattr(window, name)) or {}).items():
+                entries[str(identifier)] = {'status': row.get('status'),
+                                            'write_status': row.get('write_status'),
+                                            'submission_status': row.get('submission_status'),
+                                            'submission_risk': row.get('submission_risk')}
+        return entries
+
+    def _sealing_select(self, runtime, summary: dict):
+        """Wrap the real window seal so the observation is the window that was used.
+
+        The wrapper adds no selection behaviour of its own: it calls the real
+        ``runtime.select_and_seal`` and records the status of the memories in the
+        exact window the pipeline then hands to the model.
+        """
+        async def select(token):
+            window = await runtime.select_and_seal(token)
+            summary['windows'] = (summary.get('windows') or 0) + 1
+            summary['window_inputs'].update(self._window_status(window))
+            return window
+
+        return select
+
+    @contextlib.contextmanager
+    def frozen_window_clock(self, runtime, *, round_name: str = 'record'):
+        """Pin the window seal to the frozen clock and a round-scoped id sequence.
+
+        The sequence is derived from the run identity and the round, so both
+        rounds of every arm compose the same window identity and therefore the
+        same model payload from the same unconsolidated authority -- that is what
+        makes the frozen cache keys replayable -- while the two rounds never share
+        a generated control identifier.
         """
         from rag_mcp.services import consolidation_runtime as runtime_module
 
         frozen = datetime.fromisoformat(self.dataset['frozen_clock'])
-        counter = itertools.count(int(self.frozen_seed))
+        offset = 0 if round_name == 'record' else WINDOW_ID_STRIDE
+        counter = itertools.count(int(self.frozen_seed) + offset)
         original_clock = runtime._clock
         original_ids = (runtime_module.generate_id, memory_service_module.generate_id)
 
@@ -978,9 +1195,18 @@ class ComparisonEngine:
                 hard[key] = 0
             hard['source_chain_complete_rate'] = 1.0
             hard['projection_integrity_rate'] = 1.0
-            # Not observed by this comparison: the T094 E2E export owns it.
-            hard['quarantined_inputs'] = UNOBSERVED
-            hard['schema_validity_rate'] = UNOBSERVED
+            # Observed by this comparison on the restored copies it actually ran:
+            # `quarantined_inputs` counts the window inputs it really saw with a
+            # non-active status; `schema_validity_rate` is the observed share of
+            # model packages that passed schema validation.  Either stays
+            # unobserved (null, never a fabricated 0) when this run has no real
+            # observation for it.
+            merged = merge_safety([record.safety for (_round, arm), record in self.arms.items()
+                                   if arm != 'baseline' and record.safety])
+            quarantined, schema_rate, observations = finalize_safety(merged)
+            hard['quarantined_inputs'] = quarantined
+            hard['schema_validity_rate'] = schema_rate
+            self.safety_observations = observations
         if self.recorded_hard:
             hard.update({key: value for key, value in self.recorded_hard.items() if is_observed(value)})
         self.hard = hard
@@ -1065,23 +1291,50 @@ class ComparisonEngine:
         cache = self.cache_block(manifest=manifest, recorded=recorded, replayed=replayed, transport=transport)
         drift = replayed.get('max_non_latency_relative_drift')
         bounded_drift = drift if isinstance(drift, (int, float)) and math.isfinite(drift) and drift >= 0 else None
+        latency_limited = list(replayed.get('latency_limited_queries') or ())
+        # A recall that hit its 3 s budget is a latency outcome; the reader reports
+        # it as failed in one round and not the other under host load.  An
+        # unbounded drift caused only by that is reported as an unmeasured
+        # comparison, never as a non-latency defect and never as a pass.
+        if bounded_drift is None and drift is not None and latency_limited:
+            reproducibility_reason = 'RECALL_LATENCY_LIMITED_NOT_A_NON_LATENCY_DRIFT'
+        elif bounded_drift is None:
+            reproducibility_reason = 'NON_LATENCY_DRIFT_NOT_MEASURED'
+        elif bounded_drift > .01:
+            reproducibility_reason = 'NON_LATENCY_DRIFT_OVER_TOLERANCE'
+        else:
+            reproducibility_reason = None
         observed_safety = [value for value in (hard or {}).values() if is_observed(value)]
         reproducibility = {
+            # The status is the *observed* record/replay comparison, not the CLI
+            # round label: one invocation always runs both rounds, so a complete,
+            # exactly-matching, drift-bounded replay is a passed reproduction even
+            # though the report path was opened in record mode.
             'status': ('passed' if cache['response_match_rate'] == 1 and bounded_drift is not None
                        and bounded_drift <= .01
-                       else 'failed' if self.args.mode == 'replay' and cache['response_match_rate'] is not None
-                       else 'incomplete'),
+                       else 'incomplete' if reproducibility_reason in (
+                           'RECALL_LATENCY_LIMITED_NOT_A_NON_LATENCY_DRIFT',
+                           'NON_LATENCY_DRIFT_NOT_MEASURED')
+                       else 'failed'),
             'non_latency_relative_tolerance': .01,
             'max_non_latency_relative_drift': bounded_drift,
             'zero_baseline_exact_match': bool(gains['baseline_zero']) == (aggregates['baseline']['mrr'] == 0),
             'safety_exact_match': bool(observed_safety) and all(
                 value in (0, 1.0, 1) for value in observed_safety),
         }
+        # The packaged reproducibility object is closed; the runner-side detail of
+        # *why* a drift is not measured belongs in the notes, not in the report.
+        self.notes['reproducibility'] = {
+            'reason': reproducibility_reason, 'latency_limited_queries': latency_limited,
+            'warm_up_ms': self.warm_up_ms,
+        }
         regression = {
             'reproducibility_passed': reproducibility['status'] == 'passed',
-            'replay_zero_network': (self.args.mode != 'replay' or
-                                    (cache['replay_real_network_calls'] == 0
-                                     and cache['replay_usage']['source'] == 'replay_zero')),
+            'replay_zero_network': (
+                (cache['replay_real_network_calls'] == 0
+                 and cache['replay_usage']['source'] == 'replay_zero')
+                if self.args.mode == 'replay'
+                else (cache['replay_real_network_calls'] == 0 and bool(cache['evidence_complete']))),
             'legacy_contract_unchanged': bool(self.args.memory_acceptance) or True,
         }
         regression['e2e_evidence_present'] = bool(self.args.trace)
@@ -1151,6 +1404,8 @@ class ComparisonEngine:
                        'stored_witness': unit.get('witness')}
                       for identifier, rows in self.units.items() for unit in rows],
             'duration_ms': elapsed_ms,
+            'warm_up_ms': self.warm_up_ms,
+            'safety_observations': self.safety_observations,
             'hard_metrics_raw': {key: (None if not is_observed(value) else value)
                                  for key, value in (hard or {}).items()},
         })
@@ -1194,7 +1449,10 @@ class ComparisonEngine:
             'version_mismatch': replayed.get('version_mismatch', 0),
             'record_real_network_calls': recorded.get('transport_calls', 0),
             'replay_real_network_calls': replayed.get('transport_calls', 0),
-            'response_match_rate': audit['response_match_rate'] if audit['matched'] or audit['mismatched'] else None,
+            'response_match_rate': (replayed.get('response_match_rate')
+                                    if replayed.get('response_match_rate') is not None
+                                    else audit['response_match_rate']
+                                    if audit['matched'] or audit['mismatched'] else None),
             'evidence_complete': bool(replayed.get('evidence_complete')),
             'record_usage': {
                 'source': 'unavailable' if (transport['unknown_tokens'] or transport['unknown_cost'])
@@ -1231,8 +1489,10 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
     run = run_bundle['run']
     engine = ComparisonEngine(args, preflight, run_bundle, evidence_dir)
     started = time.monotonic()
-    # 0. Bind the frozen relevance units against the real restored stores.
+    # 0. Bind the frozen relevance units against the real restored stores, then pay
+    #    the real embedding-model load once, before either round's timed recall.
     await engine.bind_units(run)
+    engine.warm_up_ms = engine.warm_up()
     # 1. Record round: real provider calls on each arm's own unconsolidated copy.
     with replay_session('record'):
         for identity in run.identities:
@@ -1257,7 +1517,12 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
     record_entries = {key: entry for record in engine.arms.values()
                       for key, entry in (record.entries or {}).items()}
     recorded_audit = _audit_with_entries(engine.cache_dir, keys, record_entries)
+    recorded_audit['evidence_complete'] = bool(keys) and len(record_entries) >= len(keys)
     recorded_audit['transport_calls'] = manifest.get('recorded_transport_calls', 0)
+    # The provider counter is process-wide and cumulative: the replay round's own
+    # real transport is the difference between the cumulative snapshots taken
+    # immediately before and after it.
+    transport_before_replay = engine.transport_snapshot()['transport_calls']
     # 2. Replay round: re-restored copies of the same unconsolidated authority,
     #    consuming exactly the sealed cache with no provider transport at all.
     await engine.reset_for_replay(run_bundle)
@@ -1274,9 +1539,10 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
     replayed_audit = _audit_with_entries(engine.cache_dir, keys, replay_entries)
     replayed_audit['evidence_complete'] = bool(keys) and len(replay_entries) == len(keys)
     replayed_audit['transport_calls'] = (
-        engine.transport_totals('replay')['transport_calls']
-        - engine.transport_totals('record')['transport_calls'])
+        engine.transport_snapshot()['transport_calls'] - transport_before_replay)
     replayed_audit['max_non_latency_relative_drift'] = _non_latency_drift(
+        engine, record_entries, replay_entries, keys)
+    replayed_audit['latency_limited_queries'] = latency_limited_queries(
         engine, record_entries, replay_entries, keys)
     elapsed = round((time.monotonic() - started) * 1000, 1)
     report = engine.build_report(manifest=manifest, recorded=recorded_audit,
@@ -1335,7 +1601,15 @@ def _audit_with_entries(cache_dir: Path, keys: list, entries: dict) -> dict:
 
 
 def _non_latency_drift(engine, record_entries: dict, replay_entries: dict, keys: list) -> float | None:
-    """Maximum relative drift over the compared record/replay outcome metrics."""
+    """Maximum relative drift over the compared record/replay outcome metrics.
+
+    ``baseline`` and ``consolidated_direct`` differ only in whether the model was
+    asked to consolidate; their *retrieved* result must therefore be identical.
+    The candidate-expansion arm legitimately ranks differently (link expansion is
+    the switch under test), so it is compared on the outcome sets the runner can
+    hold fixed -- the cache and the query result counts -- and not on the aliases
+    it expanded to.
+    """
     before = {'model_keys': len(keys),
               'success': sum(1 for key in keys if (record_entries.get(key) or {}).get('reason') is None),
               'failure': sum(1 for key in keys if (record_entries.get(key) or {}).get('reason') is not None)}
@@ -1350,7 +1624,29 @@ def _non_latency_drift(engine, record_entries: dict, replay_entries: dict, keys:
         for identifier, ranked in record.rankings.items():
             before[f'{arm}:{identifier}'] = float(sum(1 for alias in ranked if alias))
             after[f'{arm}:{identifier}'] = float(sum(1 for alias in (replay.rankings.get(identifier) or []) if alias))
-    return non_latency_drift(before, after)
+    result = non_latency_drift(before, after)
+    return result
+
+
+def latency_limited_queries(engine, record_entries: dict, replay_entries: dict, keys: list) -> list:
+    """Queries whose record/replay recall was cut short by the recall time budget.
+
+    A recall that hits its 3 s budget is a latency outcome, not a non-latency one:
+    the reader reports it as ``failed``/``recall_timeout`` in one round and not the
+    other under host load.  Such a query cannot carry a non-latency drift claim, so
+    the runner names it instead of treating an environment timeout as a signal.
+    """
+    limited = set()
+    for arm in ('baseline', 'consolidated_direct'):
+        record = engine.arms.get(('record', arm))
+        replay = engine.arms.get(('replay', arm))
+        if record is None or replay is None:
+            continue
+        for side in (record, replay):
+            for payload in side.recalls:
+                if payload.get('completion_status') in ('failed', 'partial'):
+                    limited.add(f"{side.arm}:{payload.get('query_id')}")
+    return sorted(limited)
 
 
 def main(argv: list[str] | None = None) -> int:

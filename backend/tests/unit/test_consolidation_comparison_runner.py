@@ -25,6 +25,8 @@ from consolidation_eval_support import K, validate_comparison_report
 from run_consolidation_comparison import (
     EXIT_INCOMPLETE,
     MANIFEST_API_VERSION,
+    UNOBSERVED,
+    WINDOW_ID_STRIDE,
     ArmRound,
     ComparisonEngine,
     ComparisonFailed,
@@ -32,7 +34,9 @@ from run_consolidation_comparison import (
     _audit_with_entries,
     _non_latency_drift,
     check_preflight,
+    finalize_safety,
     main,
+    merge_safety,
     merge_units,
     quality_checks,
     query_trace,
@@ -40,6 +44,7 @@ from run_consolidation_comparison import (
     resolve_units,
     response_audit,
     safety_checks,
+    safety_entry,
 )
 
 from rag_mcp.agents.consolidation_replay import (
@@ -523,3 +528,115 @@ def _e2e_evidence(hard_counts=None, exitstatus=0):
             'tests': [{'nodeid': 'tests/integration/test_013_consolidation_e2e.py::t',
                        'records': [{'scenario': name} for name in scenarios]}],
             'hard_counts': counts}
+
+
+# ---------------------------------------------------------------------------
+# T102: observed safety counters and round-scoped window identifiers
+# ---------------------------------------------------------------------------
+
+def test_safety_counters_are_observed_from_real_window_inputs_and_outcomes():
+    """The two previously unobserved counters come from real observations only."""
+    active = safety_entry({'runs': [{'status': 'rejected', 'reason_codes': ['PROVIDER_TIMEOUT']}],
+                           'windows': 1},
+                          input_statuses={'11': {'status': 'active'}},
+                          scope_statuses={'11': {'status': 'active'},
+                                          '12': {'status': 'active'}})
+    assert active['window_inputs'] == 1 and active['window_quarantined_ids'] == []
+    assert active['scope_inputs'] == 2 and active['scope_quarantined_ids'] == []
+    assert active['schema_attempts'] == 1 and active['schema_invalid'] == 0
+    quarantined = safety_entry({'runs': [{'status': 'rejected', 'reason_codes': []}], 'windows': 1},
+                               input_statuses={'11': {'status': 'active'}},
+                               scope_statuses={'11': {'status': 'active'},
+                                               '12': {'status': 'quarantined'}})
+    assert quarantined['scope_quarantined_ids'] == ['12']
+    merged = merge_safety([active, quarantined])
+    assert merged['windows'] == 2 and merged['window_inputs'] == 2 and merged['scope_inputs'] == 4
+    counters, rate, observations = finalize_safety(merged)
+    assert counters == 1, 'a quarantined memory must be counted, never reported as zero'
+    assert rate == 1.0
+    assert observations['source'].startswith('013 comparison runner')
+
+
+def test_safety_counters_stay_unobserved_without_a_real_observation():
+    """No window and no model package means null, never a fabricated zero."""
+    counters, rate, observations = finalize_safety(merge_safety([]))
+    assert counters is UNOBSERVED and rate is UNOBSERVED
+    assert observations['windows'] == 0 and observations['schema_attempts'] == 0
+    # A model package refused by schema validation is a real observation of a
+    # failing schema-validity rate, not an unobserved counter.  The agent's own
+    # verdict is as binding as the pipeline's reason code.
+    invalid = safety_entry({'runs': [{'status': 'rejected', 'reason_codes': ['MODEL_SCHEMA_INVALID']}],
+                            'windows': 1},
+                           input_statuses={'11': {'status': 'active'}},
+                           scope_statuses={'11': {'status': 'active'}})
+    counters, rate, _ = finalize_safety(merge_safety([invalid]))
+    assert counters == 0 and rate == 0.0
+    agent_only = safety_entry({'runs': [{'status': 'rejected', 'reason_codes': []}], 'windows': 1},
+                              input_statuses={'11': {'status': 'active'}},
+                              scope_statuses={'11': {'status': 'active'}},
+                              agent_attempts=2, agent_invalid=1)
+    assert agent_only['schema_attempts'] == 2 and agent_only['schema_invalid'] == 1
+    _, rate, _ = finalize_safety(merge_safety([agent_only]))
+    assert rate == 0.5
+
+
+def test_window_identifier_stride_keeps_the_two_rounds_disjoint(tmp_path):
+    """Record and replay seal the same payload but never share generated ids."""
+    engine = _engine(tmp_path)
+    engine.frozen_seed = 12345
+    ids = {}
+    for name in ('record', 'replay'):
+        with engine.frozen_window_clock(SimpleNamespace(_clock=None), round_name=name):
+            from rag_mcp.services import consolidation_runtime as runtime_module
+
+            ids[name] = [runtime_module.generate_id() for _ in range(3)]
+    assert ids['record'] == [12345, 12346, 12347]
+    assert ids['replay'] == [12345 + WINDOW_ID_STRIDE, 12346 + WINDOW_ID_STRIDE, 12347 + WINDOW_ID_STRIDE]
+    assert not set(ids['record']) & set(ids['replay'])
+    # Re-running the record round reproduces the identical sequence: the seal is
+    # pinned, so the frozen cache key of the first round is reproducible.
+    with engine.frozen_window_clock(SimpleNamespace(_clock=None), round_name='record'):
+        from rag_mcp.services import consolidation_runtime as runtime_module
+
+        assert [runtime_module.generate_id() for _ in range(3)] == ids['record']
+
+
+def test_reproducibility_status_is_the_observed_comparison_not_the_round_label(tmp_path):
+    """One invocation runs both rounds; the verdict must follow the measurement."""
+    engine = _engine(tmp_path)
+    replayed = {'transport_calls': 0, 'evidence_complete': True, 'recorded_success': 2,
+                'recorded_failure': 0, 'missing': 0, 'corrupt': 0, 'version_mismatch': 0,
+                'response_match_rate': 1.0, 'max_non_latency_relative_drift': 0.0}
+    report = engine.build_report(manifest=_manifest(tmp_path), recorded={}, replayed=replayed,
+                                 elapsed_ms=1.0)
+    assert engine.args.mode == 'record'
+    assert report['reproducibility']['status'] == 'passed'
+    assert report['reproducibility']['max_non_latency_relative_drift'] == 0.0
+    assert report['gates']['regression']['checks']['replay_zero_network'] is True
+    # An unmeasured drift is never a pass, and a drift over tolerance fails.
+    for drift, expected in ((None, 'incomplete'), (0.5, 'failed')):
+        report = engine.build_report(manifest=_manifest(tmp_path), recorded={},
+                                     replayed=dict(replayed,
+                                                   max_non_latency_relative_drift=drift),
+                                     elapsed_ms=1.0)
+        assert report['reproducibility']['status'] == expected
+
+
+def test_arm_transport_is_the_arms_own_delta_not_a_running_total(tmp_path):
+    """A process-wide cumulative counter must not be reported as one arm's usage."""
+    engine = _engine(tmp_path)
+    before = {'transport_calls': 6, 'prompt_chars': 84446, 'completion_chars': 16713, 'cache_hits': 2,
+              'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0.0}
+    engine._distiller = SimpleNamespace(usage=lambda: dict(before))
+    assert engine.transport_delta(before) == {
+        'transport_calls': 0, 'prompt_chars': 0, 'completion_chars': 0, 'cache_hits': 0,
+        'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0.0}
+    after = dict(before, transport_calls=8, cache_hits=3)
+    engine._distiller = SimpleNamespace(usage=lambda: dict(after))
+    delta = engine.transport_delta(before)
+    assert delta['transport_calls'] == 2 and delta['cache_hits'] == 1
+    # Reading the counter must never create the distiller for a baseline arm.
+    fresh = _engine(tmp_path)
+    fresh._distiller = None
+    assert fresh.transport_snapshot()['transport_calls'] == 0 and fresh._distiller is None
+

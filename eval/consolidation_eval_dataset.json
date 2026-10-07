@@ -126,8 +126,7 @@
           "equivalence_group": "eq-embedding-superseded",
           "expected_content": "The approved embedding upgrade for the next release is text-embedding-3-large.",
           "source_event_ids": [
-            "366085059708452864",
-            "366085067493081088"
+            "366085059708452864"
           ],
           "validity": "historical"
         },
@@ -136,7 +135,6 @@
           "equivalence_group": "eq-embedding-current",
           "expected_content": "The approved embedding upgrade for the next release is BAAI/bge-m3.",
           "source_event_ids": [
-            "366085059708452864",
             "366085067493081088"
           ],
           "validity": "current"
@@ -178,8 +176,7 @@
           "equivalence_group": "eq-frontend-owner-superseded",
           "expected_content": "The frontend management console rewrite was owned by Wei Zhang.",
           "source_event_ids": [
-            "366085076624080896",
-            "366085087126618112"
+            "366085076624080896"
           ],
           "validity": "historical"
         },
@@ -188,7 +185,6 @@
           "equivalence_group": "eq-frontend-owner-current",
           "expected_content": "The frontend management console rewrite (React + antd) is owned by Maria Rodriguez.",
           "source_event_ids": [
-            "366085076624080896",
             "366085087126618112"
           ],
           "validity": "current"
