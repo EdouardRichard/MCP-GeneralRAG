@@ -1,19 +1,63 @@
 """Shared pytest fixtures for RAG MCP tests."""
 
 import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from rag_mcp.config import get_settings
-from rag_mcp.models import Base
 
 # Tests exercise the upload endpoint but do not depend on the asynchronous
 # ingestion pipeline (which loads the real bge-m3 model and runs against live
 # Qdrant). Disable background ingestion so uploads stay in 'uploaded' status,
 # keeping tests deterministic and free of un-awaited background tasks.
 os.environ.setdefault("INGESTION_BACKGROUND", "false")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def consolidation_evidence_bundle(request):
+    """T094: real 013 acceptance-evidence collection, gated on the environment.
+
+    Created for every run so a whole-suite 013 acceptance run exports evidence,
+    but it only writes files when ``CONSOLIDATION_EVIDENCE_DIR`` is configured
+    (the 012 observer's ``--memory-evidence`` caliber). The per-test
+    ``consolidation_evidence`` fixture always works in memory, so a test can
+    assert on real observations with or without an export directory.
+    """
+    target = os.environ.get("CONSOLIDATION_EVIDENCE_DIR")
+    if not target:
+        yield None
+        return
+    from tests.integration.consolidation_evidence import EvidenceBundle
+
+    bundle = EvidenceBundle(target)
+    request.config._consolidation_evidence_bundle = bundle
+    yield bundle
+
+
+@pytest.fixture
+def consolidation_evidence(request, monkeypatch):
+    """Per-test recorder for real 013 observations and observed hard counts.
+
+    When an export directory is configured the real memory services are also
+    observed with the 012 observer caliber; the wrapped production call is
+    returned unchanged, so no test outcome depends on the observation.
+    """
+    from tests.integration.consolidation_evidence import EvidenceObserver, instrument
+
+    bundle = request.getfixturevalue("consolidation_evidence_bundle")
+    observer = EvidenceObserver(bundle, request.node.nodeid)
+    if bundle is not None:
+        instrument(monkeypatch, observer)
+    return observer
+
+
+def pytest_sessionfinish(session, exitstatus):
+    bundle = getattr(session.config, "_consolidation_evidence_bundle", None)
+    if bundle is not None:
+        bundle.finalize(int(exitstatus))
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -54,8 +98,8 @@ async def test_client(engine):
     """Create an async test client with DB session dependency override."""
     from httpx import ASGITransport, AsyncClient
 
-    from rag_mcp.api.projects import get_session as projects_get_session
     from rag_mcp.api.knowledge_sources import get_session as ks_get_session
+    from rag_mcp.api.projects import get_session as projects_get_session
     from rag_mcp.api.runtime_metrics import get_session as metrics_get_session
     from rag_mcp.server import app
 

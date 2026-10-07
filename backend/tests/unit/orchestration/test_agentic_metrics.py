@@ -97,6 +97,35 @@ class _RecordMachine:
         }
 
 
+async def _agentic_run_ids(session):
+    rows = (await session.execute(
+        select(RetrievalRun.run_id).where(RetrievalRun.retrieval_mode == "agentic")
+    )).scalars().all()
+    return set(rows)
+
+
+async def _unrelated_agentic_history(session):
+    """Pre-existing agentic rows, exactly the reused-history condition (T101).
+
+    The isolated database is reused between runs, so other agentic rows (with a
+    different completion status) already exist. An unordered ``rows[-1]`` can
+    select one of them instead of the row this call wrote, which is the
+    observed defect; identity must be the exact fresh delta.
+    """
+    from rag_mcp.services.retrieval_service import persist_retrieval_run
+
+    written = [
+        await persist_retrieval_run(session, query="unrelated agentic history", project_scopes=["100"],
+                                    completion_status="complete", evidence_count=9, duration_ms=7,
+                                    retrieval_mode="agentic", tool="search_knowledge"),
+        await persist_retrieval_run(session, query="another unrelated agentic history", project_scopes=["100"],
+                                    completion_status="complete", evidence_count=3, duration_ms=5,
+                                    retrieval_mode="agentic", tool="search_knowledge"),
+    ]
+    await session.commit()
+    return written
+
+
 @pytest.mark.asyncio
 async def test_record_agentic_retrieval_run_writes_row(db_session):
     from rag_mcp.orchestration.entry import _record_agentic_retrieval_run
@@ -108,6 +137,8 @@ async def test_record_agentic_retrieval_run_writes_row(db_session):
     }
     record = {"completion_status": "partial"}
 
+    history = await _unrelated_agentic_history(db_session)
+    before = await _agentic_run_ids(db_session)
     await _record_agentic_retrieval_run(
         db_session,
         machine=machine,
@@ -124,8 +155,10 @@ async def test_record_agentic_retrieval_run_writes_row(db_session):
             select(RetrievalRun).where(RetrievalRun.retrieval_mode == "agentic")
         )
     ).scalars().all()
-    assert rows, "expected an agentic retrieval_runs row"
-    run = rows[-1]
+    fresh = [row for row in rows if row.run_id not in before]
+    assert len(fresh) == 1, "expected exactly one new agentic retrieval_runs row"
+    run = fresh[0]
+    assert {row.completion_status for row in rows} >= {"partial", "complete"}
     assert run.tool == "search_knowledge"
     assert run.completion_status == "partial"
     assert run.evidence_count == 2
@@ -136,5 +169,6 @@ async def test_record_agentic_retrieval_run_writes_row(db_session):
     assert run.provider_usage["embedding_calls"] == 1
     assert run.error_summary["code"] == "PARTIAL_PATHS_FAILED"
     assert run.error_summary["failed_paths"] == ["dense"]
-    await db_session.execute(delete(RetrievalRun).where(RetrievalRun.run_id == run.run_id))
+    await db_session.execute(delete(RetrievalRun).where(RetrievalRun.run_id.in_([run.run_id, *history])))
     await db_session.commit()
+    assert await _agentic_run_ids(db_session) == before - {run.run_id} - set(history)

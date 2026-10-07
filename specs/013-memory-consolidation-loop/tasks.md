@@ -220,9 +220,9 @@
 
 - [X] T090 [P] [US4] 在 `backend/tests/unit/test_consolidation_comparison_report.py` 先写distinct同scope六query与2+2+2/两提炼kind、真实非空labels、二元MRR/nDCG物理rank/重复alias gain0、宏平均K5/缺位0、零baseline不可计算、双3%AND/三非降、三闸和incomplete空/null观测测试；013.2 passed必须完整gate_binding、环境同字段一致、跨scope/旧绑定/direct授权扩展均拒绝，runner与T061共享纯语义validator，依赖 T089。
 - [X] T091 [P] [US4] 在 `backend/tests/unit/test_consolidation_eval_replay.py` 先写原(model,system,user)稳定key、首轮成功/失败缓存、重放原始未巩固snapshot、miss/corrupt/version mismatch不gap-fill、仅LLM transport阻断/计数、非延迟≤1%与安全零容差、usage未知null/重放额外LLM0及输出拒覆盖测试，依赖 T089。
-- [ ] T092 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_e2e.py` 先建立六类真实E2E：批量提炼、确定性归并/纠正、软推翻hard拒绝+审计、模型/Schema故障降级、闸门失败/通过控制、候选人工晋升；引用已有阶段fixture，不以预置pass代替真实观测，依赖 T089。
-- [ ] T093 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_aoep.py` 先建立权威边界/范围不扩张/来源保留/删除传播/可追溯rollback五不变量各≥2例，覆盖quarantined双排除、旧holder0、无新episode传播、非空派生/TTL后重建且模型0，依赖 T089。
-- [ ] T094 [US4] 在 `backend/tests/conftest.py` 接入CONSOLIDATION_EVIDENCE_DIR的013证据fixture，导出真实nodeid/scenario/资格/事件/manifest/硬计数/transport trace与可复原authority snapshot/DomainProfile/policy/published证据/冻结clock，脱敏同域并拒覆盖，复用 `eval/memory_pytest_evidence.py` 原012证据口径，依赖 T090、T091、T092、T093。
+- [X] T092 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_e2e.py` 先建立六类真实E2E：批量提炼、确定性归并/纠正、软推翻hard拒绝+审计、模型/Schema故障降级、闸门失败/通过控制、候选人工晋升；引用已有阶段fixture，不以预置pass代替真实观测，依赖 T089。
+- [X] T093 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_aoep.py` 先建立权威边界/范围不扩张/来源保留/删除传播/可追溯rollback五不变量各≥2例，覆盖quarantined双排除、旧holder0、无新episode传播、非空派生/TTL后重建且模型0，依赖 T089。
+- [X] T094 [US4] 在 `backend/tests/conftest.py` 接入CONSOLIDATION_EVIDENCE_DIR的013证据fixture，导出真实nodeid/scenario/资格/事件/manifest/硬计数/transport trace与可复原authority snapshot/DomainProfile/policy/published证据/冻结clock，脱敏同域并拒覆盖，复用 `eval/memory_pytest_evidence.py` 原012证据口径，依赖 T090、T091、T092、T093。
 
 ### US4 评测实现与真实验收
 
