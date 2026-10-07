@@ -201,10 +201,13 @@ read diagnostics、DSH writer/reader 原始会话日志、host evidence 和 sche
 
 ### 013 记忆巩固回路评测与证据索引
 
-013 的评测面完全复用上表原有 runner（001–012 口径不变），只新增巩固专属的
-真实 E2E/AOEP/故障证据导出与验收索引。**发布结论为 `incomplete`**：质量
-（record→replay 受益）与部署闸门结果均不存在，`consolidation_enabled` 与
-`link_expansion_enabled` 保持 `false`，未向任何 gate registry 安装登记。
+013 的评测面完全复用上表原有 runner（001–012 口径不变），新增巩固专属的
+真实 E2E/AOEP/故障证据导出、冻结数据集、六路独立还原 runner 与
+record→replay 对照 runner。**发布结论仍为 `incomplete`**：真实对照已执行，
+但部署闸门不授予任何权限（报告 `incomplete`、`default_enable_eligible=false`、
+`gate_binding=null`，T103 证明即使被安装也只得到 `GATE_VARIANT_NOT_AUTHORIZED`），
+`consolidation_enabled` 与 `link_expansion_enabled` 保持 `false`，未向任何生产
+gate registry 安装登记。
 
 已执行的命令、逐条计数与限制见
 [013 quickstart](../specs/013-memory-consolidation-loop/quickstart.md)
@@ -213,16 +216,47 @@ read diagnostics、DSH writer/reader 原始会话日志、host evidence 和 sche
 
 | 证据 | 路径 | 说明 |
 |---|---|---|
-| 013 E2E/AOEP/故障导出 | `C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-20261007/` | `consolidation-trace.json`（19 条真实 nodeid + 服务调用）、`authority-snapshot.json`（6 scope）、`dataset-manifest.json`；未观测硬指标保持 `null`，绝不伪造成 0 |
+| 冻结评测数据集 | `eval/consolidation_eval_dataset.json`（入库） | 6 条真实 query 绑定真实语料 chunk 与 10 条真实 memory event（scope `366084747748704256`），含合法 lineage、等价组与冻结版本 |
+| 权威快照 | `…/phase8-evidence/t095-20261007/authority-snapshot.json` | 可重建 authority 导出（digest `9b05336c…`）、已发布 policy、冻结 clock |
+| 六路独立还原 | `…/phase8-evidence/t097-20261007/` | capsule 索引、两份 restore receipt、run identities 与还原日志 |
+| 013 E2E/AOEP/故障导出 | `…/phase8-evidence/t099-20261007/` | `consolidation-trace.json`（19 条真实 nodeid + 服务调用）、`authority-snapshot.json`（6 scope）、`dataset-manifest.json`；未观测硬指标保持 `null`，绝不伪造成 0 |
 | 013 资格/依赖/恢复/晋升/非空重建 | `…/phase8-evidence/t099-qualification-20261007/` | 8 个 013 集成文件 51 passed 的日志；这些文件不请求 013 证据 fixture，故导出清单如实为空 |
-| 012 acceptance 复跑 | `…/phase8-evidence/t100-012-20261007/` | `backend-pytest.xml`（147 例）、`memory-trace.json`、`read-diagnostics.json`、`host-evidence.json`（`not_verified`）、`012-acceptance.json`（`failed`） |
-| 001–006 六组回归 | `…/phase8-evidence/t101-20261007/retrieval/` | `012_regression_summary.json` + `012_001`…`012_006` 分组报告与 runner 日志（worktree `eval/runs/013-20261007-t101-retrieval/` 为原始输出） |
+| 012 acceptance 复跑 | `…/phase8-evidence/t100-012-20261007-clean/` | `backend-pytest.xml`、`memory-trace.json`、`read-diagnostics.json`、`host-evidence.json`（`not_verified`）、`012-acceptance.json`（`failed`） |
+| 001–006 六组回归 | `…/phase8-evidence/t101-20261007/regression/`（原始输出在 worktree `eval/runs/013-20261007-t101-retrieval/`） | `012_regression_summary.json` + `012_001`…`012_006` 分组报告与 runner 日志 |
 | 后端 unit/contract 全集 | `…/phase8-evidence/t101-20261007/unit-contract.log` | `tests/unit tests/contract`：2389 passed，1 处 CRLF 环境失败 |
 | 后端 integration 全集 | `…/phase8-evidence/t101-20261007/integration/` | `tests/integration` 853 例（839 passed / 13 failed / 1 error）+ JUnit + 进度日志 |
-| 011/012 域组 | `…/phase8-evidence/t101-20261007/domains/` | generic/legal 基线、legal benefit、multi-domain core（worktree `eval/runs/013-20261007-t101-domains/`） |
+| 011/012 域组 | `…/phase8-evidence/t101-20261007/domains/`（原始输出在 worktree `eval/runs/013-20261007-t101-domains/`） | generic/legal 基线、legal benefit、multi-domain core |
+| **T102 record/replay 真实报告** | `…/phase8-evidence/t102-20261007/` | `comparison-record.json`（真实报告）、`cache-manifest-record.json`（2 个真实 key 的封存清单）、`llm-cache/strict-v1/`（真实成功+失败各 1 条）、`run-record/`（identities + 逐 arm ranking + 单元 lineage 见证） |
+| **T103 部署闸门模拟** | `…/phase8-evidence/t103-20261007/t103-install-simulation.json` | 纯离线 JSON 证据：真实 `incomplete` 报告被安装后 `GATE_VARIANT_NOT_AUTHORIZED`；fixture 正路径证明撤销/篡改/过期/绑定变更分别拒绝 |
+
+013 专属 runner：
+
+```powershell
+# 冻结数据集（真实隔离 scope/语料/policy/history，仅真实定位，不伪造 id）
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/freeze_consolidation_dataset.py --scope-slug <slug> --domain-key <key> --corpus <md> --output eval/consolidation_eval_dataset.json
+# 六路独立还原（seal / allocate / restore / verify / status / stop / drop）
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/restore_consolidation_arm.py seal --source-database <isolated> --source-data-root <root> --capsule-dir <dir> --scopes <scope> --token <token>
+# 对照 runner（契约 CLI：--dataset --snapshot --mode --cache-manifest --gate-variant --suite --trace --memory-acceptance --regression --output）
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py --dataset eval/consolidation_eval_dataset.json --snapshot <snapshot> --mode record --cache-manifest <manifest> --gate-variant consolidated_candidate_expansion --suite <junit> --trace <trace> --memory-acceptance <012-acceptance> --regression <summary> --output <unique report>
+```
+
+T102 真实观测（wall 202.2 s，exit 2 = incomplete）：MRR 0.5833 → 0.6667、
+nDCG 0.6488 → 0.7540、HitRate 0.8333 → 1.0、Recall@5 0.8333 → 1.0、
+Precision@5 0.2333 → 0.2667，`relative_gains{mrr 0.1429, ndcg 0.1621}` 均过 3%
+且三项非降；唯一变化来自 `q_extract_fact_01`。报告仍为 **incomplete**，原因如实
+登记：安全计数 `quarantined_inputs`/`schema_validity_rate` 未被本轮观测（两次
+`PROVIDER_TIMEOUT` 真实失败回执），`hard_metrics` 保持 `null`；replay 虽以
+`response_match_rate=1.0` 消费了真实成功与失败缓存，但仍有真实 provider 调用，
+故 `replay_real_network_calls≠0`、`max_non_latency_relative_drift=null`（底层
+相对漂移为 `inf`，绝不写成有限值）；数据集中 `q_correct_01`/`q_correct_02` 的
+历史/当前两个 relevance unit 在本权威里解析为同一真实 memory，报告记
+`RELEVANCE_UNIT_COLLISION`，不伪造第二个 alias。两个 consolidated arm 在本轮
+相等，因为链接扩展仍未获授权。
 
 沿用口径与限制（不得把规划/Schema 通过写作功能验收通过）：
 
+- 013 报告只写独立报告：runner 不安装登记、不改域策略、不自动晋升；只有
+  `candidate_expansion` 且真实 `passed` 才可能授权，本轮不存在。
 - 012 八项与 AOEP 各≥2 维持原断言；`skip`/`missing` 一律不计 pass。
 - 本轮 012 acceptance 为 `failed`：历史 `eval/runs/012-20261005-final-regression-a/*`
   在本 worktree 不存在，另有一处旧断言正则与当前守卫文案不符（守卫本身仍拒绝）；
@@ -238,6 +272,9 @@ read diagnostics、DSH writer/reader 原始会话日志、host evidence 和 sche
 - 单次 `tests/unit tests/contract tests/integration` 全量运行在本环境会于约 10% 死锁
   （pytest 进程 957 线程、一条 PG 连接 `idle in transaction` 无阻塞者），因此一律分块串行执行。
 - 前端旧 checks（`pnpm build` / `pnpm exec playwright test`）本轮未执行，记为未运行而非通过。
+- record→replay 的“次轮真实模型网络 0”本轮**未达成**：封存清单只覆盖 record 轮
+  真正落盘的 2 个 key，payload 变动的窗口在 replay 轮只能回源。缺失即记不完整，
+  不回填、不修 manifest、不悄悄 LLM 回源。
 
 ### 可配置开关与默认路径
 

@@ -38,6 +38,7 @@ import httpx
 from rag_mcp.agents.consolidation_replay import (
     REPLAY_DENIED_REASON,
     cache_write_frozen,
+    observe_cache_write,
     transport_denied,
 )
 from rag_mcp.agents.consolidation_replay import (
@@ -213,6 +214,9 @@ class LLMClient:
             if cache_write_frozen():
                 return
             path.write_text(json.dumps(document, allow_nan=False), encoding='utf-8')
+            # The record round's runner observes the exact key it persisted so
+            # the sealed manifest is the real attempt set, never a prediction.
+            observe_cache_write(path.name[: -len('.json')], document)
 
         if path:
             try:

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -78,9 +80,20 @@ def _sha256(raw: bytes) -> str:
 
 
 def body_digest(entry) -> str | None:
-    if not isinstance(entry, dict) or not isinstance(entry.get('output'), dict):
+    """Body identity of a recorded outcome.
+
+    Both a success body and a recorded failure reason are pinned, so a replay
+    that returns a different reason (or a regenerated body) is detectable.
+    """
+    if not isinstance(entry, dict):
         return None
-    return _sha256(json.dumps(entry['output'], sort_keys=True, ensure_ascii=False).encode('utf-8'))
+    if entry.get('reason') is None:
+        if not isinstance(entry.get('output'), dict):
+            return None
+        material = {'output': entry['output']}
+    else:
+        material = {'reason': entry['reason']}
+    return _sha256(json.dumps(material, sort_keys=True, ensure_ascii=False).encode('utf-8'))
 
 
 @dataclass
@@ -133,6 +146,38 @@ def cache_write_frozen() -> bool:
         return False
     session.refused_writes += 1
     return True
+
+
+# The record round's runner observes every persisted entry so the sealed manifest
+# lists exactly the keys the comparison actually attempted (never a guess).  The
+# observer is process-wide because the real persistence call happens inside the
+# provider worker thread, which never inherits a context variable set by the
+# caller; the runner is single-threaded between rounds, and a lock keeps the
+# set/restore pair atomic.
+_cache_observer: Callable[[str, dict], None] | None = None
+_cache_observer_lock = threading.Lock()
+
+
+def current_cache_observer():
+    return _cache_observer
+
+
+@contextmanager
+def cache_observation(callback: Callable[[str, dict], None]):
+    global _cache_observer
+    with _cache_observer_lock:
+        previous, _cache_observer = _cache_observer, callback
+    try:
+        yield
+    finally:
+        with _cache_observer_lock:
+            _cache_observer = previous
+
+
+def observe_cache_write(key: str, document: dict) -> None:
+    observer = _cache_observer
+    if observer is not None:
+        observer(key, document)
 
 
 def build_manifest(cache_dir, keys, *, model_version, dataset_hash, snapshot_hash, data_hash,

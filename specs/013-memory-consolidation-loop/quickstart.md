@@ -670,11 +670,13 @@ continuation repaired that test's row-identity isolation (see below).
 
 ## Phase 8 verification (2026-10-07, T090–T104)
 
-Release conclusion for this phase remains **incomplete**: no quality
-(record→replay benefit) or deployment-gate result exists, T095's frozen dataset
-and T097's six-way independent restoration runner were not produced, and
-T102/T103 were therefore never executed. Both default switches stay `false` and
-nothing was installed into a gate registry. Only the executed commands and their
+Release conclusion for this phase is **incomplete**: the record→replay benefit
+comparison now really runs (T097 runner, T102 execution) and the deployment gate
+is really exercised (T103), but the deployer gate still grants nothing. The real
+report is `incomplete`, `default_enable_eligible=false`, `gate_binding=null`,
+and the T103 install simulation proves an installed copy of it answers
+`GATE_VARIANT_NOT_AUTHORIZED`. Both default switches stay `false` and nothing was
+installed into any production gate registry. Only executed commands and their
 real counters are recorded here; planning or Schema validation is never written
 up as functional acceptance.
 
@@ -682,13 +684,18 @@ up as functional acceptance.
 
 | Index | Path | Contents |
 |---|---|---|
-| T099 013 acceptance | `C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t099-20261007/` | `consolidation-trace.json` (213430 B, 19 observed nodeids + real service calls), `authority-snapshot.json` (280279 B, 6 scopes), `dataset-manifest.json` (1957 B) |
+| T095 frozen dataset | `eval/consolidation_eval_dataset.json` (in git) | six real queries bound to real corpus chunks and ten real memory events of scope `366084747748704256`, legal lineage, equivalence groups, frozen versions |
+| T095 snapshot | `…/phase8-evidence/t095-20261007/authority-snapshot.json` | rebuildable authority export (digest `9b05336c…`), published policy, frozen clock |
+| T097 restoration | `…/phase8-evidence/t097-20261007/` | capsule index, two restore receipts, run identities, restoration log |
+| T099 013 acceptance | `…/phase8-evidence/t099-20261007/` | `consolidation-trace.json` (213430 B, 19 observed nodeids + real service calls), `authority-snapshot.json` (280279 B, 6 scopes), `dataset-manifest.json` (1957 B) |
 | T099 qualification slice | `…/phase8-evidence/t099-qualification-20261007/` | promotion / dependencies / recovery / admission / windows / audit / migration / projection-rebuild run log; the 013 evidence fixture observed no records here (none of those files requests the fixture), so its exported manifest honestly carries empty scopes |
-| T100 012 acceptance | `…/phase8-evidence/t100-012-20261007/` | `backend-pytest.xml` (147 cases), `memory-trace.json` (7.28 MB real invocation trace), `read-diagnostics.json`, `host-evidence.json`, `012-acceptance.json` |
-| T101 retrieval regression | worktree `eval/runs/013-20261007-t101-retrieval/` | `012_regression_summary.json` + six group reports (`012_001`…`012_006`) and per-group runner logs |
+| T100 012 acceptance | `…/phase8-evidence/t100-012-20261007-clean/` | `backend-pytest.xml`, `memory-trace.json`, `read-diagnostics.json`, `host-evidence.json`, `012-acceptance.json` |
+| T101 retrieval regression | worktree `eval/runs/013-20261007-t101-retrieval/`; archive `…/phase8-evidence/t101-20261007/regression/` | `012_regression_summary.json` + six group reports and per-group logs |
 | T101 unit/contract | `…/phase8-evidence/t101-20261007/unit-contract.log` | full `tests/unit tests/contract` run |
 | T101 integration | `…/phase8-evidence/t101-20261007/integration/` | complete `tests/integration` run with JUnit + progress log |
 | T101 domains | worktree `eval/runs/013-20261007-t101-domains/` | generic/legal baselines, legal benefit, multi-domain core report |
+| T102 record/replay | `…/phase8-evidence/t102-20261007/` | `comparison-record.json` (the real report), `cache-manifest-record.json` (sealed 2-key manifest), `llm-cache/strict-v1/` (the real recorded success + failure), `run-record/` (identities, run summary with per-arm rankings and the unit lineage witnesses) |
+| T103 install simulation | `…/phase8-evidence/t103-20261007/t103-install-simulation.json` | JSON-only, produced 100% offline by the script below; every case is one machine check |
 
 ### T099 — 013 six-class E2E, AOEP≥2 per invariant, faults, qualification, dependency, promotion, non-empty rebuild
 
@@ -810,19 +817,194 @@ Environment limits recorded rather than hidden:
    frontend proxy/build toolchain against the isolated backend; they were not
    executed in this phase and are reported as not run, not as passed.
 
-### T102–T104
+### T095 — the frozen real dataset
 
-T104 is the documentation/index update above plus the final re-check of the
-closed-switch, no-direct-write and no-automatic-promotion invariants (the hard
-counts exported by T099: `automatic_promotions 0`, `invalid_outputs_applied 0`,
-`cross_scope_leaks 0`, `stale_holder_commits 0`, `incomplete_outputs_consumed 0`,
-`rebuild_llm_calls 0`, plus the Phase 3 `rg`/AST/spy evidence and the promotion
-acceptance in Phase 6). T102 (same-environment record→replay with the frozen ≥6
-dataset) and T103 (gate-registry install simulation) were **not executed**: they
-depend on T095's frozen real dataset, T097's independent six-way restoration
-runner and real provider availability, none of which exist. Their honest status
-is `incomplete`; the two default switches remain `false`. The step-by-step
-commands, counters and limitation list for this phase are retained in
-`.superpowers/sdd/013-tasks/phase8-progress.md`.
+`eval/consolidation_eval_dataset.json` is frozen from real isolated material
+(public scope `c013-eval-meeting-notes`, domain profile `c013-eval-generic`, the
+real `team_meeting_notes.md` publication and ten real memory events recorded
+through the ordinary `MemoryService`; two real supersede corrections included).
+The snapshot carries the real published `MemoryPolicy` with
+`consolidation_enabled: true` and an explicit `ConsolidationPolicy`. No LLM call
+was involved, so this is dataset/material evidence, not benefit evidence.
+
+### T097 — the comparison runner
+
+`eval/run_consolidation_comparison.py` is the contract CLI
+(`--dataset --snapshot --mode --cache-manifest --gate-variant --suite --trace
+--memory-acceptance --regression --output`). Every `(round, arm)` runs against
+its own restoration (own PostgreSQL database, own private `data_root`, own
+private Qdrant process) materialised from one sealed capsule of the frozen scope;
+the runner never restores from or replays into an already-consolidated store, and
+it refuses an existing output or manifest. It also pins the window seal to the
+dataset's frozen clock and a deterministic identifier sequence, without which the
+two rounds could not compose the same model payload and the frozen cache keys
+would never match.
+
+Unit contract (pure, no database):
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_comparison_runner.py -q --tb=short -p no:cacheprovider
+```
+
+Observed **19 passed**, and **106 passed** together with the T090/T091/T094/T096/T101
+013 unit files.
+
+### T096/T098 — the frozen metric adapter and the report rule
+
+The three-arm adapter (`eval/consolidation_eval_support.py`) scores only the true
+physical rank inside the frozen `k=5` window, gives a duplicated alias zero gain
+after its first occurrence, divides `precision_at_k` by 5, and keeps a zero
+baseline `not_computable` (`relative_gains` stays `null`). The report rule is the
+shared 013.2 validator plus the eval-level requirements (real 013 E2E evidence
+index, old-suite evidence, 100 % cache coverage, zero replay transport, binding
+match). Nothing in it installs a registry entry or publishes policy.
+
+### T102 — the real record→replay comparison
+
+```powershell
+# 1. seal one capsule of the frozen scope (read-only on the source)
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/restore_consolidation_arm.py seal `
+  --source-database memory_consolidation_013_t095seed_20261007 `
+  --source-data-root C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/t095-seed-data-root `
+  --capsule-dir C:/t102/capsule --scopes 366084747748704256 --token t102a `
+  --collections memories_dense_BAAI_bge_m3_012_v2
+# 2. record round + intrinsic replay round on six independent restorations
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py `
+  --dataset eval/consolidation_eval_dataset.json `
+  --snapshot <t095 snapshot> --mode record --cache-manifest <run>/cache-manifest-record.json `
+  --gate-variant consolidated_candidate_expansion `
+  --trace <t099 trace> --memory-acceptance <012-acceptance.json> --regression <012_regression_summary.json> `
+  --output <run>/comparison-record.json --cache-dir <run>/llm-cache --evidence-dir <run>/run-record `
+  --run-id t102h --capsule-dir C:/t102/capsule --base C:/t102/runs --restore --qdrant-port-base 18400
+# 3. offline re-validation of the persisted report (no database, no provider)
+python .superpowers/sdd/013-tasks/isolation_runner.py eval .superpowers/sdd/013-tasks/phase8_t102_revalidate.py `
+  --run-dir <run>/run-record --dataset eval/consolidation_eval_dataset.json --snapshot <t095 snapshot> `
+  --cache-manifest <run>/cache-manifest-record.json --cache-dir <run>/llm-cache `
+  --identity <run>/run-record/t102h-identities.json --report <run>/comparison-record.json `
+  --trace <t099 trace> --memory-acceptance <012-acceptance.json> --regression <012_regression_summary.json>
+```
+
+Observed (wall 202.2 s, exit 2 = incomplete):
+
+| Metric | baseline | consolidated_direct | consolidated_candidate_expansion |
+|---|---|---|---|
+| MRR | 0.5833 | 0.6667 | 0.6667 |
+| nDCG | 0.6488 | 0.7540 | 0.7540 |
+| HitRate | 0.8333 | 1.0 | 1.0 |
+| Recall@5 | 0.8333 | 1.0 | 1.0 |
+| Precision@5 | 0.2333 | 0.2667 | 0.2667 |
+
+`relative_gains = {baseline_zero: false, mrr: 0.1429, ndcg: 0.1621}` — both
+above the 3 % threshold, with all three non-degradation metrics non-decreasing.
+The one query that moves is `q_extract_fact_01` (baseline has no gain at any
+physical rank; both consolidated arms have it at rank 2).
+
+The real report is nonetheless **incomplete**, and this is the honest outcome:
+
+1. **Safety evidence is incomplete.** The comparison itself observes the
+   consolidation counters, but `quarantined_inputs` and `schema_validity_rate`
+   belong to the T094 E2E export; in the real consenting run the two consolidated
+   arms were rejected (two `PROVIDER_TIMEOUT` receipts on the 42 KB distiller
+   prompt, recorded in the cache as a real failure entry) and no consolidation
+   effect was published, so no counter became observable. `hard_metrics` is
+   therefore `null`, never a fabricated `0`.
+2. **Record/replay response reproduction is only partial.** The sealed manifest
+   holds exactly the 2 keys the record round really persisted
+   (`recorded_success 1`, `recorded_failure 1`); the replay round consumed both
+   with `response_match_rate = 1.0` and no proxy for real transport. But it also
+   had to make real provider calls for windows whose payload differed, so
+   `replay_real_network_calls` is not 0 and `max_non_latency_relative_drift` is
+   `null` (the underlying relative drift was `inf` and is never written as a
+   finite number). `reproducibility.status` is `incomplete`.
+3. **The frozen dataset cannot express two of its own units.** For
+   `q_correct_01` and `q_correct_02` the dataset declares a historical and a
+   current relevance unit whose source-event sets are identical; in this
+   authority both resolve to the same real memory, so the report records
+   `RELEVANCE_UNIT_COLLISION` for `ru-embedding-current` and
+   `ru-frontend-owner-current` instead of fabricating a second alias.
+4. **A 2026-10-07 git commit was not available for `environment.commit`** beyond
+   what `git rev-parse HEAD` reports at run time; that field is the report build
+   version, not an acceptance claim.
+
+The shared validator accepts the report as a non-authorizing artifact
+(`validate_report`, then `validate_comparison_report` →
+`{status: incomplete, default_enable_eligible: false, binding: null}`), and no
+`gate_binding` was produced because the report is not `passed`.
+
+What the T102 run *does* prove, with real artifacts: six independent
+restorations were materialised from one sealed capsule; the runner really
+executed three arms twice; the model transport really happened in the record
+round (6 LLM calls, 126 670 prompt chars, 25 528 completion chars, tokens/cost
+`null` = unavailable) and the frozen cache really served both a success and a
+failure outcome in the replay round; and the frozen metric adapter produced the
+numbers above from real physical ranks. It does **not** prove a benefit entitled
+to default enablement.
+
+### T103 — the deployment gate
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py eval .superpowers/sdd/013-tasks/phase8_t103_install_simulation.py `
+  --report <run>/comparison-record.json --evidence-dir <t103 evidence dir>
+```
+
+Observed (JSON evidence, every case a machine check):
+
+- The real report is schema-valid (`schema_errors: []`) and the shared validator
+  accepts it as non-authorizing evidence.
+- A deployer temporarily installing that incomplete report in an isolated
+  acceptance directory gets `GATE_VARIANT_NOT_AUTHORIZED` from the real T061
+  loader: no entry, no authorization, direct recall only, defaults off.
+- Positive mechanism proof (shared 013.2 **fixture** report, explicitly not real
+  acceptance evidence): a matching binding answers `GATE_AUTHORIZED`; revocation
+  → `GATE_MISSING`; byte tampering → `GATE_HASH_MISMATCH`; expiry →
+  `GATE_EXPIRED`; a changed current binding → `GATE_BINDING_STALE`; another scope
+  → `GATE_MISSING`; no configured registry → `GATE_MISSING`.
+
+The runner never registers a proof, never changes a domain policy and never
+installs anything outside the temporary acceptance directory. `report_status`
+remains `incomplete`, `default_enable_eligible` `false`.
+
+### T104 — closed-switch / no-direct-write / no-auto-promotion re-check
+
+```powershell
+Select-String -Path backend/src/rag_mcp/services/memory_policy.py -Pattern 'consolidation_enabled|link_expansion_enabled'
+Select-String -Path backend/src/rag_mcp/agents/memory_distiller.py -Pattern 'session|MemoryService|governance|upload|tool|commit|flush|record'
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit/test_consolidation_injection_boundary.py tests/unit/test_consolidation_candidates.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/phase3_lint_delta.py
+```
+
+Observed: `memory_policy.py:57 consolidation_enabled = False` and `:59
+link_expansion_enabled = False`; the Distiller has **no** session/service/
+governance/upload/tool/commit/flush/record surface (rg returns only its own
+`chat_json_receipt` call), so it cannot write authority; the injection boundary
+and candidate unit files pass; the T099 export independently corroborates
+`automatic_promotions 0`, `invalid_outputs_applied 0`, `cross_scope_leaks 0`,
+`stale_holder_commits 0`, `incomplete_outputs_consumed 0`, `rebuild_llm_calls 0`.
+Deployment/install/revocation are documented in §8 *只读闸口登记与撤销*; nothing
+in this phase auto-registers a proof.
+
+### T101 leftover re-check (2026-10-07, fifth worker)
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_triggers.py -q --tb=line -p no:cacheprovider
+```
+
+Observed **10 passed in 291.66s** (exit 0). The earlier T101 integration chunk
+recorded two failures plus a teardown error in this file; the re-run shows they
+were the recorded Windows PostgreSQL connection drop
+(`OSError [WinError 121] 信号灯超时时间已到`), not a logic defect. The
+non-reproducible `se-project` acceptance environment and the stale 0092
+guard-text assertion remain untouched and were not weakened.
+
+### T102–T104 conclusions and remaining limits
+T095, T097, T102 and T103 are executed with real artifacts. T104 is this
+documentation and evidence index. The remaining limits are recorded rather than
+hidden: partial response reproduction across the two rounds (real provider calls
+inside replay for windows whose payload differs), two unobserved safety counters,
+two frozen relevance units that cannot be made physically distinct, a real
+`PROVIDER_TIMEOUT` degradation on the 42 KB distiller prompt, and the fact that
+the observed +14.3 % MRR / +16.2 % nDCG comes from the frozen six-query subset
+only (no claim of overall statistical significance), while the two consolidated
+arms are equal in this run because link expansion remains unauthorized.
 
 
