@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: Phase 1–7 全部完成并已提交/验收（T001–T089，迁移0095–0104）；Phase 8：T090/T091 已提交（报告指标重算校验 + 严格 record/replay），T092/T093/T094 已提交（真实六类 E2E、AOEP 五不变量各≥2、`CONSOLIDATION_EVIDENCE_DIR` 证据导出），T099 已执行并产出真实证据（74 passed + 51 passed，硬指标 0/1.0，未观测项保持 null）。**发布结论为 incomplete（默认关闭）**：T095/T096/T097/T098/T100/T101/T102/T103/T104 未完成或未通过——无冻结真实数据集、无六路独立还原 runner、012 acceptance 实测 failed（4 项真实失败：2 项缺失历史 eval 产物、2 项隔离库既有非法 domain_key）、T102/T103 无真实 record→replay 与闸门安装模拟；`consolidation_enabled=false`、`link_expansion_enabled=false` 保持，未安装任何扩权证明，未把规划/Schema 通过写作功能验收通过。
+**Status**: Phase 1–7 全部完成并已提交/验收（T001–T089，迁移0095–0104）；Phase 8：T090/T091 已提交（报告指标重算校验 + 严格 record/replay），T092/T093/T094 已提交（真实六类 E2E、AOEP 五不变量各≥2、`CONSOLIDATION_EVIDENCE_DIR` 证据导出），T095 已提交（真实冻结数据集 `eval/consolidation_eval_dataset.json`，隔离 scope `c013-eval-meeting-notes` 真实语料/事件/定位，校验 VALIDATED OK），T099 已执行并产出真实证据（74 passed + 51 passed，硬指标 0/1.0，未观测项保持 null）。**发布结论为 incomplete（默认关闭）**：T096/T097/T098/T100/T101/T102/T103/T104 未完成或未通过——`eval/run_consolidation_comparison.py` 与 record→replay 报告尚未产出（六路独立还原 runner 与冻结数据集已就绪）、012 acceptance 实测 failed（干净库下 144 passed/2 failed/1 skipped；剩余为 `se-project` 验收环境无法从已提交材料重建、以及 1 条 0092 触发器文案过期的旧断言）、无闸门安装模拟；`consolidation_enabled=false`、`link_expansion_enabled=false` 保持，未安装任何扩权证明，未把规划/Schema 通过写作功能验收通过。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，95项已勾选、9项待实现（T095/T096/T097/T098/T100/T101/T102/T103/T104）；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，96项已勾选、8项待实现（T096/T097/T098/T100/T101/T102/T103/T104）；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -228,7 +228,7 @@
 
 - [X] T095 [US4] 创建 `eval/consolidation_eval_dataset.json`，按evaluation-contract六覆盖槽绑定实际可定位语料/事件/位置与非空expected content+合法lineage+validity等价组，冻结distinct query主类2+2+2、semantic/procedural各1、snapshot/clock/model/prompt/schema/policy/vocabulary/recall/budget/K/variant版本；先validator后真实provider调用，依赖 T090、T094。
 - [ ] T096 [US4] 在 `eval/consolidation_eval_support.py` 实现数据/快照/等价lineage合法性与二元相关性adapter，沿 `eval/run_eval.py` MRR/nDCG函数，保留物理rank/重复alias零gain；baseline/direct/isolated candidate扩展三路分别报逐query/宏平均/延迟/成本，不隐藏direct回退，依赖 T090、T095。
-- [X] T097 [US4] 在 `eval/run_consolidation_comparison.py` 实现契约CLI与隔离snapshot还原/record/replay，每轮从原始未巩固authority开始；沿AGENTIC_LLM_CACHE_PATH精确keys和sidecar manifest，仅LLM provider transport deny/count，成功/失败全重放、缺证据不回源；unique output/manifest、preflight incomplete及退出0/1/2，依赖 T091、T094、T096。
+- [ ] T097 [US4] 在 `eval/run_consolidation_comparison.py` 实现契约CLI与隔离snapshot还原/record/replay，每轮从原始未巩固authority开始；沿AGENTIC_LLM_CACHE_PATH精确keys和sidecar manifest，仅LLM provider transport deny/count，成功/失败全重放、缺证据不回源；unique output/manifest、preflight incomplete及退出0/1/2，依赖 T091、T094、T096。
 - [ ] T098 [US4] 在 `eval/consolidation_eval_support.py` 复用T061的backend纯报告/绑定/数据材料校验，接入benefit-report 013.2结构+语义、双相对3%AND/HitRate-Recall-Precision非降/可计算基线、cache响应100%/真实模型network0/非延迟≤1%、安全零容差/源链100%/实际E2E与旧全集证据核验；完整enabled目标policy先冻结，三path不改其身份，报告环境/全部query/current绑定一致，缺失观测null不伪造0，仅给default_enable_eligible、不安装登记或写policy，依赖 T090、T091、T097。
 - [X] T099 [US4] 串行运行六类013E2E、AOEP各≥2、故障/资格/依赖/晋升/非空重建全部测试，使用 `backend/tests/integration/test_013_consolidation_e2e.py`、`test_013_consolidation_aoep.py`、`test_013_consolidation_llm_faults.py` 与T094fixture生成真实trace/snapshot；失败修复后才进入受益验收，依赖 T094、T098。
 - [ ] T100 [US4] 按原口径重跑 `backend/tests/integration/test_012_memory_e2e.py` 八项和 `test_012_aoep_obligations.py`，沿 `eval/run_memory_acceptance.py` 生成新的012 acceptance证据；硬锚/无锚/跨域/supersede/注入/TTL配额/reader/会话八项不删改，skip/missing不计pass，依赖 T099。
