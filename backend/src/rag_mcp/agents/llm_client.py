@@ -24,6 +24,7 @@ cache_dir) is configured — production callers never set it.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import math
@@ -59,6 +60,11 @@ class LLMCallReceipt:
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: float | None = None
+    # Identifies one real transport attempt across the two receipts the strict
+    # path emits for it (attempt started, attempt settled).  A consumer that
+    # accumulates receipts must credit each call id once, or the attempt is
+    # counted twice; 0 means "no real attempt" (configuration/cache-hit paths).
+    call_id: int = 0
 
 
 # Installed inside the provider worker, never shared between concurrent calls.
@@ -186,6 +192,9 @@ class LLMClient:
         self.completion_chars = 0
         self.cache_hits = 0
         self.cache_misses = 0
+        # Strict-path transport attempts are emitted twice (started, settled);
+        # both emissions carry the same call_id so accounting can dedupe them.
+        self._call_ids = itertools.count(1)
 
     @property
     def model(self) -> str:
@@ -269,7 +278,8 @@ class LLMClient:
             headers['Authorization'] = 'Bearer ' + self._api_key
         try:
             with httpx.Client(timeout=timeout_s or self._timeout_s) as http:
-                receipt = LLMCallReceipt(transport_calls=1, prompt_chars=len(system_prompt) + len(user_text))
+                receipt = LLMCallReceipt(transport_calls=1, prompt_chars=len(system_prompt) + len(user_text),
+                                         call_id=next(self._call_ids))
                 self.calls += 1
                 self.prompt_chars += receipt.prompt_chars
                 _emit_receipt(receipt)

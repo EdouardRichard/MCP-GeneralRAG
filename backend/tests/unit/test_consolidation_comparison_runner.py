@@ -54,7 +54,7 @@ from rag_mcp.agents.consolidation_replay import (
     strict_cache_dir,
     strict_entry_path,
 )
-from rag_mcp.services.consolidation_gate import GATE_VARIANTS, TRACE_VERSION
+from rag_mcp.services.consolidation_gate import GATE_CHECKS, GATE_VARIANTS, TRACE_VERSION
 
 SCOPE = '366084747748704256'
 CONTENT = {f'unit-{index}': f'frozen content {index}' for index in range(1, 8)}
@@ -427,8 +427,6 @@ def _engine(tmp_path, *, record_errors=None, rankings=None):
             alias = query['expected_source_event_ids'][0]
             ranked = rankings.get(arm, [alias] * 5) if rankings else [alias] * 5
             record.rankings[query['query_id']] = list(ranked)
-        for arm in GATE_VARIANTS:
-            pass
         engine.arms[('record', arm)] = record
     engine.hard = {'cross_scope_leaks': 0, 'quarantined_inputs': 0, 'soft_overturns_hard': 0,
                    'automatic_promotions': 0, 'invalid_outputs_applied': 0,
@@ -651,4 +649,137 @@ def test_arm_transport_is_the_arms_own_delta_not_a_running_total(tmp_path):
     fresh = _engine(tmp_path)
     fresh._distiller = None
     assert fresh.transport_snapshot()['transport_calls'] == 0 and fresh._distiller is None
+
+
+def test_warm_up_really_awaits_the_embedding_provider(tmp_path):
+    """The documented warm-up must actually run, not create an un-awaited coroutine.
+
+    ``embed_query`` is async; calling it without awaiting produced a 0 ms warm-up
+    and left the first recorded query to pay the model load, which is exactly the
+    latency-limited query the warm-up exists to prevent.
+    """
+    import asyncio
+
+    engine = _engine(tmp_path)
+    calls = []
+
+    class _Provider:
+        async def embed_query(self, text):
+            await asyncio.sleep(0)
+            calls.append(text)
+            return [0.0]
+
+    engine._embedding = _Provider()
+    elapsed = asyncio.run(engine.warm_up())
+    assert calls == ['013 comparison warm-up']
+    assert elapsed >= 0.0
+
+
+def test_one_real_transport_attempt_is_credited_once_across_its_two_receipts():
+    """``chat_json_receipt`` emits a started and a settled receipt per attempt.
+
+    Both carry the same ``call_id``, so accounting must credit the attempt once
+    with its settled numbers.  Accumulating both counted every real model call
+    twice: the sealed T102 evidence reported 4 calls and 84 446 prompt chars for
+    2 real calls of a 20 KB payload.
+    """
+    from rag_mcp.agents.llm_client import LLMCallReceipt
+
+    from run_consolidation_comparison import ObservedDistiller
+
+    observed = ObservedDistiller(SimpleNamespace(model_and_version='m1'))
+    observed._account(LLMCallReceipt(transport_calls=1, prompt_chars=20292, call_id=1))
+    observed._account(LLMCallReceipt(transport_calls=1, prompt_chars=20292, completion_chars=7800,
+                                     input_tokens=6852, output_tokens=4961, cost_usd=0.0, call_id=1))
+    usage = observed.usage()
+    assert usage['transport_calls'] == 1 and usage['prompt_chars'] == 20292
+    assert usage['completion_chars'] == 7800
+    assert usage['input_tokens'] == 6852 and usage['output_tokens'] == 4961
+    # A second attempt is a second call, and its unknown usage stays null.
+    observed._account(LLMCallReceipt(transport_calls=1, prompt_chars=20291, call_id=2))
+    usage = observed.usage()
+    assert usage['transport_calls'] == 2 and usage['prompt_chars'] == 20292 + 20291
+    assert usage['input_tokens'] is None and usage['output_tokens'] is None
+    assert usage['cost_usd'] is None
+    # A cache-hit receipt is not a transport attempt and is counted separately.
+    observed._account(LLMCallReceipt(reason='PROVIDER_TIMEOUT', cache_hits=1))
+    assert observed.usage()['transport_calls'] == 2
+    assert observed.usage()['cache_hits'] == 1
+
+
+def test_safety_gate_emits_the_aggregate_check_the_shared_validator_requires():
+    """``hard_metrics_zero`` is required by ``consolidation_gate.GATE_CHECKS``.
+
+    Without it the shared production validator rejects any report whose gates
+    passed with "report gate checks incomplete", so ``status=passed`` was
+    unreachable no matter how clean the run was.
+    """
+    from rag_mcp.services.consolidation_gate import GATE_CHECKS
+
+    complete = {name: 0 for name in ('cross_scope_leaks', 'quarantined_inputs', 'soft_overturns_hard',
+                                     'automatic_promotions', 'invalid_outputs_applied',
+                                     'stale_holder_commits', 'incomplete_outputs_consumed',
+                                     'rebuild_llm_calls')}
+    complete.update({'source_chain_complete_rate': 1.0, 'schema_validity_rate': 1.0,
+                     'projection_integrity_rate': 1.0})
+    checks, reasons = safety_checks(complete)
+    assert checks['hard_metrics_zero'] is True and reasons == []
+    assert 'hard_metrics_zero' in GATE_CHECKS['safety']
+    # A nonzero zero-tolerance counter and an unobserved counter both fail it.
+    assert safety_checks({**complete, 'cross_scope_leaks': 1})[0]['hard_metrics_zero'] is False
+    assert safety_checks({**complete, 'quarantined_inputs': None})[0]['hard_metrics_zero'] is False
+    # An incomplete integrity rate is not a "zero counter" violation.
+    broken = safety_checks({**complete, 'schema_validity_rate': 0.25})[0]
+    assert broken['hard_metrics_zero'] is True and broken['schema_validity_rate'] is False
+
+
+def test_green_runner_report_is_accepted_as_passed_by_the_shared_validator(tmp_path):
+    """A green run must be able to emit a report the production validator accepts.
+
+    Regression for two structural defects that made ``status=passed``
+    unreachable: ``environment.model_version`` carried the frozen *retrieval*
+    model instead of the model under test pinned by the gate binding (the shared
+    validator answered "report environment diverges from gate binding"), and the
+    safety gate never emitted the ``hard_metrics_zero`` check (answered "report
+    gate checks incomplete").  Either one made the runner's own
+    ``validate_comparison_report`` flip a successful run to ``failed``.
+    """
+    from rag_mcp.services.consolidation_gate import validate_report
+
+    from consolidation_eval_support import validate_comparison_report as entry_point
+
+    engine = _engine(tmp_path)
+    engine.args.trace = tmp_path / 'trace.json'
+    engine.args.memory_acceptance = tmp_path / '012-acceptance.json'
+    engine.args.regression = [tmp_path / '012_regression_summary.json']
+    # A real, non-zero baseline with a >3 % consolidation gain on both metrics.
+    # The frozen physical-rank trace carries the resolved memory ids, not labels.
+    for query in dataset_document()['queries']:
+        identifier = query['query_id']
+        memory_id = query['expected_source_event_ids'][0]
+        engine.arms[('record', 'baseline')].rankings[identifier] = [None, None, None, None, memory_id]
+        for arm in ('consolidated_direct', 'consolidated_candidate_expansion'):
+            engine.arms[('record', arm)].rankings[identifier] = [memory_id] * 5
+    # A real observed consolidation window: one model package, schema-valid.
+    observed = engine.arms[('record', 'consolidated_direct')]
+    observed.consolidation = {'windows': 1, 'runs': [{'status': 'completed', 'reason_codes': [],
+                                                      'outputs': 1}],
+                              'window_inputs': {'1000': {'status': 'active'}}}
+    observed.safety = {'windows': 1, 'schema_attempts': 1, 'schema_invalid': 0, 'schema_reasons': [],
+                       'window_inputs': 1, 'window_quarantined_inputs': [],
+                       'scope_inputs': 1, 'scope_quarantined_ids': []}
+    replayed = {'transport_calls': 0, 'evidence_complete': True, 'recorded_success': 1,
+                'recorded_failure': 0, 'missing': 0, 'corrupt': 0, 'version_mismatch': 0,
+                'response_match_rate': 1.0, 'max_non_latency_relative_drift': 0.0}
+    report = engine.build_report(manifest=_manifest(tmp_path, ['k1']),
+                                 recorded={'transport_calls': 1, 'evidence_complete': True},
+                                 replayed=replayed, elapsed_ms=6.0)
+    assert report['status'] == 'passed' and report['default_enable_eligible'] is True
+    assert report['environment']['model_version'] == engine.frozen_binding['model_version']
+    assert report['gates']['safety']['checks']['hard_metrics_zero'] is True
+    assert GATE_CHECKS['safety'] <= set(report['gates']['safety']['checks'])
+    validate_report(report)
+    decision = entry_point(report, expected_binding=engine.frozen_binding,
+                           e2e_evidence=_e2e_evidence(), old_suite_evidence=['012 report'])
+    assert decision['status'] == 'passed' and decision['binding'] == engine.frozen_binding
 

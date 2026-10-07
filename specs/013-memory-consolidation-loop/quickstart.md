@@ -1140,3 +1140,144 @@ applied; isolated head `0104_runtime_activity_signals`.
   because the shared clone still carries 3588 `013-…` domain keys created by the
   013 test fixture before it was fixed to `c013-…`; no authority was deleted and no
   report was rewritten.
+
+## T102 final rerun (2026-10-08): instrument defects fixed, real verdict
+
+Four defects in the comparison instrument were reproduced and fixed before this
+rerun. The first two made the report's `passed` state **unreachable for any run**,
+however clean — reproduced by replaying the real T102 record report through the
+shared production validator (`rag_mcp.services.consolidation_gate.validate_report`):
+
+1. `environment.model_version` was written from `dataset['frozen']['model']`,
+   which pins the **retrieval embedding** model (`BAAI/bge-m3`), while the gate
+   binding's `model_version` is the model under test (`deepseek-v4-flash`).
+   `_validate_passed_semantics` therefore always answered *"report environment
+   diverges from gate binding"* and the runner flipped a would-be `passed` report
+   to `failed` (`REPORT_VALIDATION_REJECTED`). The same wrong value also
+   mislabelled the sealed cache manifest. Fixed: `ComparisonEngine.model_version`
+   (the binding's model, falling back to `settings.llm_model`) feeds both.
+2. The safety gate never emitted `hard_metrics_zero`, one of the two checks
+   `consolidation_gate.GATE_CHECKS['safety']` requires, so `validate_report`
+   answered *"report gate checks incomplete"*. Fixed in `safety_checks`: the
+   aggregate is true only when every zero-tolerance counter is observed and zero.
+3. `ComparisonEngine.warm_up()` called the coroutine
+   `LocalCPUEmbeddingProvider.embed_query` **without awaiting**, so the documented
+   embedding warm-up never ran (`warm_up_ms: 0.0` in the earlier evidence) and the
+   first recorded query of each invocation paid the model load. In the previous
+   run `baseline:q_extract_fact_01` was cut off by the reader's own budget and
+   scored `mrr 0`, which produced the **entire** previously reported gain
+   (MRR +14.3 %, nDCG +18.5 %). Fixed: `warm_up` is awaited and every arm pays one
+   discarded real recall (`warm_recall`) outside the timed section.
+4. One real model attempt was credited twice: `chat_json_receipt` emits one receipt
+   when the transport attempt starts and another when it settles, and
+   `ObservedDistiller` accumulated both — the earlier evidence reported
+   `llm_calls 4` / `llm_prompt_chars 84 446` (the "frozen 42 KB distiller prompt")
+   for two real calls of a 20 292/20 291-character payload. Fixed with a receipt
+   `call_id` and one credit per attempt.
+
+Rerun with fresh identities and unique reports:
+
+```powershell
+$ev = 'C:/Users/Richard/AppData/Local/Codex/013-isolation-20261006/phase8-evidence/t102-20261008-final'
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/run_consolidation_comparison.py `
+  --dataset eval/consolidation_eval_dataset.json --snapshot "$base/t095-20261007/authority-snapshot.json" `
+  --mode record --cache-manifest "$ev/cache-manifest-record.json" `
+  --gate-variant consolidated_candidate_expansion --trace "$base/t099-20261007/consolidation-trace.json" `
+  --memory-acceptance "$base/t100-012-20261007-host/012-acceptance.json" `
+  --regression "$base/t101-20261007/regression/012_regression_summary.json" `
+  --output "$ev/comparison-record.json" --evidence-dir "$ev/run-record" `
+  --run-id t102a1 --capsule-dir C:/t102/capsule --base C:/t102a1/runs --restore --qdrant-port-base 20800
+# the same invocation with --mode replay, --output "$ev/comparison-replay.json",
+# --evidence-dir "$ev/run-replay", --run-id t102b1 --base C:/t102b1/runs --qdrant-port-base 21000
+```
+
+Observed (both invocations: `status failed`, `default_enable_eligible false`,
+`gate_binding null`, exit 1, `validation: accepted`):
+
+| measurement | record invocation | replay invocation |
+|---|---|---|
+| aggregates baseline ↔ candidate-expansion | MRR 0.6667 ↔ 0.6667, nDCG 0.6726 ↔ 0.6726 | identical |
+| `relative_gains` | mrr 0.0, ndcg 0.0 | mrr 0.0, ndcg 0.0 |
+| quality / safety / regression gate | incomplete / incomplete / **passed** | incomplete / incomplete / incomplete |
+| cache | 2 keys (1 success + 1 failure), replay 0 real calls, `response_match_rate 1.0`, complete | 2 keys, 0 real calls, evidence complete |
+| real provider usage | `llm_calls 2`, `llm_prompt_chars 42 223`, `llm_completion_chars 8 072` | 0 (`replay_zero`) |
+| reproducibility | **passed**, max non-latency drift 0.0 | not measured (no record side) |
+| latency-limited queries / warm-up | none / 8 266 ms (real) | none / 10 172 ms (real) |
+| `environment.model_version` | `deepseek-v4-flash` | `deepseek-v4-flash` |
+
+What the rerun establishes:
+
+* The instrument now measures what it reports: exactly one real call per
+  consolidated arm (2 total), a ~21 KB payload, a warm-up that really runs, and a
+  replay invocation with **0** provider calls consuming the sealed cache.
+* **No retrieval benefit is observed.** With the baseline no longer spoiled by a
+  cold-start timeout, baseline and both consolidated arms return the same ranking
+  for all six queries, so the quality gate fails honestly
+  (`RELATIVE_GAIN_BELOW_THRESHOLD`). The earlier +14.3 %/+18.5 % gain was defect
+  3's artifact and is withdrawn.
+* **No consolidation effect at all.** Both consolidated arms committed nothing
+  (`no_change`, 0 outputs). The real audit trail of the finished record arm
+  (`memory_consolidation_013_t102a1_1.consolidation_runs`, 5 observations) shows
+  the model package that did arrive — cache key `86861b67…`, five schema-valid
+  proposals — rejected by adjudication with `EVIDENCE_UNAVAILABLE` (the proposals
+  cite memory ids as `evidence_refs` instead of corpus evidence anchors), with
+  `all_rejected` as the recorded degradation reason; the deterministic rules had
+  no provable work in this window.
+* **The provider, not the schema, is the safety-gate blocker.** The frozen policy
+  bounds the model at `llm_timeout_seconds: 30`. The real provider answered the
+  direct arm (payload 21 112 chars, completion 8 072 chars, schema-valid) and did
+  not answer the candidate-expansion arm (`PROVIDER_TIMEOUT`, cache key
+  `f8db1cd2…`), so `schema_validity_rate` is 0.5 of four observed attempts and the
+  safety gate stays `incomplete`. The earlier note that `MODEL_SCHEMA_INVALID`
+  with `output: null` meant "the provider returned nothing" was wrong: the strict
+  client nulls the body when the returned package fails the contract, and a later
+  schema-valid package from the same payload is on record.
+* `quarantined_inputs` is 0, with the two superseded memories kept as
+  `excluded_nonactive_ids`; `invalid_outputs_applied` is 0 (no rejected package was
+  ever applied); `source_chain_complete_rate` and `projection_integrity_rate` are
+  1.0.
+
+Both default switches remain false, no policy was published, no gate registry
+entry was installed. Machine evidence:
+`…/phase8-evidence/t102-20261008-final/{comparison-record.json,comparison-replay.json,cache-manifest-record.json,cache-manifest-record.json.cache/strict-v1/,run-record/,run-replay/,record.log,replay.log}`.
+
+Residual observation (documented, not changed without matching evidence): the
+`--mode replay` invocation reports `cache.response_match_rate: null`, because that
+invocation's own record round only consumes the sealed cache and never persists
+entries, so there is no record-side entry set to compare against. Its own
+contract (`replay_real_network_calls 0`, `replay_usage.source replay_zero`,
+`evidence_complete true`) is met, and the record invocation's report carries
+`response_match_rate 1.0`.
+
+Tests after the fixes: `tests/unit tests/contract tests/eval` → **2452 passed**
+(one pre-existing environment failure in `tests/eval/test_instance_form_smoke.py`,
+unchanged from the pristine baseline), including four new regression tests in
+`backend/tests/unit/test_consolidation_comparison_runner.py`: the green-report
+reachability test (the runner's own report is now accepted as `passed` by the
+shared validator), the `hard_metrics_zero` contract, the one-credit-per-attempt
+transport rule and the awaited warm-up (all four are red on the unfixed code and
+green after it). `tests/unit/test_consolidation_comparison_runner.py`
+alone: 28 passed. The 013 integration acceptance scope (16 files: E2E, AOEP, LLM
+faults, admission, audit, windows, dependencies, migration, projection rebuild,
+promotion, commit, recovery, replay parity, triggers, concurrency, foreground):
+**163 passed** in 19 min.
+
+The suites need the isolated Qdrant endpoint to be up (otherwise eleven
+Qdrant-backed tests fail with `MEMORY_WRITE_UNAVAILABLE:dense`, exactly as on the
+pristine baseline):
+
+```powershell
+python -c "import sys,json;sys.path.insert(0,'eval');from consolidation_restore_support import qdrant_config,qdrant_binary;from pathlib import Path;s=Path('C:/qdrant-16333');[ (s/c).mkdir(parents=True,exist_ok=True) for c in ('storage','snapshots','temp')];(s/'config.yaml').write_text(json.dumps(qdrant_config(s,16333,16334),indent=2))"
+Start-Process '<restore-tools>/qdrant-1.19.0/qdrant.exe' -ArgumentList '--config-path','C:\qdrant-16333\config.yaml' -WorkingDirectory 'C:\qdrant-16333'
+```
+
+Reproduction harnesses for the four defects (diagnostic only, no report written,
+`.superpowers/sdd/013-tasks/`): `phase8_t102_payload_probe.py` (captures the
+byte-exact distiller payload from the restored authority without a provider call),
+`phase8_t102_keycheck.py` (proves the captured payloads reproduce both frozen cache
+keys), `phase8_t102_provider_probe.py` (replays that payload against the real
+provider under the frozen 30 s bound and prints the contract verdict),
+`phase8_t102_latency_probe.py`, `phase8_t102_passed_probe.py` (enumerates the
+structural blockers of the `passed` branch through the shared validator) and
+`phase8_t102_audit_probe.py` (reads the finished arm's real audit trail).
+

@@ -226,7 +226,8 @@ gate registry 安装登记。
 | 后端 unit/contract 全集 | `…/phase8-evidence/t101-20261007/unit-contract.log` | `tests/unit tests/contract`：2389 passed，1 处 CRLF 环境失败 |
 | 后端 integration 全集 | `…/phase8-evidence/t101-20261007/integration/` | `tests/integration` 853 例（839 passed / 13 failed / 1 error）+ JUnit + 进度日志 |
 | 011/012 域组 | `…/phase8-evidence/t101-20261007/domains/`（原始输出在 worktree `eval/runs/013-20261007-t101-domains/`） | generic/legal 基线、legal benefit、multi-domain core |
-| **T102 record/replay 真实报告** | `…/phase8-evidence/t102-20261007/` | `comparison-record.json`（真实报告）、`cache-manifest-record.json`（2 个真实 key 的封存清单）、`llm-cache/strict-v1/`（真实成功+失败各 1 条）、`run-record/`（identities + 逐 arm ranking + 单元 lineage 见证） |
+| **T102 record/replay 真实报告（2026-10-07，已被下表取代）** | `…/phase8-evidence/t102-20261007/` | 历史证据：`comparison-record.json`、`cache-manifest-record.json`、`llm-cache/strict-v1/`、`run-record/`。其中的 +14.3 %/+18.5 % "受益" 与 "42 KB 提示" 已确认是仪器缺陷产物，见下 |
+| **T102 最终 record/replay（2026-10-08，修复四个确定缺陷后）** | `…/phase8-evidence/t102-20261008-final/` | `comparison-record.json` + `comparison-replay.json`（两轮均 `failed`、`validation accepted`）、`cache-manifest-record.json`（2 key：1 成功 + 1 失败）、`cache-manifest-record.json.cache/strict-v1/`、`run-record/`、`run-replay/`、`record.log`、`replay.log`；`llm_calls 2 / prompt_chars 42 223 / completion_chars 8 072`、重放真实调用 0、非延迟漂移 0.0、`relative_gains` 0.0/0.0、`schema_validity_rate 0.5` |
 | **T103 部署闸门模拟** | `…/phase8-evidence/t103-20261007/t103-install-simulation.json` | 纯离线 JSON 证据：真实 `incomplete` 报告被安装后 `GATE_VARIANT_NOT_AUTHORIZED`；fixture 正路径证明撤销/篡改/过期/绑定变更分别拒绝 |
 
 013 专属 runner：
@@ -298,32 +299,52 @@ Precision@5 0.2333 → 0.2667，`relative_gains{mrr 0.1429, ndcg 0.1621}` 均过
 - 评测前会为数据集作用域内的 Java/DDL 已发布版本执行图关系重建并声明
   `graph_ready`（等价用户触发重建，FR-027；幂等）。
 
-## 013 consolidation benefit gate: current measured state (2026-10-07)
+## 013 consolidation benefit gate: current measured state (2026-10-08)
 
 `eval/run_consolidation_comparison.py` runs the frozen six-query comparison with
 six independent restorations (own PostgreSQL database, private data root, private
 Qdrant process) and a strict record -> replay cache. On the frozen dataset
 (`eval/consolidation_eval_dataset.json`) the honest measured state is:
 
-- `quarantined_inputs = 0`, `cross_scope_leaks = 0`, `soft_overturns_hard = 0`,
+- `quarantined_inputs = 0` (the two superseded memories of the scope stay recorded
+  as `excluded_nonactive_ids`), `cross_scope_leaks = 0`, `soft_overturns_hard = 0`,
   `automatic_promotions = 0`, `invalid_outputs_applied = 0`,
   `stale_holder_commits = 0`, `incomplete_outputs_consumed = 0`,
   `rebuild_llm_calls = 0`, `source_chain_complete_rate = 1.0`,
   `projection_integrity_rate = 1.0`;
-- replay makes **0** real provider transport calls (`response_match_rate = 1.0`);
-- quality metrics are above the 3 % relative threshold, but the baseline arm is
-  depressed by reader-budget latency under host load, so **no benefit is
-  claimed**;
-- the one blocking observation is `schema_validity_rate`: the sealed cache shows
-  the failing attempt with `reason: MODEL_SCHEMA_INVALID` and **`output: null`**,
-  i.e. the real provider returned nothing within the 30 s model bound (the sibling
-  key is `PROVIDER_TIMEOUT`). `MemoryDistiller.validate_output` maps any
-  non-contract-valid output, including `None`, to `MODEL_SCHEMA_INVALID`, so
-  "provider returned nothing" and "provider returned invalid JSON" share a label;
-  the zero-tolerance safety gate counts either way.
+- replay makes **0** real provider transport calls (`response_match_rate = 1.0`)
+  and the sealed cache holds both recorded outcomes (1 success + 1 failure);
+- **no retrieval benefit is observed**: baseline and both consolidated arms return
+  the same ranking for all six queries, so `relative_gains` are 0.0/0.0 and the
+  quality gate fails with `RELATIVE_GAIN_BELOW_THRESHOLD`. Both consolidated arms
+  committed nothing (`no_change`); the model package that did arrive was rejected
+  by adjudication with `EVIDENCE_UNAVAILABLE`, so consolidation had no effect on
+  this authority. (The +14.3 %/+18.5 % gain reported on 2026-10-07 was an artifact:
+  `warm_up()` never awaited the async `embed_query`, so the baseline's first
+  recorded query paid the model load, hit the reader budget and scored `mrr 0`.
+  That defect is fixed and the gain is withdrawn.)
+- the blocking observation is `schema_validity_rate = 0.5`: the frozen policy
+  bounds the model at `llm_timeout_seconds: 30`, the real provider answered one
+  arm (schema-valid package, 8 072 completion chars) and timed out on the other
+  (`PROVIDER_TIMEOUT`, cache `output: null`). A `MODEL_SCHEMA_INVALID` entry with
+  `output: null` means the provider *did* answer and the package failed the
+  contract — the strict client never persists an unvalidated body — so "returned
+  nothing" and "returned an invalid package" must not be conflated. Either way the
+  zero-tolerance safety gate counts the attempt as not usable.
 
-Consequence: the report stays `incomplete`, `default_enable_eligible=false`,
+Consequence: the report stays `failed`, `default_enable_eligible=false`,
 `gate_binding=null`, and both `consolidation_enabled` / `link_expansion_enabled`
-remain `false`. Reaching `passed` needs either a re-frozen, smaller real scenario
-(the frozen 42 KB distiller prompt is what the provider times out on) or a
-provider that answers that prompt within the bound; neither is fabricated.
+remain `false`. Reaching `passed` needs a provider that answers the ~21 KB frozen
+distiller payload within the frozen 30 s bound (and produces a package the
+adjudicator can support with real corpus evidence); nothing is fabricated and the
+runner never installs a gate entry or changes policy.
+
+Instruments fixed on 2026-10-08 (all with regression tests in
+`backend/tests/unit/test_consolidation_comparison_runner.py`): the report's
+`environment.model_version` and the cache manifest now name the model under test
+pinned by the gate binding, the safety gate emits the `hard_metrics_zero` check the
+shared production validator requires (both previously made `status=passed`
+unreachable), one real transport attempt is credited once (a `call_id` distinguishes
+the started/settled receipts), and the warm-up is awaited with one discarded real
+recall per arm so the first timed query measures retrieval instead of a cold start.
+

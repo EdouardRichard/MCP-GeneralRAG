@@ -391,7 +391,9 @@ def safety_checks(hard: dict) -> tuple[dict, list]:
     """Zero-tolerance safety gate over observed hard counters only.
 
     An unobserved counter is ``false`` here and is named in ``unobserved_counters``;
-    it is never counted as a zero observation.
+    it is never counted as a zero observation.  ``hard_metrics_zero`` names the
+    aggregate the shared production validator requires of a passed report: every
+    zero-tolerance counter is observed and zero.
     """
     checks, reasons, unobserved = {}, [], []
     for key in ZERO_SAFETY_KEYS + FULL_INTEGRITY_KEYS:
@@ -404,6 +406,7 @@ def safety_checks(hard: dict) -> tuple[dict, list]:
         checks[key] = value == expected
         if value != expected:
             reasons.append(f'{key.upper()}_VIOLATION')
+    checks['hard_metrics_zero'] = all(checks.get(key) is True for key in ZERO_SAFETY_KEYS)
     checks['unobserved_counters'] = len(unobserved) == 0
     checks['all_required_observed'] = not unobserved
     if unobserved:
@@ -622,13 +625,12 @@ class ObservedDistiller:
 
     def __init__(self, agent):
         self.agent = agent
-        self._calls = 0
-        self._prompt = 0
-        self._completion = 0
-        self._tokens = {'input': 0, 'output': 0}
-        self._cost = 0.0
-        self._unknown = {'input': False, 'output': False, 'cost': False}
         self._cache_hits = 0
+        # One credit per real transport attempt, keyed by the receipt's call_id:
+        # the strict path emits a receipt when the attempt starts and another when
+        # it settles, and the settled numbers replace the provisional ones instead
+        # of counting the same attempt twice.
+        self._credits: dict = {}
         self.agent_runs = 0
         self.agent_invalid = 0
 
@@ -662,26 +664,25 @@ class ObservedDistiller:
         self._cache_hits += receipt.cache_hits or 0
         if not receipt.transport_calls:
             return
-        self._calls += receipt.transport_calls
-        self._prompt += receipt.prompt_chars or 0
-        self._completion += receipt.completion_chars or 0
-        for name, value in (('input', receipt.input_tokens), ('output', receipt.output_tokens)):
-            if value is None:
-                self._unknown[name] = True
-            else:
-                self._tokens[name] += value
-        if receipt.cost_usd is None:
-            self._unknown['cost'] = True
-        else:
-            self._cost += receipt.cost_usd
+        self._credits[getattr(receipt, 'call_id', 0) or 0] = {
+            'calls': receipt.transport_calls, 'prompt': receipt.prompt_chars or 0,
+            'completion': receipt.completion_chars or 0,
+            'input': receipt.input_tokens, 'output': receipt.output_tokens,
+            'cost': receipt.cost_usd}
 
     def usage(self) -> dict:
+        credits = list(self._credits.values())
+        unknown_input = any(row['input'] is None for row in credits)
+        unknown_output = any(row['output'] is None for row in credits)
+        unknown_cost = any(row['cost'] is None for row in credits)
         return {
-            'transport_calls': self._calls, 'prompt_chars': self._prompt,
-            'completion_chars': self._completion, 'cache_hits': self._cache_hits,
-            'input_tokens': None if self._unknown['input'] else self._tokens['input'],
-            'output_tokens': None if self._unknown['output'] else self._tokens['output'],
-            'cost_usd': None if self._unknown['cost'] else self._cost,
+            'transport_calls': sum(row['calls'] for row in credits),
+            'prompt_chars': sum(row['prompt'] for row in credits),
+            'completion_chars': sum(row['completion'] for row in credits),
+            'cache_hits': self._cache_hits,
+            'input_tokens': None if unknown_input else sum(row['input'] or 0 for row in credits),
+            'output_tokens': None if unknown_output else sum(row['output'] or 0 for row in credits),
+            'cost_usd': None if unknown_cost else round(sum(row['cost'] or 0.0 for row in credits), 12),
         }
 
 
@@ -721,6 +722,23 @@ class ComparisonEngine:
     def scope_id(self) -> str:
         return str(self.dataset['scope_id'])
 
+    @property
+    def model_version(self) -> str:
+        """The model under test: the one the gate binding pins as ``model_version``.
+
+        ``dataset['frozen']['model']`` pins the *retrieval* embedding model, which
+        the binding already covers through ``recall_config_hash``.  The report's
+        ``environment.model_version`` and the sealed cache manifest must name the
+        model whose packages were really compared, otherwise a report whose gates
+        passed is refused by the shared production validator
+        (``consolidation_gate._validate_passed_semantics`` compares it against the
+        binding) and ``status=passed`` becomes unreachable.  The live binding is
+        preferred; ``settings.llm_model`` is the same value it reads.
+        """
+        from rag_mcp.config import get_settings
+
+        return (self.frozen_binding or {}).get('model_version') or get_settings().llm_model
+
     def embedding_provider(self):
         if self._embedding is None:
             from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
@@ -728,16 +746,20 @@ class ComparisonEngine:
             self._embedding = LocalCPUEmbeddingProvider()
         return self._embedding
 
-    def warm_up(self) -> float:
+    async def warm_up(self) -> float:
         """Load and run the embedding model before any timed recall.
 
         The reader enforces a ~3 s recall budget.  Paying the real model load and
         the first-inference cost inside the first query would make that query's
         latency, not its data, decide the record/replay comparison, so the cost is
         paid here, once, before either round.  It adds no data and no ranking.
+
+        ``embed_query`` is a coroutine: a previous revision called it without
+        awaiting, so the documented warm-up never happened and the first recorded
+        query really was the one that loaded the model.
         """
         started = time.monotonic()
-        self.embedding_provider().embed_query('013 comparison warm-up')
+        await self.embedding_provider().embed_query('013 comparison warm-up')
         return round((time.monotonic() - started) * 1000, 1)
 
     def distiller(self):
@@ -903,6 +925,14 @@ class ComparisonEngine:
                     await self.apply_arm_policy(session, profile_key, policy)
                 async with self.writer_owner(factory) as owner:
                     service = MemoryService(session, embedding_provider=self.embedding_provider())
+                    # Pay the first real read-path cost before the timed section.
+                    # A freshly restored copy has never answered a recall, so
+                    # without this the first recorded query is the one that loads
+                    # the vector segments and can hit the reader's own budget; the
+                    # runner would then report a latency-limited query and leave
+                    # the record/replay non-latency drift unmeasured.
+                    await self.warm_recall(session, service)
+                    started = time.monotonic()
                     with cache_observation(lambda key, document: collected.__setitem__(key, document)):
                         if policy.get('consolidation_enabled'):
                             record.consolidation = await self.consolidate(factory, owner, identity,
@@ -932,6 +962,17 @@ class ComparisonEngine:
         record.duration_ms = round((time.monotonic() - started) * 1000, 1)
         self.arms[(round_name, identity.arm)] = record
         return record
+
+    async def warm_recall(self, session, service) -> None:
+        """One discarded real recall, so the timed queries start on a warm copy.
+
+        Read-only and unmeasured: the result is dropped, it is not part of the
+        arm's duration and it enters no reported metric.  It exists so the first
+        *recorded* query measures retrieval, not the cold start of a restoration.
+        """
+        with contextlib.suppress(Exception):
+            await service.recall(scope_ref=[self.scope_id], query='013 comparison warm-up', limit=1)
+        await session.rollback()
 
     async def consolidate(self, factory, owner, identity, *, round_name: str) -> dict:
         """The bounded real isolated consolidation loop; every field is observed.
@@ -1351,7 +1392,7 @@ class ComparisonEngine:
             'vocabulary_hash': (self.frozen_binding or {}).get('vocabulary_hash'),
             'prompt_hash': (self.frozen_binding or {}).get('prompt_hash'),
             'schema_hash': (self.frozen_binding or {}).get('schema_hash'),
-            'model_version': dataset['frozen']['model'],
+            'model_version': self.model_version,
             'projection_fingerprints': self.projection_fingerprints(),
         }
         reasons = list(dict.fromkeys(self.note_reasons + quality_reasons + safety_reasons))
@@ -1494,7 +1535,7 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
     # 0. Bind the frozen relevance units against the real restored stores, then pay
     #    the real embedding-model load once, before either round's timed recall.
     await engine.bind_units(run)
-    engine.warm_up_ms = engine.warm_up()
+    engine.warm_up_ms = await engine.warm_up()
     # 1. Record round: real provider calls on each arm's own unconsolidated copy.
     with replay_session('record'):
         for identity in run.identities:
@@ -1506,7 +1547,7 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
         keys = sorted({key for (round_name, _arm), record in engine.arms.items()
                        if round_name == 'record' for key in record.keys})
         manifest = build_manifest(engine.cache_dir, keys,
-                                  model_version=engine.dataset['frozen']['model'],
+                                  model_version=engine.model_version,
                                   dataset_hash=engine.faces['dataset']['sha256'],
                                   snapshot_hash=engine.dataset['snapshot_hash'],
                                   data_hash=engine.dataset['snapshot_hash'])
