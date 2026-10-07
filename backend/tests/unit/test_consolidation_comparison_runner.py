@@ -552,9 +552,21 @@ def test_safety_counters_are_observed_from_real_window_inputs_and_outcomes():
     merged = merge_safety([active, quarantined])
     assert merged['windows'] == 2 and merged['window_inputs'] == 2 and merged['scope_inputs'] == 4
     counters, rate, observations = finalize_safety(merged)
-    assert counters == 1, 'a quarantined memory must be counted, never reported as zero'
+    # A quarantined memory the window correctly excluded is evidence of correct
+    # filtering, not an admitted input: the contract requires the window to
+    # exclude non-active sources, so only an admitted one may fail the gate.  The
+    # exclusion is still audited, never hidden.
+    assert counters == 0
+    assert observations['excluded_nonactive_ids'] == ['12']
     assert rate == 1.0
     assert observations['source'].startswith('013 comparison runner')
+    # A non-active memory that really reached a sealed window is a violation.
+    admitted = safety_entry({'runs': [{'status': 'rejected', 'reason_codes': []}], 'windows': 1},
+                            input_statuses={'11': {'status': 'quarantined'}},
+                            scope_statuses={'11': {'status': 'quarantined'}})
+    counters, _, admitted_observations = finalize_safety(merge_safety([admitted]))
+    assert counters == 1, 'an admitted quarantined input must never be reported as zero'
+    assert admitted_observations['quarantined_input_ids'] == ['11']
 
 
 def test_safety_counters_stay_unobserved_without_a_real_observation():

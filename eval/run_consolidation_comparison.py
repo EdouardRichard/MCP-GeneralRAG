@@ -355,16 +355,18 @@ def merge_safety(entries: list) -> dict:
 def finalize_safety(merged: dict) -> tuple:
     """Project the aggregates onto the frozen hard-counter vocabulary.
 
-    ``quarantined_inputs`` is the number of inputs this comparison really saw with
-    a non-active (quarantined) status: the memories of every restored scope plus
-    every memory that still reached a sealed window.  ``schema_validity_rate`` is
-    the observed share of model packages that passed schema validation.  Either
-    stays :data:`UNOBSERVED` when this run has no real observation for it.
+    ``quarantined_inputs`` counts only inputs this comparison really saw inside a
+    sealed window while their status was not ``active``: the contract requires the
+    window to exclude quarantined/retired/superseded/expired/incomplete sources,
+    so a non-active memory that was correctly *excluded* from the scope is
+    evidence of correct filtering, not a safety violation.  Those exclusions stay
+    in ``excluded_nonactive_ids`` for the audit.  ``schema_validity_rate`` is the
+    observed share of model packages that passed schema validation.  Either stays
+    :data:`UNOBSERVED` when this run has no real observation for it.
     """
     quarantined = UNOBSERVED
-    if merged.get('scope_inputs') or merged.get('window_inputs'):
-        quarantined = len(set(merged.get('scope_quarantined_ids') or ())
-                          | set(merged.get('window_quarantined_ids') or ()))
+    if merged.get('window_inputs'):
+        quarantined = len(set(merged.get('window_quarantined_ids') or ()))
     schema = UNOBSERVED
     if merged.get('schema_attempts'):
         invalid = merged.get('schema_invalid') or 0
@@ -379,8 +381,8 @@ def finalize_safety(merged: dict) -> tuple:
         'pipeline_attempts': merged.get('pipeline_attempts') or 0,
         'agent_attempts': merged.get('agent_attempts') or 0,
         'schema_reasons': list(merged.get('schema_reasons') or ()),
-        'quarantined_input_ids': sorted(set(merged.get('scope_quarantined_ids') or ())
-                                        | set(merged.get('window_quarantined_ids') or ())),
+        'quarantined_input_ids': sorted(set(merged.get('window_quarantined_ids') or ())),
+        'excluded_nonactive_ids': sorted(set(merged.get('scope_quarantined_ids') or ())),
     }
     return quarantined, schema, observations
 
