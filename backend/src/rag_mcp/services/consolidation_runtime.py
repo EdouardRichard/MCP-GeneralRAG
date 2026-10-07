@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import functools
 import hashlib
 import json
+import logging
 import math
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -33,12 +36,17 @@ from rag_mcp.orchestration.consolidation_pipeline import (
     select_window,
     thaw,
 )
+from rag_mcp.runtime.activity import get_runtime_activity
 from rag_mcp.services.memory_event_store import MemoryEventStore
 from rag_mcp.services.memory_policy import MemoryPolicy
 from rag_mcp.services.memory_reducer import projection_fingerprint, reduce_events
 from rag_mcp.services.memory_validators import redact_submission, sanitize_consolidation_audit
 from rag_mcp.services.provider_usage import ProviderUsageAccumulator
 from rag_mcp.utils.snowflake import generate_id
+
+logger = logging.getLogger(__name__)
+
+TERMINAL_STATUSES = ('succeeded', 'no_change', 'degraded', 'partial', 'failed', 'interrupted')
 
 
 class ConsolidationRuntimeError(ValueError):
@@ -507,6 +515,53 @@ class ConsolidationRuntime:
             observation = await self._observe_locked(token, **changes)
         return observation
 
+    async def release_terminal(self, token):
+        """Narrow terminal release for a fenced/failed run (T087).
+
+        Normal ``release`` needs the original live writer lease; a run that
+        ended because that lease was lost still has to stop holding its scope.
+        This path proves the complete historical token identity (all six token
+        components), changes no memory fact, appends no observation and never
+        touches a successor eligibility.
+        """
+        async with self._transaction():
+            row = await self.session.scalar(select(ConsolidationEligibility).where(
+                ConsolidationEligibility.eligibility_id == token.eligibility_id).with_for_update()
+                .execution_options(populate_existing=True))
+            if not self._matches(row, token) or row.state != 'active':
+                return False
+            row.state, row.released_at = 'released', await self._clock()
+        return True
+
+    async def finalize_terminal(self, token, *, status, degradation_reasons=(), provider_usage=None):
+        """Append an honest terminal observation without live authority (T087).
+
+        Deliberately takes no scope lock: a fenced run must be able to record its
+        outcome while a successor holds the scope. Refuses to mask a newer
+        generation — when a successor eligibility for the same run is still
+        current, the late old-generation terminal record is dropped instead of
+        becoming the run's public status.
+        """
+        if status not in TERMINAL_STATUSES:
+            raise ConsolidationRuntimeError('CONSOLIDATION_STATUS_INVALID')
+        async with self._transaction():
+            row = await self.session.scalar(select(ConsolidationEligibility).where(
+                ConsolidationEligibility.eligibility_id == token.eligibility_id).with_for_update()
+                .execution_options(populate_existing=True))
+            if not self._matches(row, token):
+                return None
+            latest = await self.latest_observation(token.run_id)
+            if (latest is not None and latest.eligibility_version > token.eligibility_version
+                    and latest.status not in TERMINAL_STATUSES):
+                return None
+            changes = {'status': status, 'eligibility_state': row.state}
+            if degradation_reasons:
+                changes['degradation_reasons'] = list(degradation_reasons)
+            if provider_usage is not None:
+                changes['provider_usage'] = provider_usage
+            observation = await self._observe_locked(token, **changes)
+        return observation
+
     async def observe_result(self, token, decisions, outcome, *, batch):
         published = set(outcome.output_event_ids)
         status = ('partial' if published and (outcome.pending_result_keys or outcome.failed_result_keys) else
@@ -527,6 +582,7 @@ class ConsolidationRuntime:
                 publication.update(dict.fromkeys(group.decision_ids, state))
         return await self.observe(token, status=status, output_memory_ids=list(outcome.output_memory_ids),
             output_event_ids=list(outcome.output_event_ids), pending_result_keys=list(outcome.pending_result_keys),
+            proposals=[thaw(proposal) for proposal in (*batch.deterministic_proposals, *batch.proposals)],
             provider_usage=thaw(batch.usage), degradation_reasons=reasons,
             adjudications=[{'decision_id': d.decision_id, 'decision': d.decision, 'reason_codes': list(d.reason_codes),
                 'publication': publication.get(d.decision_id, 'not_committed')} for d in decisions.decisions])
@@ -678,3 +734,243 @@ class ConsolidationRuntime:
         if pending:
             raise ConsolidationRuntimeError('CONSOLIDATION_WINDOW_PUBLICATION_PENDING')
         return window
+
+
+class WorkerReservation:
+    """One atomically reserved scope-worker slot (never a durable queue entry)."""
+
+    __slots__ = ('released', 'scope_id')
+
+    def __init__(self, scope_id):
+        self.scope_id, self.released = scope_id, False
+
+
+class ConsolidationSupervisor:
+    """Bounded background ownership for the three triggers (T081/T087).
+
+    At most ``scope_capacity`` (2) scope workers run at once, each with its own
+    DB session; a full capacity/busy admission is rejected outright — there is
+    no waiting, durable or in-memory run queue. Every accepted run is bounded by
+    one monotonic total deadline (default 300 s, scope policy 30-600 s) covering
+    selection, model, adjudication and commit attempts; heartbeat (separate
+    session, 20 s) never resets it. Cancellation, shutdown, lease loss and
+    expiry append an honest terminal observation and release only the matching
+    eligibility.
+    """
+
+    scope_capacity = 2
+    total_deadline_seconds = 300
+
+    def __init__(self, session_factory, owner, *, distiller=None, capacity=None,
+                 total_deadline_seconds=None, heartbeat_interval_seconds=20, activity=None,
+                 provider=None, memory_service_factory=None):
+        self.session_factory = session_factory
+        self.owner = owner
+        self.distiller = distiller
+        self.capacity = capacity or self.scope_capacity
+        self._explicit_deadline = total_deadline_seconds
+        self.total_deadline_seconds = (total_deadline_seconds if total_deadline_seconds is not None
+                                       else self.total_deadline_seconds)
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        self.activity = activity or get_runtime_activity()
+        self.provider = provider or DistillerProvider()
+        self.memory_service_factory = memory_service_factory
+        self._accepting = True
+        self._reservations: dict[int, WorkerReservation] = {}
+        self._workers: dict[int, asyncio.Task] = {}
+        self._runs: dict[int, UUID] = {}
+
+    @property
+    def accepting(self) -> bool:
+        return self._accepting
+
+    def active_run(self, scope_id):
+        """The run_id currently owning this scope's worker slot, or None."""
+        return self._runs.get(scope_id)
+
+    def worker_task(self, scope_id):
+        """The owned asyncio task for the scope's worker slot, or None."""
+        return self._workers.get(scope_id)
+
+    def _runtime_for(self, session):
+        return ConsolidationRuntime(session, owner=self.owner, memory_service=self._memory_service(session))
+
+    def _memory_service(self, session):
+        if self.memory_service_factory is not None:
+            return self.memory_service_factory(session)
+        from rag_mcp.services.memory_service import MemoryService
+
+        return MemoryService(session)
+
+    def _reserve(self, scope_id):
+        """Atomically take one of exactly two worker slots (no await inside)."""
+        if not self._accepting:
+            raise ConsolidationRuntimeError('CONSOLIDATION_UNAVAILABLE')
+        if len(self._reservations) + len(self._workers) >= self.capacity:
+            raise ConsolidationRuntimeError('CONSOLIDATION_CAPACITY_EXCEEDED')
+        reservation = WorkerReservation(scope_id)
+        self._reservations[id(reservation)] = reservation
+        return reservation
+
+    def _release_reservation(self, reservation):
+        if not reservation.released:
+            reservation.released = True
+            self._reservations.pop(id(reservation), None)
+
+    async def _same_scope_active(self, scope_id):
+        async with self.session_factory() as session:
+            return await session.scalar(select(ConsolidationEligibility.run_id).where(
+                ConsolidationEligibility.knowledge_scope_id == scope_id,
+                ConsolidationEligibility.state == 'active',
+                ConsolidationEligibility.expires_at > func.clock_timestamp()))
+
+    async def submit(self, scope_id, *, trigger, request_id=None, actor='management', context=None):
+        """Reserve capacity, admit in a short owned transaction, then schedule."""
+        if not self._accepting:
+            raise ConsolidationRuntimeError('CONSOLIDATION_UNAVAILABLE')
+        try:
+            reservation = self._reserve(scope_id)
+        except ConsolidationRuntimeError as error:
+            if error.code == 'CONSOLIDATION_CAPACITY_EXCEEDED':
+                # Same-scope occupancy is reported as BUSY before generic capacity.
+                active = await self._same_scope_active(scope_id)
+                if active is not None:
+                    raise ConsolidationRuntimeError('CONSOLIDATION_BUSY', run_id=active) from None
+            raise
+        try:
+            async with self.session_factory() as session:
+                token = await self._runtime_for(session).admit(
+                    scope_id, trigger=trigger, request_id=request_id, actor=actor, context=context)
+        except BaseException:
+            self._release_reservation(reservation)
+            raise
+        if scope_id in self._runs:
+            # An accepted orphan must never be silently left for later execution.
+            await self._terminal(token, 'failed', 'SUPERSEDED_BEFORE_WORKER_START')
+            await self._release_token(token)
+            self._release_reservation(reservation)
+            raise ConsolidationRuntimeError('CONSOLIDATION_BUSY', run_id=self._runs[scope_id])
+        self._runs[scope_id] = token.run_id
+        try:
+            task = asyncio.get_running_loop().create_task(self._run(scope_id, token, reservation, context))
+        except BaseException:
+            self._runs.pop(scope_id, None)
+            await self._terminal(token, 'failed', 'WORKER_SCHEDULING_FAILED')
+            await self._release_token(token)
+            self._release_reservation(reservation)
+            raise
+        self._workers[scope_id] = task
+        # The reservation is converted into the tracked worker: it must not keep
+        # occupying a second slot while the same run is already running.
+        self._reservations.pop(id(reservation), None)
+        return token
+
+    async def _deadline(self, scope_id):
+        if self._explicit_deadline is not None:
+            return self._explicit_deadline
+        try:
+            async with self.session_factory() as session:
+                scope = await session.get(KnowledgeScope, scope_id)
+                if scope is not None:
+                    profile = await session.get(DomainProfile, scope.domain_key)
+                    config = MemoryPolicy.model_validate(
+                        (profile.memory_policy if profile else None) or {}).consolidation
+                    if config is not None:
+                        return config.run_timeout_seconds
+        except Exception:
+            logger.exception('consolidation deadline lookup failed; using the default')
+        return self.total_deadline_seconds
+
+    async def _work(self, token, context):
+        from rag_mcp.orchestration.consolidation_pipeline import propose, run_pipeline, run_propagation
+
+        async with self.session_factory() as session:
+            runtime = self._runtime_for(session)
+            if getattr(context, 'execution_context', None) == 'deterministic_propagation':
+                return await run_propagation(runtime, token, context=context)
+            stage = functools.partial(propose, provider=self.provider)
+            return await run_pipeline(runtime, token, distiller=self.distiller, propose_stage=stage)
+
+    async def _heartbeat(self, scope_id, token):
+        while True:
+            await asyncio.sleep(self.heartbeat_interval_seconds)
+            try:
+                async with self.session_factory() as session:
+                    await self._runtime_for(session).heartbeat(token)
+            except ConsolidationRuntimeError as error:
+                if error.code in ('ELIGIBILITY_LOST', 'WRITER_LEASE_LOST'):
+                    task = self._workers.get(scope_id)
+                    if task is not None and task is not asyncio.current_task():
+                        task.cancel()
+                    return
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception('consolidation heartbeat failed')
+
+    async def _run(self, scope_id, token, reservation, context):
+        heartbeat = None
+        outcome = None
+        cancelled = False
+        try:
+            heartbeat = asyncio.get_running_loop().create_task(self._heartbeat(scope_id, token))
+            deadline = await self._deadline(scope_id)
+            await asyncio.wait_for(self._work(token, context), timeout=deadline)
+        except TimeoutError:
+            outcome = ('interrupted', 'CONSOLIDATION_RUN_TIMEOUT')
+        except asyncio.CancelledError:
+            cancelled = True
+            outcome = ('interrupted', 'CONSOLIDATION_CANCELLED')
+        except ConsolidationRuntimeError as error:
+            outcome = ('interrupted' if error.code in (
+                'ELIGIBILITY_LOST', 'WRITER_LEASE_LOST', 'CONSOLIDATION_COMMIT_TIMEOUT') else 'failed',
+                error.code)
+        except Exception:
+            logger.exception('consolidation run failed for scope %s', scope_id)
+            outcome = ('failed', 'CONSOLIDATION_RUN_FAILED')
+        finally:
+            if heartbeat is not None:
+                heartbeat.cancel()
+                with contextlib.suppress(BaseException):
+                    await heartbeat
+            await self._release_token(token)
+            if outcome is not None:
+                await self._terminal(token, outcome[0], outcome[1])
+            self._workers.pop(scope_id, None)
+            self._runs.pop(scope_id, None)
+            self._release_reservation(reservation)
+        if cancelled:
+            raise asyncio.CancelledError()
+
+    async def _release_token(self, token):
+        try:
+            async with self.session_factory() as session:
+                await self._runtime_for(session).release(token)
+        except Exception:  # noqa: BLE001 - lease loss needs the narrow terminal route
+            try:
+                async with self.session_factory() as session:
+                    await self._runtime_for(session).release_terminal(token)
+            except Exception:
+                logger.exception('consolidation terminal release failed')
+
+    async def _terminal(self, token, status, reason):
+        try:
+            async with self.session_factory() as session:
+                await self._runtime_for(session).finalize_terminal(
+                    token, status=status, degradation_reasons=[reason])
+        except Exception:
+            logger.exception('consolidation terminal audit failed')
+
+    async def shutdown(self):
+        """Stop acceptance, settle owned workers and release their eligibility."""
+        self._accepting = False
+        tasks = [task for task in self._workers.values()]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._workers.clear()
+        self._runs.clear()
+        self._reservations.clear()
+
+

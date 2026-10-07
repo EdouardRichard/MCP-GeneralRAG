@@ -8,6 +8,8 @@ cleanup loop belongs to the writer management process only.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 
@@ -57,8 +59,11 @@ async def test_lifespan_runs_ttl_loop_after_lease(monkeypatch) -> None:
     events: list[str] = []
 
     class FakeLease:
+        # Mirrors the real LeaseAcquisition shape: lifespan binds the writer
+        # process identity (013 T082) from the acquired holder.
         lease_id = 1
         acquired = True
+        holder_instance_id = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 
     async def fake_acquire(settings):
         events.append("lease")
@@ -68,7 +73,7 @@ async def test_lifespan_runs_ttl_loop_after_lease(monkeypatch) -> None:
         events.append("renewal_loop")
         await asyncio_never()
 
-    async def fake_ttl_loop(interval_s):
+    async def fake_ttl_loop(interval_s, *, supervisor=None, owner=None):
         events.append("ttl_loop")
         await asyncio_never()
 

@@ -127,23 +127,15 @@ async def _run_ingestion(
 def _schedule_ingestion(
     source_id: int, graph_ready: bool = False, retry: bool = False, initial_run_id: int | None = None
 ) -> None:
-    """Schedule ingestion as a fire-and-forget background task.
+    """Schedule ingestion through the single activity-visible scheduling path (T082).
 
     When ``INGESTION_BACKGROUND=false`` (used by tests and any operationally
     deferred-processing mode), no background task is spawned and the source
     remains in ``uploaded`` status awaiting explicit reprocessing.
     """
-    if not get_settings().ingestion_background:
-        logger.info("Background ingestion disabled; source %s stays 'uploaded'", source_id)
-        return
-    try:
-        asyncio.get_running_loop().create_task(
-            _run_ingestion(source_id, graph_ready=graph_ready, retry=retry, initial_run_id=initial_run_id)
-        )
-        logger.info("Scheduled ingestion for source %s", source_id)
-    except RuntimeError:
-        # No running loop (e.g., synchronous context) — skip scheduling
-        logger.warning("No running event loop; skipping background ingestion")
+    from rag_mcp.runtime.scheduling import schedule_ingestion
+
+    schedule_ingestion(source_id, graph_ready=graph_ready, retry=retry, initial_run_id=initial_run_id)
 
 
 # ---------------------------------------------------------------------------

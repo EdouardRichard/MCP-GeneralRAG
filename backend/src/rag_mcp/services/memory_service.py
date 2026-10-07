@@ -271,6 +271,12 @@ class MemoryService:
                         session.last_active_at = now
                         session.expires_at = now + timedelta(days=7)
             await self.session.commit()
+            # 013 T083: a successful ordinary eligible write emits only an O(1)
+            # offline volume hint. The foreground never selects a window, waits
+            # for or calls the Distiller, or starts an awaited consolidation job.
+            from rag_mcp.runtime.activity import mark_volume_hint
+
+            mark_volume_hint(scope_id)
         except ProjectionFailure as failure:
             if failure.path == "relation":
                 await self.session.rollback()
@@ -299,6 +305,16 @@ class MemoryService:
         return await self.projections.inspect(state, scope_id)
 
     async def rebuild(self, scope_id, *, actor, reason="management rebuild", since_event_id=None, request_id=None):
+        from rag_mcp.runtime.activity import get_runtime_activity
+
+        # 013 T082: wrap the actual rebuild lifetime (including exceptions and
+        # cancellation) rather than only the REST handler.
+        with get_runtime_activity().track('rebuild'):
+            return await self._rebuild(scope_id, actor=actor, reason=reason,
+                                       since_event_id=since_event_id, request_id=request_id)
+
+    async def _rebuild(self, scope_id, *, actor, reason="management rebuild", since_event_id=None,
+                       request_id=None):
         if actor != "management" or not isinstance(scope_id, int) or isinstance(scope_id, bool):
             raise PermissionError("MEMORY_ROLLBACK_FORBIDDEN")
         await self.session.execute(text("SELECT pg_advisory_xact_lock(:scope)"), {"scope": scope_id})

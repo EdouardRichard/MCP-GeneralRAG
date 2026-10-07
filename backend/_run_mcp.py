@@ -23,10 +23,10 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 from rag_mcp.config import get_settings
 from rag_mcp.config.timeout_profiles import validate_timeout_profiles
+from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.mcp import create_mcp_server
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
 from rag_mcp.providers.local_cpu_reranker import LocalCPUReranker
-from rag_mcp.indexing.qdrant_client import QdrantStore
 
 _INSTANCE_MODES = ("writer", "reader")
 
@@ -194,14 +194,30 @@ async def _instance_heartbeat_loop(
     """
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+    from rag_mcp.runtime.activity import PUBLISH_INTERVAL_SECONDS, publish_activity
     from rag_mcp.runtime.instance_registry import InstanceRegistryService
 
     settings = get_settings()
     engine = create_async_engine(settings.database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        elapsed = heartbeat_interval_s
         while True:
-            await asyncio.sleep(heartbeat_interval_s)
+            await asyncio.sleep(min(PUBLISH_INTERVAL_SECONDS, heartbeat_interval_s))
+            elapsed += PUBLISH_INTERVAL_SECONDS
+            try:
+                # 013 T082: this MCP process publishes its own bounded activity
+                # snapshot; the writer management process cannot see it in memory.
+                async with factory() as session:
+                    await publish_activity(session)
+                    await session.commit()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.getLogger(__name__).exception("activity publication failed")
+            if elapsed < heartbeat_interval_s:
+                continue
+            elapsed = 0
             try:
                 registry = InstanceRegistryService(factory)
                 ok = await registry.heartbeat(identity.instance_id, expiry_window_s)
@@ -285,6 +301,12 @@ def main():
     # Startup validation (FR-007/FR-021/FR-030) before serving.
     validate_timeout_profiles_at_startup()
     identity = asyncio.run(startup_sequence(mode))
+
+    # 013 T082: bind this process's real identity so its published activity
+    # snapshot is attributed to the actual MCP instance.
+    from rag_mcp.runtime.activity import set_process_identity
+
+    set_process_identity(identity.instance_id, process_role="mcp", instance_mode=mode)
 
     provider, reranker = assemble_runtime_providers(settings)
     qdrant = QdrantStore()

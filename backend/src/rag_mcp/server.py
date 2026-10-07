@@ -165,8 +165,8 @@ async def _release_writer_lease(lease) -> None:
 async def _lease_renewal_loop(lease_id: int, renew_interval_s: int, expiry_window_s: int) -> None:
     """Renew the writer lease every renew_interval_s (data-model §3.3)."""
     from rag_mcp.db import get_session_factory
-    from rag_mcp.runtime.write_coordinator import PostgresLeaseWriteCoordinator
     from rag_mcp.runtime.instance_registry import InstanceRegistryService
+    from rag_mcp.runtime.write_coordinator import PostgresLeaseWriteCoordinator
 
     while True:
         await asyncio.sleep(renew_interval_s)
@@ -190,32 +190,93 @@ async def _lease_renewal_loop(lease_id: int, renew_interval_s: int, expiry_windo
             logger.exception("lease renewal failed")
 
 
-async def _ttl_cleanup_loop(interval_s: int) -> None:
-    """Periodically purge expired retrieval run records (blueprint §20).
+async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> None:
+    """Periodically purge expired runtime records and run consolidation maintenance.
 
-    Covers the 001 retrieval_runs audit table and the 005 Agent
-    orchestration runtime tables (T066).
+    Covers the 001 retrieval_runs audit table, the 005 Agent orchestration
+    runtime tables (T066) and — from 013 T084 — the automatic idle/volume
+    consolidation admission, which always runs the existing housekeeping first.
     """
     from rag_mcp.db import get_session_factory
     from rag_mcp.services.maintenance_service import (
         purge_expired_agentic_runs,
         purge_expired_retrieval_runs,
+        run_consolidation_maintenance,
         run_memory_maintenance,
     )
+
+    while True:
+        await asyncio.sleep(interval_s)
+        factory = get_session_factory()
+
+        async def legacy_housekeeping(factory=factory):
+            async with factory() as session:
+                await purge_expired_retrieval_runs(session)
+                await purge_expired_agentic_runs(session)
+                await session.commit()
+                await run_memory_maintenance(session)
+
+        try:
+            if supervisor is None or owner is None:
+                await legacy_housekeeping()
+                continue
+            await run_consolidation_maintenance(factory, owner, supervisor,
+                                                legacy_housekeeping=legacy_housekeeping)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - keep the loop alive on transient errors
+            logger.exception("TTL cleanup failed")
+
+
+async def _activity_publish_loop(interval_s: float) -> None:
+    """Publish this process's bounded activity snapshot for cross-process checks."""
+    from rag_mcp.db import get_session_factory
+    from rag_mcp.runtime.activity import publish_activity
 
     while True:
         await asyncio.sleep(interval_s)
         try:
             factory = get_session_factory()
             async with factory() as session:
-                await purge_expired_retrieval_runs(session)
-                await purge_expired_agentic_runs(session)
+                await publish_activity(session)
                 await session.commit()
-                await run_memory_maintenance(session)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 - keep the loop alive on transient errors
-            logger.exception("TTL cleanup failed")
+        except Exception:
+            logger.exception("activity publication failed")
+
+
+def _consolidation_distiller(settings):
+    """The writer's real Distiller, or None so rules-only degradation is explicit."""
+    try:
+        from rag_mcp.agents.memory_distiller import MemoryDistiller
+        from rag_mcp.providers.factory import assemble_or_fail
+
+        bundle = assemble_or_fail(settings)
+        return MemoryDistiller(bundle.llm) if bundle.llm is not None else None
+    except Exception:
+        logger.exception("consolidation distiller unavailable; deterministic rules only")
+        return None
+
+
+def _build_supervisor(lease, settings):
+    from rag_mcp.api.memory import _service as memory_service_factory
+    from rag_mcp.db import get_session_factory
+    from rag_mcp.services.consolidation_runtime import ConsolidationSupervisor
+
+    return ConsolidationSupervisor(get_session_factory(), lease,
+                                   distiller=_consolidation_distiller(settings),
+                                   memory_service_factory=memory_service_factory)
+
+
+async def _shutdown_recovery() -> None:
+    """Final writer recovery while the lease is still valid (T084)."""
+    from rag_mcp.db import get_session_factory
+    from rag_mcp.services.maintenance_service import recover_promotion_observations
+
+    factory = get_session_factory()
+    async with factory() as session:
+        await recover_promotion_observations(session)
 
 
 @asynccontextmanager
@@ -235,6 +296,20 @@ async def lifespan(app: FastAPI):
     app.state.writer_lease = lease
     # 007: sync builtin domain profiles (drift repair; fails startup on error, FR-005/SC-008)
     await _sync_domain_profiles()
+    # 013 T081/T082: the bounded consolidation supervisor is constructed only
+    # after a valid writer lease, and the management process publishes its own
+    # request-activity snapshot for cross-process automatic admission.
+    from rag_mcp.runtime.activity import (
+        PUBLISH_INTERVAL_SECONDS,
+        publish_activity,
+        release_activity,
+        set_process_identity,
+    )
+
+    set_process_identity(lease.holder_instance_id, process_role="management",
+                         instance_mode=settings.instance_mode)
+    supervisor = _build_supervisor(lease, settings)
+    app.state.consolidation_supervisor = supervisor
     renewal_task = asyncio.create_task(
         _lease_renewal_loop(
             lease.lease_id,
@@ -243,20 +318,50 @@ async def lifespan(app: FastAPI):
         )
     )
     cleanup_task = asyncio.create_task(
-        _ttl_cleanup_loop(settings.retrieval_ttl_cleanup_interval_s)
+        _ttl_cleanup_loop(settings.retrieval_ttl_cleanup_interval_s, supervisor=supervisor, owner=lease)
     )
+    activity_task = asyncio.create_task(_activity_publish_loop(PUBLISH_INTERVAL_SECONDS))
+    background = (renewal_task, cleanup_task, activity_task)
     try:
         yield
     finally:
-        for task in (renewal_task, cleanup_task):
+        # Stop accepting new runs and settle owned workers before the lease goes.
+        try:
+            await supervisor.shutdown()
+        except Exception:
+            logger.exception("failed to stop the consolidation supervisor cleanly")
+        for task in background:
             task.cancel()
-        for task in (renewal_task, cleanup_task):
+        for task in background:
             try:
                 await task
             except asyncio.CancelledError:
                 pass
+        try:
+            from rag_mcp.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await publish_activity(session)
+                await session.commit()
+        except Exception:
+            logger.exception("failed to publish the final activity snapshot")
+        try:
+            await _shutdown_recovery()
+        except Exception:
+            logger.exception("final consolidation recovery failed")
         await _release_writer_lease(lease)
         app.state.writer_lease = None
+        app.state.consolidation_supervisor = None
+        try:
+            from rag_mcp.db import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await release_activity(session)
+                await session.commit()
+        except Exception:
+            logger.exception("failed to release the activity signal")
         from rag_mcp.db import dispose_engine
 
         await dispose_engine()
@@ -298,11 +403,11 @@ def create_app() -> FastAPI:
 
 
     # Register API routers
-    from rag_mcp.api.projects import router as projects_router
     from rag_mcp.api.knowledge_sources import router as ks_router
+    from rag_mcp.api.memory import router as memory_router
+    from rag_mcp.api.projects import router as projects_router
     from rag_mcp.api.runtime_metrics import router as runtime_metrics_router
     from rag_mcp.api.sse import router as sse_router
-    from rag_mcp.api.memory import router as memory_router
 
     app.include_router(projects_router)
     app.include_router(ks_router)

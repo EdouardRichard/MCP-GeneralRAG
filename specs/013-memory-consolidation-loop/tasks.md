@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；Phase 6 T065-T076已实现并通过308项串行验收（含012迁移往返回归修复：0096-0103 downgrade 仅在保留013 authority时拒绝），迁移0101-0103已应用；T077-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；Phase 6 T065-T076已实现并通过308项串行验收（含012迁移往返回归修复：0096-0103 downgrade 仅在保留013 authority时拒绝），迁移0101-0103已应用；Phase 7 T077-T089已实现并通过47项串行验收（含012工具面契约更新），迁移0104已应用；T090-T104尚未开始。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–6的76项已勾选，28项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–7的89项已勾选，15项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -191,22 +191,22 @@
 
 ### US1 / US7 测试先行
 
-- [ ] T077 [P] [US1] 在 `backend/tests/contract/test_consolidation_run_api.py` 先写POST consolidation短admission 202/window=null/execution_context=distiller_window、disabled/config-required/busy+run_id/scope-write-busy/capacity/write-unavailable及GET list/detail/history/TTL 410证明与跨域404契约；REST携带support_maintenance/execution_context/propagation/proof等未知控制字段必须拒绝，内部维护报告标明历史来源/失效依据且新输入为空，依赖 T076。
-- [ ] T078 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_triggers.py` 先写手动/idle/volume共用DB admission竞争、自动前台/摄入/重建活跃跳过、阈值只提示且维护重验、busy不排队、两scope独立、空窗口与全部驳回释放测试，依赖 T076。
-- [ ] T079 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_concurrency.py` 先写scope worker≤2/provider真实调用≤2、timeout底层仍在途占槽、异常/取消最终释放、generation接管/旧任务晚到提交0与释放新资格0测试，依赖 T076。
-- [ ] T080 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_foreground.py` 先写巩固期间search/recall/record/start_work原预算与调用路径测试，前台同步等待/调用Distiller=0、reader新管理入口无写、request activity最终归零，依赖 T076。
+- [X] T077 [P] [US1] 在 `backend/tests/contract/test_consolidation_run_api.py` 先写POST consolidation短admission 202/window=null/execution_context=distiller_window、disabled/config-required/busy+run_id/scope-write-busy/capacity/write-unavailable及GET list/detail/history/TTL 410证明与跨域404契约；REST携带support_maintenance/execution_context/propagation/proof等未知控制字段必须拒绝，内部维护报告标明历史来源/失效依据且新输入为空，依赖 T076。
+- [X] T078 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_triggers.py` 先写手动/idle/volume共用DB admission竞争、自动前台/摄入/重建活跃跳过、阈值只提示且维护重验、busy不排队、两scope独立、空窗口与全部驳回释放测试，依赖 T076。
+- [X] T079 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_concurrency.py` 先写scope worker≤2/provider真实调用≤2、timeout底层仍在途占槽、异常/取消最终释放、generation接管/旧任务晚到提交0与释放新资格0测试，依赖 T076。
+- [X] T080 [P] [US1] 在 `backend/tests/integration/test_013_consolidation_foreground.py` 先写巩固期间search/recall/record/start_work原预算与调用路径测试，前台同步等待/调用Distiller=0、reader新管理入口无写、request activity最终归零，依赖 T076。
 
 ### US1 / US7 实现
 
-- [ ] T081 [US1] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现最多2个scope后台任务的接纳/独立session/总期限300s/取消与shutdown回收；接入T036 provider信号量、区分worker与真实在途调用，容量满明确拒绝不保留队列，所有完成/失败路径追加审计并匹配token释放，依赖 T012、T036、T049、T079。
-- [ ] T082 [US1] 在 `backend/src/rag_mcp/server.py` 接入常数时间前台活动计数/最后活动时间、摄入/重建活动状态与有界runtime生命周期，HTTP/MCP异常也释放活动计数，未取得writer lease不运行新管理控制，依赖 T080、T081。
-- [ ] T083 [US1] 在 `backend/src/rag_mcp/services/memory_service.py` 仅在既有记忆写入完成后发送量阈值离线检查提示，不在前台选窗口/调用模型/启动等待任务；维护对当前eligible pending count重验，busy提示不能变持久运行队列，依赖 T078、T082。
-- [ ] T084 [US1] 在 `backend/src/rag_mcp/services/maintenance_service.py` 接入idle/volume统一admission：先执行既有TTL/recovery/purge，再核验当前writer/idle_seconds/前台和摄入重建活动/真实阈值/域门控；自动跳过有原因，必要support维护走T059/T060窄权限路径，由可信钩子构造support_maintenance上下文，关闭时仍执行但共用资格/lease/fence/容量且不伪装普通触发，依赖 T060、T075、T078、T081、T083。
-- [ ] T085 [US1] 在 `backend/src/rag_mcp/api/memory.py` 接入手动POST与运行list/detail/history，短事务资格+admitted审计后后台执行，明确scope/require_writer/live lease；只返回同域净化报告，TTL410仅有长期身份证明时返回，否则404，依赖 T050、T073、T077、T081、T084。
-- [ ] T086 [US7] 在 `backend/src/rag_mcp/services/maintenance_service.py` 接入默认7天审计TTL到期清理与RuntimeMaintenanceLog，维护角色/DB guard校验，不能删永久authority/有效link或释放仍active资格；报告usage含真实计量/估计/缺失，依赖 T006、T016、T085。
-- [ ] T087 [US1] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 接齐lease丢失、总超时、进程中断与过期资格恢复的终态观察及fenced接管；当前token心跳不复活过期资格，恢复原run仍须新独占资格，迟到模型结果无效，依赖 T048、T079、T081、T086。
-- [ ] T088 [US1] 串行运行三触发/容量/前台/reader/资格竞争集成测试，将真实触发、忙碌、接管与零同步等待证据记入 `specs/013-memory-consolidation-loop/quickstart.md`，依赖 T087。
-- [ ] T089 [US7] 在 `backend/tests/integration/test_013_consolidation_audit.py` 补真实端到端正常/空/全拒绝/降级/部分/失败/中断与usage报告、append-only和TTL后来源可解释性验收；涵盖关闭时support_maintenance/deterministic_propagation报告、null窗口/空新输入/完整历史来源及proof，确认每受理run都有轨迹且counts与实际权威发布一致，依赖 T050、T085、T086、T088。
+- [X] T081 [US1] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 实现最多2个scope后台任务的接纳/独立session/总期限300s/取消与shutdown回收；接入T036 provider信号量、区分worker与真实在途调用，容量满明确拒绝不保留队列，所有完成/失败路径追加审计并匹配token释放，依赖 T012、T036、T049、T079。
+- [X] T082 [US1] 在 `backend/src/rag_mcp/server.py` 接入常数时间前台活动计数/最后活动时间、摄入/重建活动状态与有界runtime生命周期，HTTP/MCP异常也释放活动计数，未取得writer lease不运行新管理控制，依赖 T080、T081。
+- [X] T083 [US1] 在 `backend/src/rag_mcp/services/memory_service.py` 仅在既有记忆写入完成后发送量阈值离线检查提示，不在前台选窗口/调用模型/启动等待任务；维护对当前eligible pending count重验，busy提示不能变持久运行队列，依赖 T078、T082。
+- [X] T084 [US1] 在 `backend/src/rag_mcp/services/maintenance_service.py` 接入idle/volume统一admission：先执行既有TTL/recovery/purge，再核验当前writer/idle_seconds/前台和摄入重建活动/真实阈值/域门控；自动跳过有原因，必要support维护走T059/T060窄权限路径，由可信钩子构造support_maintenance上下文，关闭时仍执行但共用资格/lease/fence/容量且不伪装普通触发，依赖 T060、T075、T078、T081、T083。
+- [X] T085 [US1] 在 `backend/src/rag_mcp/api/memory.py` 接入手动POST与运行list/detail/history，短事务资格+admitted审计后后台执行，明确scope/require_writer/live lease；只返回同域净化报告，TTL410仅有长期身份证明时返回，否则404，依赖 T050、T073、T077、T081、T084。
+- [X] T086 [US7] 在 `backend/src/rag_mcp/services/maintenance_service.py` 接入默认7天审计TTL到期清理与RuntimeMaintenanceLog，维护角色/DB guard校验，不能删永久authority/有效link或释放仍active资格；报告usage含真实计量/估计/缺失，依赖 T006、T016、T085。
+- [X] T087 [US1] 在 `backend/src/rag_mcp/services/consolidation_runtime.py` 接齐lease丢失、总超时、进程中断与过期资格恢复的终态观察及fenced接管；当前token心跳不复活过期资格，恢复原run仍须新独占资格，迟到模型结果无效，依赖 T048、T079、T081、T086。
+- [X] T088 [US1] 串行运行三触发/容量/前台/reader/资格竞争集成测试，将真实触发、忙碌、接管与零同步等待证据记入 `specs/013-memory-consolidation-loop/quickstart.md`，依赖 T087。
+- [X] T089 [US7] 在 `backend/tests/integration/test_013_consolidation_audit.py` 补真实端到端正常/空/全拒绝/降级/部分/失败/中断与usage报告、append-only和TTL后来源可解释性验收；涵盖关闭时support_maintenance/deterministic_propagation报告、null窗口/空新输入/完整历史来源及proof，确认每受理run都有轨迹且counts与实际权威发布一致，依赖 T050、T085、T086、T088。
 
 **Checkpoint**: US1 与 US7 管理工作流完整，可合法opt-in内测；正式默认开启与链接增强资格待 Phase 8。
 

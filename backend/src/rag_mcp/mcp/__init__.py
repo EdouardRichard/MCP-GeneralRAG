@@ -135,6 +135,12 @@ def create_mcp_server(
         settings.mcp_port,
     )
 
+    # 013 T082: the real MCP dispatch boundary is a foreground-activity boundary
+    # in this process; a shared in-process fixture alone would not prove it.
+    from rag_mcp.runtime.activity import track_tool_calls
+
+    track_tool_calls(mcp_server)
+
     return mcp_server
 
 

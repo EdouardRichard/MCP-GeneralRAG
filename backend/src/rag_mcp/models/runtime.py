@@ -21,6 +21,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Index,
@@ -29,7 +30,7 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from rag_mcp.models import Base
@@ -180,4 +181,43 @@ class RuntimeMaintenanceLog(Base):
         return (
             f"<RuntimeMaintenanceLog(log_id={self.log_id}, "
             f"event_type={self.event_type!r}, purged={self.purged_retrieval_runs})>"
+        )
+
+
+class RuntimeActivitySignal(Base):
+    """One published activity snapshot per process (013 T082/T084, migration 0104).
+
+    Operational only: the management process cannot see the MCP process's
+    in-memory request counters, so each process periodically publishes a bounded
+    snapshot here. The writer maintenance tick reads *fresh* peer rows and
+    conservatively skips automatic consolidation admission when any observation
+    is stale — a failed or old process observation is never read as "idle".
+    """
+
+    __tablename__ = "runtime_activity_signals"
+    __table_args__ = (
+        CheckConstraint("process_role IN ('management', 'mcp')", name="ck_runtime_activity_process_role"),
+        CheckConstraint("instance_mode IN ('writer', 'reader')", name="ck_runtime_activity_instance_mode"),
+        CheckConstraint("foreground_active>=0", name="ck_runtime_activity_foreground_active"),
+        CheckConstraint("state IN ('active', 'released')", name="ck_runtime_activity_state"),
+        Index("ix_runtime_activity_active", "state", "published_at"),
+    )
+
+    instance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    process_role: Mapped[str] = mapped_column(String(12), nullable=False)
+    instance_mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    foreground_active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    last_foreground_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    ingestion_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    rebuild_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    volume_hint_scope_ids: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    volume_hint_published_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    published_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
+    released_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+
+    def __repr__(self) -> str:
+        return (
+            f"<RuntimeActivitySignal(instance_id={self.instance_id}, role={self.process_role!r}, "
+            f"foreground={self.foreground_active}, published_at={self.published_at})>"
         )

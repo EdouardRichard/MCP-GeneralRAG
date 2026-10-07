@@ -176,6 +176,95 @@ async def promotion_report(task_id: int, scope_ref: str = Query(min_length=1),
             "authority_event_ids": [str(item) for item in report["authority_event_ids"]]}
 
 
+class ConsolidationCommand(BaseModel):
+    """The only client-settable consolidation request fields (T077).
+
+    Internal triggers, execution contexts, propagation/proof material, run or
+    holder identity, policy and proposals are not client controls at all.
+    """
+    model_config = ConfigDict(extra="forbid")
+    scope_id: int = Field(gt=0, strict=True)
+    reason: str = Field(min_length=1, max_length=4000)
+
+
+def _consolidation_error(exception):
+    from rag_mcp.services.consolidation_runtime import ConsolidationRuntimeError
+
+    if not isinstance(exception, ConsolidationRuntimeError):
+        return _http_error(exception)
+    code = exception.code
+    if code == 'CONSOLIDATION_DISABLED':
+        return HTTPException(403, detail={"code": code})
+    if code == 'CONSOLIDATION_CONFIGURATION_REQUIRED':
+        return HTTPException(409, detail={"code": "CONSOLIDATION_CONFIG_REQUIRED"})
+    if code == 'CONSOLIDATION_BUSY':
+        return HTTPException(409, detail={"code": code,
+                                          "run_id": str(exception.run_id) if exception.run_id else None})
+    if code == 'CONSOLIDATION_SCOPE_WRITE_BUSY':
+        return HTTPException(409, detail={"code": code})
+    if code == 'CONSOLIDATION_CAPACITY_EXCEEDED':
+        return HTTPException(429, detail={"code": code})
+    if code in ('MISSING_KNOWLEDGE_SCOPE', 'CONSOLIDATION_STATUS_INVALID'):
+        return HTTPException(400, detail={"code": code})
+    return HTTPException(503, detail={"code": "MEMORY_WRITE_UNAVAILABLE"})
+
+
+@router.post("/consolidation", status_code=202, dependencies=[Depends(require_writer)])
+async def start_consolidation(data: ConsolidationCommand, request: Request):
+    """Short manual admission: durable eligibility + admitted audit, then 202.
+
+    Window selection and any model work happen in the bounded background worker;
+    the HTTP response never waits for them.
+    """
+    supervisor = getattr(request.app.state, 'consolidation_supervisor', None)
+    if supervisor is None:
+        raise HTTPException(503, detail={"code": "MEMORY_WRITE_UNAVAILABLE"})
+    request_id = str(uuid4())
+    try:
+        token = await supervisor.submit(data.scope_id, trigger='manual', request_id=request_id,
+                                        actor='management')
+    except (ValueError, PermissionError) as exception:
+        raise _consolidation_error(exception) from None
+    return {"schema_version": 1, "run_id": str(token.run_id), "scope_id": str(token.scope_id),
+            "request_id": request_id, "trigger": "manual", "execution_context": "distiller_window",
+            "status": "admitted", "window": None,
+            "report_url": f"/api/memories/consolidation/runs/{token.run_id}?scope_ref={token.scope_id}"}
+
+
+@router.get("/consolidation/runs", dependencies=[Depends(require_writer)])
+async def list_consolidation_runs(scope_ref: str = Query(min_length=1),
+                                  limit: int = Query(default=20, ge=1, le=100),
+                                  offset: int = Query(default=0, ge=0),
+                                  session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """Latest cumulative observation per run, stable newest first."""
+    from rag_mcp.services import consolidation_report
+
+    try:
+        scope_id = await MemoryScopeResolver(session).resolve(scope_ref)
+    except ValueError as exception:
+        raise _http_error(exception) from None
+    return await consolidation_report.list_run_reports(session, scope_id=scope_id, limit=limit, offset=offset)
+
+
+@router.get("/consolidation/runs/{run_id}", dependencies=[Depends(require_writer)])
+async def get_consolidation_run(run_id: str, scope_ref: str = Query(min_length=1),
+                                include_history: bool = Query(default=False),
+                                session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """Same-scope run report; 404 without proof, 410 only with retained identity."""
+    from rag_mcp.services import consolidation_report
+    from rag_mcp.services.consolidation_report import ConsolidationRunMissing
+
+    try:
+        scope_id = await MemoryScopeResolver(session).resolve(scope_ref)
+        return await consolidation_report.get_run_report(session, run_id=run_id, scope_id=scope_id,
+                                                         include_history=include_history)
+    except ConsolidationRunMissing as exception:
+        status = 410 if exception.code == consolidation_report.EXPIRED else 404
+        raise HTTPException(status, detail={"code": exception.code}) from None
+    except ValueError as exception:
+        raise _http_error(exception) from None
+
+
 @router.get("/scopes")
 async def list_memory_scopes(session: AsyncSession = Depends(get_session)):
     scopes = (await session.execute(select(KnowledgeScope).where(KnowledgeScope.status == "active")

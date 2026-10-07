@@ -32,8 +32,12 @@ async def test_generated_memory_schema_exposes_contract_inputs_only():
     expected = {
         "record_memory": {"scope_ref", "kind", "content", "provenance", "evidence_refs", "inference_meta",
                           "confidence", "title", "tags", "session_id", "agent_id", "task_context", "supersedes_memory_id"},
+        # 013 recall extensions v2: the memory tool alone gains two additive
+        # optional StrictBool flags (contracts/recall-extensions.md); the three
+        # historical knowledge tools stay byte-compatible.
         "recall_memory": {"scope_ref", "query", "memory_ids", "kind", "session_id", "agent_id", "time_window",
-                          "as_of", "include_superseded", "include_delivered", "limit"},
+                          "as_of", "include_superseded", "include_delivered", "limit",
+                          "include_linked", "include_context"},
         "start_work": {"scope_ref", "session_id", "task_hint", "agent_id", "include", "budget"},
     }
     for name, fields in expected.items():
@@ -41,6 +45,10 @@ async def test_generated_memory_schema_exposes_contract_inputs_only():
         assert set(schema["properties"]) == fields
         assert "scope_ref" in schema["required"]
         assert schema.get("additionalProperties") is False
+    # The additive flags are optional, default false, and never coercible.
+    for flag in ("include_linked", "include_context"):
+        assert flag not in tools["recall_memory"].inputSchema["required"]
+        assert tools["recall_memory"].inputSchema["properties"][flag]["default"] is False
 
 
 def test_unknown_mode_does_not_silently_become_reader():

@@ -488,3 +488,183 @@ repaired migrations changed (only `downgrade()` bodies; `upgrade()` bytes
 verified unchanged) — the applied `upgrade()` hashes above remain the authority
 for what the isolated database actually ran.
 
+## Phase 7 verification (2026-10-07, T077-T089)
+
+Phase 7 wired the three triggers (manual/idle/volume), the bounded worker and
+provider capacity, real request-activity tracking and the same-scope run reports.
+0095-0103 stayed byte-frozen; one successor was applied to the isolated database:
+`0104_runtime_activity_signals` (bounded cross-process request-activity signals;
+`down_revision = 0103_promotion_guard_skip`, SHA256
+`F19143FF951D79A73D97C6A3BFAB26CB0FD881CEE475A499EEDA025835CB70F4`). Isolated head
+is now `0104_runtime_activity_signals`.
+
+RED first (behaviour failures, not import/collection errors — all four files
+collect 30 tests cleanly):
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_run_api.py -q --tb=line -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_triggers.py -q --tb=line -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_013_consolidation_concurrency.py tests/integration/test_013_consolidation_foreground.py -q --tb=line -p no:cacheprovider
+```
+
+Observed: **6 failed in 6.93s** (4 × `{"detail":"Not Found"}` for the absent
+consolidation routes, 1 × supervisor `NotImplementedError`, 1 ×
+`TRUSTED_CONTEXT_REQUIRED` reached by an invalid trigger kind);
+**10 failed in 4.61s** (T081 supervisor / T082 activity / T084 gate shells);
+**11 failed, 3 passed in 23.05s** (the two provider-pool cases already passed:
+the Phase 3/4 `DistillerProvider` capacity is pre-existing).
+
+GREEN, per file:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_run_api.py tests/integration/test_013_consolidation_triggers.py tests/integration/test_013_consolidation_concurrency.py tests/integration/test_013_consolidation_foreground.py tests/integration/test_013_consolidation_audit.py -q --tb=line -p no:cacheprovider
+```
+
+Observed (serial, no concurrent writer, run from the repository root; the runner
+executes pytest with `cwd=<repo>/backend`):
+
+- `tests/contract/test_consolidation_run_api.py` **6 passed in 36.72s**
+- `tests/integration/test_013_consolidation_triggers.py` **10 passed in 205.14s**
+- `tests/integration/test_013_consolidation_concurrency.py` **9 passed in 43.86s**
+- `tests/integration/test_013_consolidation_foreground.py` **5 passed in 21.94s**
+- `tests/integration/test_013_consolidation_audit.py` **10 passed in 81.01s**
+- combined T088 acceptance batch (all five Phase 7 files, one serial run) **40 passed in
+  401.51s (6:41)**, exit 0, no skips; final re-run on the final bytes after the
+  lint cleanup, adding the server-mode unit file,
+  `pytest tests/unit/test_server_mode.py tests/contract/test_consolidation_run_api.py
+  tests/integration/test_013_consolidation_triggers.py
+  tests/integration/test_013_consolidation_concurrency.py
+  tests/integration/test_013_consolidation_foreground.py
+  tests/integration/test_013_consolidation_audit.py` →
+  **47 passed in 413.83s (6:53)**, exit 0, no skips
+
+Regression on the same bytes (serial): `tests/unit` plus
+`tests/contract/test_consolidation_management_api.py`,
+`tests/contract/test_012_actual_tool_surface.py`,
+`tests/integration/test_013_consolidation_promotion.py`,
+`tests/integration/test_013_consolidation_windows.py`,
+`tests/integration/test_013_consolidation_commit.py`,
+`tests/integration/test_012_memory_e2e.py`,
+`tests/integration/test_runtime_reader_independence.py` — **2075 passed, 3 failed
+in 350.13s**. All three failures were re-run at the Phase 7 base commit
+`2fc9610` in a detached worktree:
+`tests/unit/orchestration/test_agentic_metrics.py::test_record_agentic_retrieval_run_writes_row`
+and
+`tests/contract/test_012_actual_tool_surface.py::test_generated_memory_schema_exposes_contract_inputs_only`
+fail **identically at the base commit** (Phase 5 gaps: the T062 additive
+`include_linked`/`include_context` flags were never reflected in the 012 schema
+contract test, and the agentic-metrics unit case predates this phase). The third,
+`tests/unit/test_server_mode.py::test_lifespan_runs_ttl_loop_after_lease`, was a
+Phase 7 regression caused by the new writer-identity binding in `lifespan`; the
+test doubles were updated to mirror the real callables
+(`LeaseAcquisition.holder_instance_id`, `_ttl_cleanup_loop(..., *, supervisor=None,
+owner=None)`) with no assertion changed, and the file re-ran **7 passed in 12.99s**.
+
+What the Phase 7 evidence establishes:
+
+- `POST /api/memories/consolidation` is a short admission: the 202 carries
+  `run_id`/`request_id`/`trigger=manual`/`execution_context=distiller_window`/
+  `status=admitted`/`window=null`, the admitted row is durable before the
+  response, and no window selection or model call happens while the request is in
+  flight (verified with a blocked `select_and_seal`). Disabled,
+  configuration-required, same-scope busy (with the live `run_id`), contested
+  scope-write lock and full capacity are distinct outcomes; bool/string scope,
+  every unknown control field (`trigger`, `execution_context`,
+  `propagation_trigger`, `proof`, `run_id`, `holder_instance_id`, `policy`,
+  `proposals`, `actor`, `request_id`) reject with 422.
+- Manual, idle and volume share one DB admission: losers get
+  `CONSOLIDATION_BUSY` with the live run id, no second run row or queue entry is
+  created, and at most two scope workers run at once with independent sessions
+  (the third is refused and only succeeds after a slot is freed).
+- Real provider capacity is separately bounded at two: a timed-out or cancelled
+  waiter keeps its slot until the synchronous call actually returns, a third real
+  call is refused boundedly (no executor backlog), and cancellation, worker
+  faults, total-deadline expiry and lease loss all append an honest terminal
+  observation, release exactly the matching eligibility and free the slot. A
+  late old-generation result cannot commit, release or mask a newer generation
+  (takeover allocates a new eligibility id and a larger version).
+- Automatic admission requires *current* evidence: foreground/ingestion/rebuild
+  activity (own process and fresh peers), a stale peer observation, an
+  insufficient idle window, a disabled/unconfigured domain, a busy scope or a
+  below-threshold volume hint each produce a reasoned skip with zero model,
+  selection and commit work; a rejected hint is discarded and never replayed,
+  while a later tick may independently observe the still-current pending work as
+  an idle trigger. The volume hint is re-verified against the real eligible
+  unconsumed episodic count, not raw projection rows (a +400-day clock with two
+  raw rows reports `eligible: 0`).
+- Request activity is constant-time and honest: only `/api/**` and `/mcp`
+  dispatch counts (health, OpenAPI, SSE and static assets are passive), the count
+  is released on success, error and cancellation, real MCP tool dispatch is
+  instrumented in both writer and reader forms, and the reader surface exposes no
+  consolidation/management control. Foreground search/recall/record/start_work
+  keep their call path and budget while a consolidation run is blocked in the
+  real provider thread, `MemoryDistiller.run` is never invoked from the
+  foreground, and the activity count returns to zero.
+- Promotion resumption now dispatches through the single activity-visible
+  scheduling path (`rag_mcp.runtime.scheduling.schedule_ingestion`), counted from
+  the moment the task is created and released in a `finally`; the maintenance
+  tick also recovers missing real promotion outcomes (`recover_promotion_observations`,
+  and once more during shutdown while the lease is still valid) so a completed
+  attempt is never reported as merely `uploaded`.
+- Reports are same-scope and honest: 404 without proof and for a foreign scope
+  (no metadata leak), 410 only when a retained same-scope eligibility proves the
+  run existed, one item per run in the list, append-only `history` ordered by
+  sequence, and `counts` derived from the adjudication trail
+  (`accepted ≠ committed`, accepted-but-pending never listed as output). Real
+  end-to-end cases verify `succeeded`, `no_change`+`all_rejected`,
+  `degraded`, `partial` (one independent group committed, one pending) and
+  `failed` (rolled-back group publishes nothing) against the actual published
+  authority prefix, with cache hits, actual transport and unknown token/cost
+  kept separate.
+- The 7-day audit TTL purge runs through the guarded live-maintenance role and
+  audit log, deletes only expired observation rows (the report names that unit
+  honestly as `purged_consolidation_observations`), keeps authority, published
+  output, retained eligibility history and a still-explainable report, never
+  releases active eligibility, and ordinary-role UPDATE/DELETE/TRUNCATE stay
+  rejected.
+- Trusted support maintenance still runs end-to-end while the ordinary switch is
+  false: a real `support_maintenance`/`deterministic_propagation` wave with
+  `window=null`, empty new inputs, nonempty historical lineage and a current
+  proof, zero Distiller calls, and the same eligibility/lease/fence/capacity
+  path; REST cannot fabricate the trigger.
+- Defects found and recorded (no assertion weakened): `observe_result` now
+  records the sanitized proposals it considered so `counts.proposed` matches the
+  adjudication trail; test-double shapes in `tests/unit/test_server_mode.py` were
+  aligned with the real callables; the remaining edits are test-side hygiene
+  documented in `.superpowers/sdd/013-tasks/phase7-progress.md`.
+- Known bounded caveat: one best-effort log line
+  (`consolidation terminal release failed`) was observed once in an early run
+  where a test failed while its worker was still mid-flight; it appears in **no**
+  passing acceptance run (re-checked with a filtered re-run of the two largest
+  Phase 7 files: **20 passed in 312.20s**, no such line). It never changes a run's
+  public status, and every acceptance assertion on released eligibility passes;
+  it is reported rather than hidden.
+
+### Lead final verification of Phase 7 (2026-10-07)
+
+Independently re-run by the Lead on the final bytes, serial, no concurrent
+writer, isolated head `0104_runtime_activity_signals`:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_consolidation_run_api.py tests/integration/test_013_consolidation_triggers.py tests/integration/test_013_consolidation_concurrency.py tests/integration/test_013_consolidation_foreground.py tests/integration/test_013_consolidation_audit.py tests/unit/test_server_mode.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/contract/test_012_actual_tool_surface.py tests/contract/test_consolidation_recall_extensions.py -q --tb=short -p no:cacheprovider
+```
+
+Observed: **47 passed in 407.34s** (T088 acceptance set: run API contract, three
+triggers, concurrency, foreground, audit matrix, server mode) and **17 passed in
+3.33s** after the Lead repaired the one legacy contract gap the phase reported:
+`tests/contract/test_012_actual_tool_surface.py` still pinned `recall_memory`'s
+exact 012 property set, so T062's additive `include_linked`/`include_context`
+StrictBool flags made it fail. The Lead updated that 012 test to the
+spec-sanctioned v2 shape (contracts/recall-extensions.md: the memory tool alone
+gains two additive optional flags; the three historical knowledge tools stay
+byte-compatible) and **strengthened** it: both flags must be optional, default
+`false`, with `additionalProperties: false` still asserted. No other assertion was
+weakened.
+
+Remaining known pre-existing failure unrelated to 013:
+`tests/unit/orchestration/test_agentic_metrics.py::test_record_agentic_retrieval_run_writes_row`
+(expected `partial`, observed `complete`) — it failed identically at the Phase 4
+head `ef51894` and at `2fc9610`; it is reported, not adjusted.
+
+

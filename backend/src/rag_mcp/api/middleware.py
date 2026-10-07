@@ -35,11 +35,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
+        from rag_mcp.runtime.activity import get_runtime_activity, is_passive_http_path
+
         req_id = str(uuid.uuid4())
         token = request_id_var.set(req_id)
+        # Constant-time foreground accounting: only real API/MCP work counts,
+        # and the count is released on success, error and cancellation alike.
+        counted = not is_passive_http_path(request.url.path)
+        tracker = get_runtime_activity()
+        if counted:
+            tracker.begin("foreground")
         try:
             response = await call_next(request)
             response.headers["X-Request-ID"] = req_id
             return response
         finally:
+            if counted:
+                tracker.end("foreground")
             request_id_var.reset(token)

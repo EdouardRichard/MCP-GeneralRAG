@@ -406,6 +406,42 @@ def adjudicate_ttl(intent, current, *, now):
     return adjudicate_lifecycle(intent, current, now=now)
 
 
+def pending_input_count(current: CurrentSnapshot, *, now) -> int:
+    """Eligible unconsumed episodic inputs in the verified complete prefix.
+
+    This is the maintenance-side re-verification of a volume hint: the same
+    filters the selector applies (four-state eligibility, complete write,
+    high-water prefix, consumed registry, expiry and content safety) minus the
+    per-run batch/character budget, so a raw projection row count can never
+    stand in for real pending work.
+    """
+    from rag_mcp.services.memory_validators import detect_submission, redact_submission
+
+    if now.tzinfo is None:
+        raise ValueError('timezone-aware clock required')
+    consumed = {tuple(value['source_version']) for value in current.consolidation_state.get(
+        'potential_source_outcomes', {}).values() if value.get('outcome') == 'consumed_on_complete'}
+    count = 0
+    for identifier, frozen in current.entries.items():
+        row = thaw(frozen)
+        source = row.get('source_event_id')
+        state = row.get('state_event_id') or source
+        if (row.get('status') != 'active' or row.get('knowledge_scope_id') != current.scope_id
+                or row.get('kind') != 'episodic' or row.get('write_status', 'complete') != 'complete'
+                or not source or source > current.high_water_mark or state > current.high_water_mark
+                or (identifier, source, state) in consumed):
+            continue
+        if any(row.get(key) and datetime.fromisoformat(row[key]) <= now for key in ('expires_at', 'valid_to')):
+            continue
+        if datetime.fromisoformat(row['observed_at']) >= now:
+            continue
+        cleaned = redact_submission(row)
+        if detect_submission({**cleaned, 'content': cleaned.get('content_text', '')}).status != 'active':
+            continue
+        count += 1
+    return count
+
+
 def select_window(current: CurrentSnapshot, *, policy, now, start=None, token=None,
                   consumed_versions=(), incomplete_memory_ids=(), original_window=None) -> WindowSnapshot:
     """Select bounded read sets from an already verified authority prefix."""

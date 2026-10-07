@@ -35,8 +35,9 @@ from rag_mcp.models.memory_management_audit import MemoryManagementAudit  # noqa
 from rag_mcp.models.consolidation_run import ConsolidationEligibility, ConsolidationRunObservation  # noqa: E402, F401
 from rag_mcp.models.runtime import (  # noqa: E402, F401
     InstanceRegistry,
-    WriterLease,
+    RuntimeActivitySignal,
     RuntimeMaintenanceLog,
+    WriterLease,
 )
 from rag_mcp.graph.models import GraphEdge, SoftRelation, GraphExpansionPath  # noqa: E402, F401
 from rag_mcp.orchestration.models import (  # noqa: E402, F401
@@ -60,6 +61,7 @@ __all__ = [
     "InstanceRegistry",
     "WriterLease",
     "RuntimeMaintenanceLog",
+    "RuntimeActivitySignal",
     "GraphEdge",
     "SoftRelation",
     "GraphExpansionPath",
