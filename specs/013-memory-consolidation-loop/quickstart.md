@@ -1116,3 +1116,27 @@ re-frozen, smaller-window real scenario (which cascades into the T095/T099/T100
 evidence and their hashes) or a provider that reliably returns schema-valid JSON
 for that prompt; neither was fabricated or forced. Both default switches remain
 false.
+
+## Final release conclusion (accepted by the user, 2026-10-07)
+
+The user accepted **incomplete / default-off** as the final release conclusion for
+013. Delivered: 103 of 104 tasks across all eight phases; migrations 0095-0104
+applied; isolated head `0104_runtime_activity_signals`.
+
+- The single unmarked task is **T102** (frozen-subset benefit gate). Its record ->
+  replay rounds were executed for real and every repairable measurement defect was
+  fixed (`quarantined_inputs` 2 -> 0, replay provider transport 0, no relevance-unit
+  collision, safety counters observed rather than `null`, drift handed through
+  instead of hard-coded). The gate itself stays `incomplete` because
+  `schema_validity_rate` could not reach 1.0: the sealed cache shows the failing
+  attempt with `reason=MODEL_SCHEMA_INVALID` and `output=null` (the sibling key is
+  `PROVIDER_TIMEOUT`), i.e. the real provider returned nothing within the 30 s
+  model bound. No benefit is claimed.
+- `consolidation_enabled=false` and `link_expansion_enabled=false` remain; no gate
+  registry entry was installed in production and no expansion authorization
+  exists. Planning/Schema validation and fixture positives are not recorded as
+  functional acceptance anywhere.
+- Accepted residual: T100's SC-012 (`test_schema_validity_100_percent`) is red only
+  because the shared clone still carries 3588 `013-…` domain keys created by the
+  013 test fixture before it was fixed to `c013-…`; no authority was deleted and no
+  report was rewritten.
