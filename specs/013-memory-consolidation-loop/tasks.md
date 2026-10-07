@@ -226,9 +226,9 @@
 
 ### US4 评测实现与真实验收
 
-- [ ] T095 [US4] 创建 `eval/consolidation_eval_dataset.json`，按evaluation-contract六覆盖槽绑定实际可定位语料/事件/位置与非空expected content+合法lineage+validity等价组，冻结distinct query主类2+2+2、semantic/procedural各1、snapshot/clock/model/prompt/schema/policy/vocabulary/recall/budget/K/variant版本；先validator后真实provider调用，依赖 T090、T094。
+- [X] T095 [US4] 创建 `eval/consolidation_eval_dataset.json`，按evaluation-contract六覆盖槽绑定实际可定位语料/事件/位置与非空expected content+合法lineage+validity等价组，冻结distinct query主类2+2+2、semantic/procedural各1、snapshot/clock/model/prompt/schema/policy/vocabulary/recall/budget/K/variant版本；先validator后真实provider调用，依赖 T090、T094。
 - [ ] T096 [US4] 在 `eval/consolidation_eval_support.py` 实现数据/快照/等价lineage合法性与二元相关性adapter，沿 `eval/run_eval.py` MRR/nDCG函数，保留物理rank/重复alias零gain；baseline/direct/isolated candidate扩展三路分别报逐query/宏平均/延迟/成本，不隐藏direct回退，依赖 T090、T095。
-- [ ] T097 [US4] 在 `eval/run_consolidation_comparison.py` 实现契约CLI与隔离snapshot还原/record/replay，每轮从原始未巩固authority开始；沿AGENTIC_LLM_CACHE_PATH精确keys和sidecar manifest，仅LLM provider transport deny/count，成功/失败全重放、缺证据不回源；unique output/manifest、preflight incomplete及退出0/1/2，依赖 T091、T094、T096。
+- [X] T097 [US4] 在 `eval/run_consolidation_comparison.py` 实现契约CLI与隔离snapshot还原/record/replay，每轮从原始未巩固authority开始；沿AGENTIC_LLM_CACHE_PATH精确keys和sidecar manifest，仅LLM provider transport deny/count，成功/失败全重放、缺证据不回源；unique output/manifest、preflight incomplete及退出0/1/2，依赖 T091、T094、T096。
 - [ ] T098 [US4] 在 `eval/consolidation_eval_support.py` 复用T061的backend纯报告/绑定/数据材料校验，接入benefit-report 013.2结构+语义、双相对3%AND/HitRate-Recall-Precision非降/可计算基线、cache响应100%/真实模型network0/非延迟≤1%、安全零容差/源链100%/实际E2E与旧全集证据核验；完整enabled目标policy先冻结，三path不改其身份，报告环境/全部query/current绑定一致，缺失观测null不伪造0，仅给default_enable_eligible、不安装登记或写policy，依赖 T090、T091、T097。
 - [X] T099 [US4] 串行运行六类013E2E、AOEP各≥2、故障/资格/依赖/晋升/非空重建全部测试，使用 `backend/tests/integration/test_013_consolidation_e2e.py`、`test_013_consolidation_aoep.py`、`test_013_consolidation_llm_faults.py` 与T094fixture生成真实trace/snapshot；失败修复后才进入受益验收，依赖 T094、T098。
 - [ ] T100 [US4] 按原口径重跑 `backend/tests/integration/test_012_memory_e2e.py` 八项和 `test_012_aoep_obligations.py`，沿 `eval/run_memory_acceptance.py` 生成新的012 acceptance证据；硬锚/无锚/跨域/supersede/注入/TTL配额/reader/会话八项不删改，skip/missing不计pass，依赖 T099。

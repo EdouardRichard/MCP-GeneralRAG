@@ -1,0 +1,304 @@
+{
+  "authority_cutoff": 366085522273075200,
+  "dataset_version": "013.eval.1",
+  "domain_profile": {
+    "declared_topic_adaptations": [
+      "the contract illustrative export/invoice topics are replaced by the real team_meeting_notes.md retrieval-platform topics of this frozen scope",
+      "all six queries resolve inside this one frozen scope with its own domain profile",
+      "the declared evaluation setup histories are not past user activity"
+    ],
+    "domain_key": "c013-eval-generic"
+  },
+  "frozen": {
+    "budget": "e931b151ec2538b3863a1a03ebfe5556cf52f9a6b3911ca6475bfdfebb5f8812",
+    "clock": "2026-10-07T04:53:29+00:00",
+    "implementation": "89b3d7d1716fbc4ab3ed5046145ab1f950eb8b0e",
+    "model": "BAAI/bge-m3",
+    "policy": "159799a38ba8f981c8d499f27bc27cce2e6d9d254b72e4d17727d7b0beaa484f",
+    "prompt": "013.distiller.1",
+    "recall": "f36d01a0099a3c46ce1c45d9e49ad49a4a1e6e9bb0da3f6a08c83b4fe924c365",
+    "schema": "urn:rag-mcp:013:benefit-report:2",
+    "snapshot": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
+    "vocabulary": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  "frozen_clock": "2026-10-07T04:53:29+00:00",
+  "gate_variant": "consolidated_candidate_expansion",
+  "k": 5,
+  "queries": [
+    {
+      "coverage_slot": "extract_fact_01",
+      "expected_content": [
+        "Every retrieval request must carry an explicit scope reference; implicit whole-library search is forbidden."
+      ],
+      "expected_source_event_ids": [
+        "366085012090519552"
+      ],
+      "extraction_kind": "semantic",
+      "locators": [
+        {
+          "event_id": "366085012090519552",
+          "kind": "event"
+        },
+        {
+          "chunk_id": "366084749795524609",
+          "kind": "chunk",
+          "position_path": "# Team Meeting Notes — Retrieval Platform > ## 2026-08-25 Architecture Review"
+        }
+      ],
+      "primary_category": "extraction",
+      "query_id": "q_extract_fact_01",
+      "question": "Which retrieval-scope rule did the 2026-08-25 Architecture Review fix?",
+      "relevance_units": [
+        {
+          "alias": "ru-scope-rule",
+          "equivalence_group": "eq-scope-rule",
+          "expected_content": "Every retrieval request must carry an explicit scope reference; implicit whole-library search is forbidden.",
+          "source_event_ids": [
+            "366085012090519552"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    },
+    {
+      "coverage_slot": "distill_procedure_01",
+      "expected_content": [
+        "Read the constitution first, then the 1.0 architecture blueprint; the evaluation README describes how to rerun every baseline report."
+      ],
+      "expected_source_event_ids": [
+        "366085053198893056"
+      ],
+      "extraction_kind": "procedural",
+      "locators": [
+        {
+          "event_id": "366085053198893056",
+          "kind": "event"
+        }
+      ],
+      "primary_category": "extraction",
+      "query_id": "q_distill_procedure_01",
+      "question": "What onboarding sequence does the team prescribe for new members?",
+      "relevance_units": [
+        {
+          "alias": "ru-onboarding-procedure",
+          "equivalence_group": "eq-onboarding-procedure",
+          "expected_content": "Read the constitution first, then the 1.0 architecture blueprint; the evaluation README describes how to rerun every baseline report.",
+          "source_event_ids": [
+            "366085053198893056"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    },
+    {
+      "coverage_slot": "correct_01",
+      "expected_content": [
+        "The approved embedding upgrade for the next release is text-embedding-3-large.",
+        "The approved embedding upgrade for the next release is BAAI/bge-m3."
+      ],
+      "expected_source_event_ids": [
+        "366085067493081088",
+        "366085059708452864"
+      ],
+      "locators": [
+        {
+          "event_id": "366085067493081088",
+          "kind": "event"
+        },
+        {
+          "event_id": "366085059708452864",
+          "kind": "event"
+        },
+        {
+          "chunk_id": "366084749795524608",
+          "kind": "chunk",
+          "position_path": "# Team Meeting Notes — Retrieval Platform > ## 2026-09-01 Weekly Sync"
+        }
+      ],
+      "primary_category": "correction",
+      "query_id": "q_correct_01",
+      "question": "Which embedding upgrade is approved for the next release now, and what did it replace?",
+      "relevance_units": [
+        {
+          "alias": "ru-embedding-superseded",
+          "equivalence_group": "eq-embedding-superseded",
+          "expected_content": "The approved embedding upgrade for the next release is text-embedding-3-large.",
+          "source_event_ids": [
+            "366085059708452864",
+            "366085067493081088"
+          ],
+          "validity": "historical"
+        },
+        {
+          "alias": "ru-embedding-current",
+          "equivalence_group": "eq-embedding-current",
+          "expected_content": "The approved embedding upgrade for the next release is BAAI/bge-m3.",
+          "source_event_ids": [
+            "366085059708452864",
+            "366085067493081088"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    },
+    {
+      "coverage_slot": "correct_02",
+      "expected_content": [
+        "The frontend management console rewrite was owned by Wei Zhang.",
+        "The frontend management console rewrite (React + antd) is owned by Maria Rodriguez."
+      ],
+      "expected_source_event_ids": [
+        "366085087126618112",
+        "366085076624080896"
+      ],
+      "locators": [
+        {
+          "event_id": "366085087126618112",
+          "kind": "event"
+        },
+        {
+          "event_id": "366085076624080896",
+          "kind": "event"
+        },
+        {
+          "chunk_id": "366084749795524608",
+          "kind": "chunk",
+          "position_path": "# Team Meeting Notes — Retrieval Platform > ## 2026-09-01 Weekly Sync"
+        }
+      ],
+      "primary_category": "correction",
+      "query_id": "q_correct_02",
+      "question": "Who owns the frontend management console rewrite, and who owned it before?",
+      "relevance_units": [
+        {
+          "alias": "ru-frontend-owner-superseded",
+          "equivalence_group": "eq-frontend-owner-superseded",
+          "expected_content": "The frontend management console rewrite was owned by Wei Zhang.",
+          "source_event_ids": [
+            "366085076624080896",
+            "366085087126618112"
+          ],
+          "validity": "historical"
+        },
+        {
+          "alias": "ru-frontend-owner-current",
+          "equivalence_group": "eq-frontend-owner-current",
+          "expected_content": "The frontend management console rewrite (React + antd) is owned by Maria Rodriguez.",
+          "source_event_ids": [
+            "366085076624080896",
+            "366085087126618112"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    },
+    {
+      "coverage_slot": "merge_01",
+      "expected_content": [
+        "Domain differences are expressed declaratively through domain profiles instead of code paths."
+      ],
+      "expected_source_event_ids": [
+        "366085099046830080",
+        "366085112481185792"
+      ],
+      "locators": [
+        {
+          "event_id": "366085099046830080",
+          "kind": "event"
+        },
+        {
+          "event_id": "366085112481185792",
+          "kind": "event"
+        },
+        {
+          "chunk_id": "366084749795524609",
+          "kind": "chunk",
+          "position_path": "# Team Meeting Notes — Retrieval Platform > ## 2026-08-25 Architecture Review"
+        }
+      ],
+      "primary_category": "merge",
+      "query_id": "q_merge_01",
+      "question": "How are domain format and vocabulary differences expressed?",
+      "relevance_units": [
+        {
+          "alias": "ru-domain-profile-a",
+          "equivalence_group": "eq-domain-profile",
+          "expected_content": "Domain differences are expressed declaratively through domain profiles instead of code paths.",
+          "source_event_ids": [
+            "366085099046830080"
+          ],
+          "validity": "current"
+        },
+        {
+          "alias": "ru-domain-profile-b",
+          "equivalence_group": "eq-domain-profile",
+          "expected_content": "Domain differences are expressed declaratively through domain profiles instead of code paths.",
+          "source_event_ids": [
+            "366085112481185792"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    },
+    {
+      "coverage_slot": "merge_02",
+      "expected_content": [
+        "Li benchmarks reranker latency on CPU instances, due 2026-09-08."
+      ],
+      "expected_source_event_ids": [
+        "366085127752646656",
+        "366085145033179136"
+      ],
+      "locators": [
+        {
+          "event_id": "366085127752646656",
+          "kind": "event"
+        },
+        {
+          "event_id": "366085145033179136",
+          "kind": "event"
+        },
+        {
+          "chunk_id": "366084749795524608",
+          "kind": "chunk",
+          "position_path": "# Team Meeting Notes — Retrieval Platform > ## 2026-09-01 Weekly Sync"
+        }
+      ],
+      "primary_category": "merge",
+      "query_id": "q_merge_02",
+      "question": "Which CPU reranker latency benchmark is outstanding and who owns it?",
+      "relevance_units": [
+        {
+          "alias": "ru-reranker-benchmark-episodic",
+          "equivalence_group": "eq-reranker-benchmark",
+          "expected_content": "Li benchmarks reranker latency on CPU instances, due 2026-09-08.",
+          "source_event_ids": [
+            "366085127752646656"
+          ],
+          "validity": "current"
+        },
+        {
+          "alias": "ru-reranker-benchmark-procedural",
+          "equivalence_group": "eq-reranker-benchmark",
+          "expected_content": "Li benchmarks reranker latency on CPU instances, due 2026-09-08.",
+          "source_event_ids": [
+            "366085145033179136"
+          ],
+          "validity": "current"
+        }
+      ],
+      "scope_id": "366084747748704256"
+    }
+  ],
+  "scope_id": "366084747748704256",
+  "snapshot_hash": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
+  "source": {
+    "chunks": 3,
+    "corpus": "eval/corpora/generic/team_meeting_notes.md"
+  }
+}
