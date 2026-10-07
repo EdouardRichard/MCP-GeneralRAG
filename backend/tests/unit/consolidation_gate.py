@@ -1,19 +1,32 @@
-"""Shared 013.2 report / gate-registry fixtures for the T055 contract tests.
+"""Shared 013.2 report / gate-registry fixtures for the T055 and T090 tests.
 
 These fixtures prove loader and validator mechanics only. They are explicitly
 NOT real three-gate acceptance evidence: no frozen dataset, cache trace or
 provider identity backs them, and T103 must install a genuine report.
+
+The per-query metrics are recomputed from a frozen physical-rank trace instead
+of being asserted by the fixture, because the shared validator (T090) refuses a
+self-reported metric. The traces and units here are synthetic labels: they
+carry no evaluation meaning and cannot be mistaken for the frozen dataset.
 """
 import json
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 
+from rag_mcp.services.consolidation_gate import TRACE_VERSION, binary_metrics
+
 HASH = 'a' * 64
 STAMP = '2026-10-06T06:00:00+00:00'
 NOW = datetime(2026, 10, 7, tzinfo=UTC)
 BINDING_FIELDS = ('data_hash', 'policy_hash', 'vocabulary_hash', 'prompt_hash', 'schema_hash',
                   'implementation_hash', 'recall_config_hash')
+UNITS = ('unit-a', 'unit-b')
+TRACES = {
+    'baseline': [None, 'unit-a', None, 'unit-b', None],
+    'consolidated_direct': [None, 'unit-a', None, 'unit-b', None],
+    'consolidated_candidate_expansion': ['unit-a', 'unit-b', None, None, None],
+}
 
 
 def binding(scope_id='1', **overrides):
@@ -28,19 +41,29 @@ def metrics(mrr=.5, ndcg=.5):
             'latency_p50_ms': None, 'latency_p95_ms': None, 'cost_usd': None}
 
 
+def variant_metrics(variant, k=5):
+    values = binary_metrics(TRACES[variant], UNITS, k)
+    return {**values, 'latency_p50_ms': None, 'latency_p95_ms': None, 'cost_usd': None}
+
+
 def build_report(bound, *, variant='consolidated_candidate_expansion', passed=True):
     usage = {'source': 'replay_zero',
              'provider_usage': {key: 0 for key in ('embedding_calls', 'rerank_calls', 'llm_calls',
                                                    'llm_prompt_chars', 'llm_completion_chars')},
              'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0, 'latency_ms': None}
-    baseline, direct, expansion = metrics(), metrics(), metrics(mrr=.53, ndcg=.53)
+    baseline, direct = variant_metrics('baseline'), variant_metrics('consolidated_direct')
+    expansion = variant_metrics('consolidated_candidate_expansion')
     queries = []
     for index, category in enumerate(('extraction', 'extraction', 'correction', 'correction', 'merge', 'merge')):
         queries.append({'query_id': f'q{index}', 'primary_category': category,
             'extraction_kind': ('semantic' if index == 0 else 'procedural') if category == 'extraction' else None,
-            'scope_id': bound['scope_id'], 'expected_source_event_ids': ['1'], 'relevance_units': ['unit'],
-            'baseline': baseline, 'consolidated_direct': direct, 'consolidated_candidate_expansion': expansion,
-            'result_trace': {'event': '1'}, 'failed_paths': []})
+            'scope_id': bound['scope_id'], 'expected_source_event_ids': ['1'],
+            'relevance_units': list(UNITS),
+            'baseline': dict(baseline), 'consolidated_direct': dict(direct),
+            'consolidated_candidate_expansion': dict(expansion),
+            'result_trace': {'trace_version': TRACE_VERSION, 'k': 5,
+                             'variants': {name: list(ranked) for name, ranked in TRACES.items()}},
+            'failed_paths': []})
     gains = {'baseline_zero': False,
              'mrr': (expansion['mrr'] - baseline['mrr']) / baseline['mrr'],
              'ndcg': (expansion['ndcg'] - baseline['ndcg']) / baseline['ndcg']}

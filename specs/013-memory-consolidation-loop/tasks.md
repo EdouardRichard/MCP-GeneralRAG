@@ -2,10 +2,10 @@
 
 **Input**: [spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、[data-model.md](data-model.md)、[contracts](contracts/README.md)、[quickstart.md](quickstart.md)
 **Created**: 2026-10-06
-**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；Phase 6 T065-T076已实现并通过308项串行验收（含012迁移往返回归修复：0096-0103 downgrade 仅在保留013 authority时拒绝），迁移0101-0103已应用；Phase 7 T077-T089已实现并通过47项串行验收（含012工具面契约更新），迁移0104已应用；T090-T104尚未开始。
+**Status**: I1/U1一致性修复已完成；Phase 1 T001-T017已实现并通过独立评审；Phase 2 T018-T028已通过fix3独立评审；Phase 3 T029-T037已实现并通过749项串行隔离验证与独立评审；Phase 4 T038-T052已实现（61c1c57）并通过159项串行隔离矩阵复验与root独立评审；Phase 5 T053-T064已实现并通过458项串行隔离验收（含012读取回归），迁移0099/0100已应用；Phase 6 T065-T076已实现并通过308项串行验收（含012迁移往返回归修复），迁移0101-0103已应用；Phase 7 T077-T089已实现并通过47项串行验收（含012工具面契约更新），迁移0104已应用；Phase 8 进行中：T090/T091已实现并通过114项复验（指标重算校验与严格 record/replay），T092-T104待完成；发布结论当前为 incomplete（未产生质量/安全/回归闸门结果，两个默认开关保持 false）。
 **Structure**: 按用户指定的八个技术 Phase 组织；Phase 内以 `[US#]` 保留用户故事归属。Phase 1 为多故事共享基座，不加故事标签。
 
-**Task Summary**: 104项，Phase 1–7的89项已勾选，15项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
+**Task Summary**: 104项，Phase 1–7的89项与Phase 8的T090/T091共91项已勾选，13项待实现；31项标注可在前置满足后并行编写。Phase1–8分别为17/11/9/15/12/12/13/15项；基础17项，US1–US7标签分别为11/12/17/15/15/12/5项，共享覆盖另见追踪表。
 
 ## 执行约定
 
@@ -218,8 +218,8 @@
 
 ### US4 测试与证据先行
 
-- [ ] T090 [P] [US4] 在 `backend/tests/unit/test_consolidation_comparison_report.py` 先写distinct同scope六query与2+2+2/两提炼kind、真实非空labels、二元MRR/nDCG物理rank/重复alias gain0、宏平均K5/缺位0、零baseline不可计算、双3%AND/三非降、三闸和incomplete空/null观测测试；013.2 passed必须完整gate_binding、环境同字段一致、跨scope/旧绑定/direct授权扩展均拒绝，runner与T061共享纯语义validator，依赖 T089。
-- [ ] T091 [P] [US4] 在 `backend/tests/unit/test_consolidation_eval_replay.py` 先写原(model,system,user)稳定key、首轮成功/失败缓存、重放原始未巩固snapshot、miss/corrupt/version mismatch不gap-fill、仅LLM transport阻断/计数、非延迟≤1%与安全零容差、usage未知null/重放额外LLM0及输出拒覆盖测试，依赖 T089。
+- [X] T090 [P] [US4] 在 `backend/tests/unit/test_consolidation_comparison_report.py` 先写distinct同scope六query与2+2+2/两提炼kind、真实非空labels、二元MRR/nDCG物理rank/重复alias gain0、宏平均K5/缺位0、零baseline不可计算、双3%AND/三非降、三闸和incomplete空/null观测测试；013.2 passed必须完整gate_binding、环境同字段一致、跨scope/旧绑定/direct授权扩展均拒绝，runner与T061共享纯语义validator，依赖 T089。
+- [X] T091 [P] [US4] 在 `backend/tests/unit/test_consolidation_eval_replay.py` 先写原(model,system,user)稳定key、首轮成功/失败缓存、重放原始未巩固snapshot、miss/corrupt/version mismatch不gap-fill、仅LLM transport阻断/计数、非延迟≤1%与安全零容差、usage未知null/重放额外LLM0及输出拒覆盖测试，依赖 T089。
 - [ ] T092 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_e2e.py` 先建立六类真实E2E：批量提炼、确定性归并/纠正、软推翻hard拒绝+审计、模型/Schema故障降级、闸门失败/通过控制、候选人工晋升；引用已有阶段fixture，不以预置pass代替真实观测，依赖 T089。
 - [ ] T093 [P] [US4] 在 `backend/tests/integration/test_013_consolidation_aoep.py` 先建立权威边界/范围不扩张/来源保留/删除传播/可追溯rollback五不变量各≥2例，覆盖quarantined双排除、旧holder0、无新episode传播、非空派生/TTL后重建且模型0，依赖 T089。
 - [ ] T094 [US4] 在 `backend/tests/conftest.py` 接入CONSOLIDATION_EVIDENCE_DIR的013证据fixture，导出真实nodeid/scenario/资格/事件/manifest/硬计数/transport trace与可复原authority snapshot/DomainProfile/policy/published证据/冻结clock，脱敏同域并拒覆盖，复用 `eval/memory_pytest_evidence.py` 原012证据口径，依赖 T090、T091、T092、T093。

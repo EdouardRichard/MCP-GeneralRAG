@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import threading
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +38,11 @@ GATE_CHECKS = {'quality': {'six_query_coverage', 'aggregate_recomputed', 'relati
                'safety': {'hard_metrics_zero', 'scope_isolation'},
                'regression': {'reproducibility_passed', 'replay_zero_network', 'legacy_contract_unchanged'}}
 _RATE_KEYS = ('mrr', 'ndcg', 'hit_rate', 'recall_at_k', 'precision_at_k')
+GATE_VARIANTS = ('baseline', 'consolidated_direct', 'consolidated_candidate_expansion')
+# Frozen physical-rank trace identity (evaluation-contract.md "Relevance and
+# metrics"): every arm records the alias observed at each retrieved position so
+# the report's per-query metrics are recomputable instead of self-reported.
+TRACE_VERSION = '013.trace.1'
 
 _IO_SLOTS = threading.BoundedSemaphore(2)
 _IO_THREADS = ThreadPoolExecutor(max_workers=2, thread_name_prefix='consolidation-gate')
@@ -138,6 +144,91 @@ def _close(left, right, tolerance=1e-9):
     return left is not None and right is not None and abs(left - right) <= tolerance
 
 
+def binary_metrics(ranked_aliases, relevance_units, k):
+    """Binary-gain retrieval metrics at preserved physical rank.
+
+    ``ranked_aliases`` is the ordered alias observed at each physical position
+    (``None`` for a retrieved item that is not a frozen relevance unit). Gains
+    are strictly binary: the first occurrence of a relevance unit gains 1 and
+    every later duplicate gains 0, so a repeated alias can never inflate
+    recall, precision or nDCG. Only the first ``k`` positions are scored and a
+    missing rank contributes zero. Shared by the eval comparison runner and the
+    production report validator, which recomputes rather than trusts them.
+    """
+    units = list(relevance_units)
+    known = set(units)
+    gains = []
+    seen = set()
+    for position, alias in enumerate(list(ranked_aliases)[:k], start=1):
+        if alias is not None and alias in known and alias not in seen:
+            seen.add(alias)
+            gains.append((position, 1))
+        else:
+            gains.append((position, 0))
+    dcg = sum(gain / math.log2(position + 1) for position, gain in gains)
+    ideal_hits = min(len(units), k)
+    idcg = sum(1.0 / math.log2(position + 1) for position in range(1, ideal_hits + 1))
+    return {
+        'mrr': next((1.0 / position for position, gain in gains if gain), 0.0),
+        'ndcg': (dcg / idcg) if idcg else 0.0,
+        'hit_rate': 1.0 if any(gain for _, gain in gains) else 0.0,
+        'recall_at_k': (len(seen) / len(units)) if units else 0.0,
+        'precision_at_k': sum(gain for _, gain in gains) / k,
+    }
+
+
+def macro_average(rows):
+    """One-query-one-weight macro average; an unobserved arm is never zero-filled."""
+    rows = list(rows)
+    if not rows:
+        return {metric: None for metric in _RATE_KEYS}
+    return {metric: sum(row[metric] for row in rows) / len(rows) for metric in _RATE_KEYS}
+
+
+def _frozen_relevance_units(relevance_units):
+    units = []
+    for unit in relevance_units if isinstance(relevance_units, (list, tuple)) else ():
+        if not isinstance(unit, str) or not unit.strip():
+            raise ValueError('report relevance unit must be a non-empty label')
+        if unit in units:
+            raise ValueError('report relevance unit repeated')
+        units.append(unit)
+    if not units:
+        raise ValueError('report query has no frozen relevance unit')
+    return units
+
+
+def recompute_query_metrics(query, k) -> dict:
+    """Recompute all three arms from the frozen physical-rank trace."""
+    units = _frozen_relevance_units(query['relevance_units'])
+    trace = query['result_trace']
+    if not isinstance(trace, Mapping) or trace.get('trace_version') != TRACE_VERSION:
+        raise ValueError('report result trace version invalid')
+    if trace.get('k') != k:
+        raise ValueError('report result trace k mismatch')
+    variants = trace.get('variants')
+    if not isinstance(variants, Mapping) or set(variants) != set(GATE_VARIANTS):
+        raise ValueError('report result trace variants incomplete')
+    recomputed = {}
+    for variant in GATE_VARIANTS:
+        ranked = variants[variant]
+        if not isinstance(ranked, list) or len(ranked) != k:
+            raise ValueError('report result trace must record every physical rank')
+        if any(alias is not None and alias not in units for alias in ranked):
+            raise ValueError('report result trace alias is not a frozen unit')
+        recomputed[variant] = binary_metrics(ranked, units, k)
+    return recomputed
+
+
+def _observed_metrics(container, context):
+    if not isinstance(container, Mapping):
+        raise ValueError(f'report {context} observation missing')
+    for metric in _RATE_KEYS:
+        if container.get(metric) is None:
+            raise ValueError(f'report {context} observation missing')
+    return container
+
+
 def _validate_passed_semantics(report):
     binding = validate_gate_binding(report['gate_binding'])
     environment = report['environment']
@@ -157,13 +248,19 @@ def _validate_passed_semantics(report):
     kinds = {q['extraction_kind'] for q in queries if q['primary_category'] == 'extraction'}
     if kinds != {'semantic', 'procedural'}:
         raise ValueError('report extraction coverage invalid')
-    variants = ('baseline', 'consolidated_direct', 'consolidated_candidate_expansion')
+    variants = GATE_VARIANTS
+    for query in queries:
+        recomputed = recompute_query_metrics(query, report['k'])
+        for variant in variants:
+            observed = _observed_metrics(query[variant], f'query {variant}')
+            for metric in _RATE_KEYS:
+                if not _close(observed[metric], recomputed[variant][metric]):
+                    raise ValueError('report per-query metrics are not the frozen physical-rank result')
     for variant in variants:
+        aggregate = _observed_metrics(report['aggregates'][variant], f'aggregate {variant}')
         for metric in _RATE_KEYS:
             observed = [q[variant][metric] for q in queries]
-            if any(value is None for value in observed):
-                raise ValueError('report metric observation missing')
-            if not _close(_mean(observed), report['aggregates'][variant][metric]):
+            if not _close(_mean(observed), aggregate[metric]):
                 raise ValueError('report aggregates are not the recomputed macro average')
     baseline = report['aggregates']['baseline']
     zero = baseline['mrr'] == 0 or baseline['ndcg'] == 0
@@ -230,6 +327,17 @@ def validate_report(report) -> Mapping:
         binding = validate_gate_binding(report['gate_binding'])
         if any(q['scope_id'] != binding['scope_id'] for q in report['queries']):
             raise ValueError('report covers more than one scope')
+    # A zero baseline is not a quality gain and is never computed with epsilon,
+    # infinity or a fabricated number: the relative gains stay null. This holds
+    # for every status so an incomplete report cannot smuggle a computed gain.
+    baseline = report['aggregates']['baseline']
+    gains = report['relative_gains']
+    if isinstance(baseline, Mapping):
+        zero = baseline.get('mrr') == 0 or baseline.get('ndcg') == 0
+        if gains.get('baseline_zero') is not zero:
+            raise ValueError('report baseline_zero inconsistent')
+        if zero and (gains.get('mrr') is not None or gains.get('ndcg') is not None):
+            raise ValueError('report gains must be null on a zero baseline')
     if report['status'] == 'passed':
         _validate_passed_semantics(report)
     return MappingProxyType(dict(report))

@@ -24,7 +24,6 @@ cache_dir) is configured — production callers never set it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
@@ -35,6 +34,13 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from rag_mcp.agents.consolidation_replay import (
+    REPLAY_DENIED_REASON,
+    cache_key as _replay_cache_key,
+    cache_write_frozen,
+    transport_denied,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +204,14 @@ class LLMClient:
             return _emit_receipt(LLMCallReceipt(reason='MODEL_CONFIGURATION_REQUIRED'))
         user_text = user_payload if isinstance(user_payload, str) else json.dumps(user_payload, ensure_ascii=False)
         path = (Path(self._cache_dir) / 'strict-v1' / (self._cache_key(system_prompt, user_text) + '.json')) if self._cache_dir else None
+
+        def persist(document):
+            # A replay consumes recorded bytes (success or failure) and never
+            # repairs, rewrites or gap-fills them (T091).
+            if cache_write_frozen():
+                return
+            path.write_text(json.dumps(document, allow_nan=False), encoding='utf-8')
+
         if path:
             try:
                 entry = _strict_object(path.read_text(encoding='utf-8'))
@@ -206,17 +220,17 @@ class LLMClient:
                     if cached_reason is not None:
                         if not safe_failure_code(cached_reason):
                             trusted = {'parser': 'strict-v1', 'output': None, 'reason': 'AGENT_EXECUTION_FAILED'}
-                            path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                            persist(trusted)
                             raise ValueError('invalid cached reason')
                         else:
                             trusted = {'parser': 'strict-v1', 'output': None, 'reason': cached_reason}
                             if entry != trusted:
-                                path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                                persist(trusted)
                             self.cache_hits += 1
                             return _emit_receipt(LLMCallReceipt(reason=cached_reason, cache_hits=1))
                     if not isinstance(entry.get('output'), dict):
                         trusted = {'parser': 'strict-v1', 'output': None, 'reason': 'MODEL_SCHEMA_INVALID'}
-                        path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                        persist(trusted)
                         self.cache_hits += 1
                         return _emit_receipt(LLMCallReceipt(
                             reason='MODEL_SCHEMA_INVALID', cache_hits=1))
@@ -224,19 +238,23 @@ class LLMClient:
                         validation_reason = _cache_validation_reason(entry['output'], validate_output)
                         if validation_reason:
                             trusted = {'parser': 'strict-v1', 'output': None, 'reason': validation_reason}
-                            path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                            persist(trusted)
                             self.cache_hits += 1
                             return _emit_receipt(LLMCallReceipt(
                                 reason=validation_reason, cache_hits=1))
                     trusted = {'parser': 'strict-v1', 'output': entry['output'], 'reason': None}
                     if entry != trusted:
-                        path.write_text(json.dumps(trusted, allow_nan=False), encoding='utf-8')
+                        persist(trusted)
                     self.cache_hits += 1
                     return _emit_receipt(LLMCallReceipt(output=entry['output'], cache_hits=1))
             except (OSError, ValueError, TypeError, RecursionError):
                 # Read-through cache misses carry no response body diagnostics.
                 pass
         self.cache_misses += 1
+        if transport_denied():
+            # Replay: a missing/corrupt/unusable entry is a deterministic
+            # degradation, never a provider call and never a new cache entry.
+            return _emit_receipt(LLMCallReceipt(reason=REPLAY_DENIED_REASON))
         receipt = LLMCallReceipt()
         body = {'model': self._model, 'messages': [{'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_text}], 'temperature': 0.0}
@@ -292,8 +310,7 @@ class LLMClient:
         if path:
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps({'parser': 'strict-v1', 'output': receipt.output,
-                                            'reason': receipt.reason}, allow_nan=False), encoding='utf-8')
+                persist({'parser': 'strict-v1', 'output': receipt.output, 'reason': receipt.reason})
             except (OSError, ValueError, TypeError):
                 logger.warning('LLMClient strict cache write failed')
         return _emit_receipt(receipt)
@@ -304,12 +321,7 @@ class LLMClient:
 
     def _cache_key(self, system_prompt: str, user_text: str) -> str:
         """Stable cache key: sha256 over (model, system prompt, user text)."""
-        canonical = json.dumps(
-            {"model": self._model, "system": system_prompt, "user": user_text},
-            sort_keys=True,
-            ensure_ascii=False,
-        )
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        return _replay_cache_key(self._model, system_prompt, user_text)
 
     def _cache_lookup(
         self, system_prompt: str, user_text: str,
@@ -340,6 +352,9 @@ class LLMClient:
     ) -> None:
         """Record a call outcome (success or failure) in the cache."""
         if not self._cache_dir:
+            return
+        if cache_write_frozen():
+            # Replay keeps the recorded bytes and adds no new provider outcome.
             return
         entry = {"ok": payload is not None, "response": payload}
         path = Path(self._cache_dir) / (self._cache_key(system_prompt, user_text) + ".json")
@@ -376,6 +391,11 @@ class LLMClient:
             self.cache_hits += 1
             return cached_payload
         self.cache_misses += 1
+
+        if transport_denied():
+            # Replay: only the LLM transport is denied and counted; the
+            # deterministic offline result is returned instead of a provider call.
+            return None
 
         self.calls += 1
         self.prompt_chars += len(system_prompt) + len(user_text)
