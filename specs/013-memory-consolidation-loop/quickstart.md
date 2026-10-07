@@ -1008,3 +1008,46 @@ only (no claim of overall statistical significance), while the two consolidated
 arms are equal in this run because link expansion remains unauthorized.
 
 
+
+## Phase 8 host acceptance with real MCP services (2026-10-07)
+
+The 012 acceptance host criteria (SC-001, SC-009) require **real** writer/reader
+MCP calls, not an in-process stand-in. Two Streamable HTTP services were started
+from this worktree and probed with the real MCP client:
+
+```powershell
+# writer MCP (18080) and reader MCP (18081)
+python .superpowers/sdd/013-tasks/isolation_runner.py eval backend/_run_mcp.py --mode writer --port 18080
+python .superpowers/sdd/013-tasks/isolation_runner.py eval backend/_run_mcp.py --mode reader --port 18081
+# writer management process (18000) holds the writer lease that record_memory requires
+$env:INSTANCE_MODE = 'writer'
+python .superpowers/sdd/013-tasks/isolation_runner.py eval -m uvicorn rag_mcp.server:app --host 127.0.0.1 --port 18000
+# real six-call probe (writes host-evidence.json)
+python .superpowers/sdd/013-tasks/isolation_runner.py eval eval/probe_mcp_host.py
+```
+
+Observed: writer tools `get_evidence, list_knowledge_domains, recall_memory,
+record_memory, search_knowledge, start_work`; reader tools omit `record_memory`
+and a real reader `record_memory` call returns `Unknown tool: record_memory`.
+`record_memory` needs an active writer lease held by a `management` instance and
+a distinct content hash (a repeated body is refused with `MEMORY_CONTENT_CONFLICT`)
+and a soft provenance `inference_meta`; with those satisfied it returned a real
+`memory_id`/`status=active` and `recall_memory` returned the same memory.
+Host evidence: `phase8-evidence/t101-host-20261007/host-evidence.json`,
+`status=passed`, all six required calls `passed=true`.
+
+With that host evidence, the regenerated 012 acceptance report
+(`phase8-evidence/t100-012-20261007-host/012-acceptance.json`) now reports
+**SC-001 and SC-009 passed** (previously `not_verified`) and 16 of 17 criteria
+passed. The single remaining failure is `SC-012`, caused by
+`test_011_multidomain_acceptance::TestHardMetricsThreePiece::test_schema_validity_100_percent`,
+which validates every stored scope: the shared clone still holds 3588 domain
+profiles whose `domain_key` starts with `013-`, created by the 013 test fixture
+before it was fixed to `c013-`. No authority was deleted and no report was
+altered; a clone without that debris (or a normalised copy) passes that test, and
+the `se-project` acceptance environment itself is present in the clone and now
+passes (it was missing from the freshly created "clean" database used earlier).
+
+Host-acceptance reruns must stop the three services before a pytest run that
+acquires the writer lease, and must free the stale lease afterwards
+(`python .superpowers/sdd/013-tasks/phase5_cleanup_stale_lease.py`).
