@@ -25,7 +25,9 @@ async def test_promotion_timestamp_cannot_be_forged_with_valid_reducer_event(db_
     sid, payload = await scope_and_payload(db_session)
     memory = await MemoryService(db_session).record(payload)
     await db_session.execute(text("SELECT set_config('rag_memory.reducer_event', :event, true)"), {"event": str(memory["memory_id"])})
-    with pytest.raises(DBAPIError, match="immutable.*source|source.*field"):
+    # The forged write is still refused; 013 rewrote the guard text to require a
+    # current verification receipt, so the accepted message matches that.
+    with pytest.raises(DBAPIError, match="verification receipt|immutable.*source|source.*field"):
         async with db_session.begin_nested():
             await db_session.execute(text("UPDATE memory_entries SET promote_candidate_at=NOW() WHERE memory_id=:id"), {"id": memory["memory_id"]})
 

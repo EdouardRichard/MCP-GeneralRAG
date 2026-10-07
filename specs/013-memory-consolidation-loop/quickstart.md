@@ -1051,3 +1051,37 @@ passes (it was missing from the freshly created "clean" database used earlier).
 Host-acceptance reruns must stop the three services before a pytest run that
 acquires the writer lease, and must free the stale lease afterwards
 (`python .superpowers/sdd/013-tasks/phase5_cleanup_stale_lease.py`).
+
+## Phase 8 T101 rerun with the host and legacy fixes (2026-10-07)
+
+Real reruns after the host acceptance and the two stale-test corrections:
+
+```powershell
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/unit tests/contract -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_real_server_acceptance.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest tests/integration/test_012_regression_suite.py -q --tb=short -p no:cacheprovider
+python .superpowers/sdd/013-tasks/isolation_runner.py pytest <29-file 012 acceptance scope> -q --tb=short -p no:cacheprovider --junitxml=.../t101-20261007-rerun/backend-pytest.xml
+```
+
+Observed: **2414 passed** (unit + contract, exit 0); **13 passed** (the real-server
+suite starts its own MCP server on 8080, so the earlier three "absent server"
+failures were environmental); **4 passed** (`test_012_regression_suite`, whose
+missing historical `eval/runs/012-20261005-final-regression-a/*` reports were
+regenerated for real earlier); the 29-file 012 acceptance scope (the previous
+27 plus `test_012_frontend_memory_page` — the frontend bundle is built — and
+`test_inherited_invariants`) is **151 passed / 1 failed**, the only failure being
+`test_011_multidomain_acceptance::TestHardMetricsThreePiece::test_schema_validity_100_percent`,
+the same shared-clone debris (3588 `013-…` domain keys) that keeps T100's SC-012
+red.
+
+Two stale legacy tests were corrected text-only, with the substantive assertion
+kept:
+
+- `tests/integration/test_012_convergence_boundaries.py`: the forged
+  `UPDATE memory_entries` is still refused with `DBAPIError`; the accepted message
+  now includes the real 013 guard text (`completion publication requires current
+  verification receipt`).
+- `tests/integration/test_inherited_invariants.py`: the empty-chunk case now
+  models the 013 T070 pending-run lookup (`session.scalar.return_value = None`),
+  so the legacy path still reaches `No chunks produced`; the "no KnowledgeVersion
+  was added" assertion is unchanged.

@@ -24,6 +24,10 @@ class TestInheritedInvariants:
         result = MagicMock()
         result.scalar_one_or_none.return_value = source
         session.execute.return_value = result
+        # 013 T070: ingestion first looks for a pending initial run left by the
+        # shared registration step. This case models the plain legacy path with
+        # no prebuilt run, so the lookup must return None.
+        session.scalar.return_value = None
 
         qdrant = MagicMock()
         embedding = MagicMock()
