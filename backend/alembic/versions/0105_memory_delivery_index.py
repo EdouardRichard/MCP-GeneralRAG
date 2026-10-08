@@ -35,4 +35,7 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_index(INDEX_NAME, table_name='memory_recall_runs')
+    # Idempotent on purpose: an operator (or an out-of-order history) may reach
+    # this point without the index ever having been created, and dropping an index
+    # that does not exist must not abort the rest of a downgrade chain.
+    op.execute(f'DROP INDEX IF EXISTS {INDEX_NAME}')
