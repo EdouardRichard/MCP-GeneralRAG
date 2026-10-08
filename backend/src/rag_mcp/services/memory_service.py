@@ -629,6 +629,14 @@ class MemoryService:
             from rag_mcp.runtime.activity import mark_volume_hint
 
             mark_volume_hint(scope_id)
+            # 014 T047: the same O(1) discipline for the read-only consumption
+            # layer. This only marks the scope dirty and schedules a bounded
+            # per-scope worker; it never awaits, never raises into the write and
+            # skips entirely while the projection switch is off, so the write
+            # critical path and its failure semantics are unchanged.
+            from rag_mcp.runtime.memory_projection import mark_memory_projection_dirty
+
+            mark_memory_projection_dirty(scope_id)
         except ProjectionFailure as failure:
             if failure.path == "relation":
                 await self.session.rollback()
