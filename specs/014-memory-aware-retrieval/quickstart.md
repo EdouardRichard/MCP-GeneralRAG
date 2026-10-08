@@ -193,7 +193,35 @@ python ..\eval\run_comparison.py --output ..\eval\runs\<run-id>\retrieval-regres
 
 **结论**：本环境**具备** PG/Qdrant 前置条件（远端共享实例，仓库既有 012 live 验收即写此库），但**不具备** MCP 端点与"显式隔离库"。因此 §2、§3、§5、§7 中真实 PG/Qdrant 可执行步骤**必须实际执行**并留证；仅依赖 MCP 端点或隔离库的步骤（宿主冒烟、013 写入类 E2E）不得记为通过。写入均为随机命名的临时作用域（`reader-<snowflake>`），不修改既有数据。
 
-**副作用如实记录**：T031 首次执行时测试前提有误（对未携带该 `session_id` 的记忆做会话过滤），产生 4 个临时作用域与少量事件/审计行的写入；已修正为"记录时即绑定 session_id"，并保留本注记。
+**副作用如实记录**：T031 首次执行时测试前提有误（对未携带该 `session_id` 的记忆做会话过滤），产生 4 个临时作用域与少量事件/审计行的写入；已修正为"记录时即绑定 session_id"，并保留本注记。此外 014 的两次迁移（0105 索引、0106 消费层元数据表）已应用到该共享库，`alembic_version` 现为 `0106_memory_consumption`。
+
+---
+
+## 10. T066/T067 全量步骤执行结果（逐项注记，2026-10-09）
+
+**未执行项一律标注「未执行」，不记为通过。**
+
+| § | 步骤 | 实测结果 |
+|---|---|---|
+| 0 | 前置条件 | PG/Qdrant **可用**（远端）；MCP 端点 **不可用**；`MEMORY_AWARE_RETRIEVAL_ENABLED` / `MEMORY_CONSUMPTION_PROJECTION_ENABLED` 默认 false（发布状态），验收时按需临时开启 |
+| 1 | 契约与纯函数（无数据库） | **205 passed in 3.04s** |
+| 2 | 附加层与独立降级 | **70 passed in 39.60s**（含真实 PG+Qdrant 的 `test_014_memory_e2e.py`） |
+| 3 | 会话级已交付集 | **23 passed in 0.91s** |
+| 4 | 工作集续接与预算 | **44 passed in 3.98s** |
+| 5 | 文件投影消费层 | **48 passed in 4.21s** |
+| 6 | 连续性对照闸门（记录轮/重放轮） | **未执行**：缺封印 capsule/snapshot 前置条件，运行器如实以退出码 2 + `status=incomplete` 拒绝，未产出 `memory-record.json`/`memory-replay.json`/`memory-gate-report.json` |
+| 7 | 012 的 8 项 E2E + 旧客户端兼容 | **13 passed in 82.78s**（`test_012_memory_e2e.py` 实测收集 11 项全绿 + `test_012_old_tool_compat.py`）；**交付窗口变更留证**：`delivered_ttl_seconds=3600` 取代 012 的 7 天 `expires_at`，012"会话时间线与已交付过滤"在本轮按新口径通过 |
+| 7 | 013 的 7 项 E2E | **2 passed / 5 未执行**：5 项在 `tests/integration/consolidation_fixtures.py:15` 被**显式隔离库门**拦下（需 `CONSOLIDATION_ISOLATED_DATABASE`），属 013 既有纪律，**不是** 014 回归 |
+| 7 | 三宿主冒烟 | **DSH = failed**（无 MCP 端点，工作集续接与投影直读均未被观测，按规则记为 failed）；ChatGPT App / Claude Code = `not_executed`（仅记录环境可用性）。证据：`eval/target-host-smoke-014.json` |
+| 7 | 文件投影直读三层证据 | **filesystem 层 passed**（frontmatter 完备、`untrusted: true` 完备、正文与权威 `content_text` 一致、清空后重建树指纹一致、模型调用 0）；**DSH 真实观测层 failed**（未观测到）；**协议层 not_applicable**（消费层不经 MCP）。三层结论 **failed**。证据：`eval/runs/<run-id>/projection-direct-read.json` |
+| 8 | 发布判定 | **未通过**，故两个开关保持默认关闭，能力与报告保留 |
+
+### T067 US7 验收结论
+
+- 契约零破坏：未触发响应在四个 completion 状态下与 T002 golden 逐字节一致（含 pretty 镜像与 wire 字面量）、`AGENTIC_RETRIEVAL_ENABLED=true` 下同样一致；旧三工具与旧客户端行为不变（102 项相关用例通过）。
+- 既有能力无回归：012 的 11 项 E2E 全绿；既有检索契约/评测集 pin 全集无回归（`test_domain_eval_dataset_schema.py` 14 passed，三个既有评测集 sha256 与 011 pin 一致，`eval/runs` 既有报告零改动）。
+- **目标宿主结论不成立**：DSH 必过冒烟未通过（无端点、未观测），按纪律**不得宣布收敛**。
+- 未执行项：013 的 5 项隔离门 E2E、连续性记录/重放双轮与闸门报告、ChatGPT App / Claude Code 冒烟。
 
 
 ### 9.3 既有测试基线（`cd backend`）
