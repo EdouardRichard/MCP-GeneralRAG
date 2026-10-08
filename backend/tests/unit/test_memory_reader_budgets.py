@@ -32,6 +32,12 @@ def test_recall_character_count_matches_mcp_json_mirror():
 @pytest.mark.asyncio
 async def test_start_work_keeps_measurable_minimal_envelope_with_many_failures(monkeypatch):
     class Session:
+        def __init__(self):
+            # 014 T029: start_work also records its delivered-channel audit row,
+            # so the fake session has to accept the additive write. The package
+            # body assertions below still pin the 012 bytes.
+            self.audits = []
+
         async def get(self, model, key):
             if model is KnowledgeScope:
                 return SimpleNamespace(slug="scope", domain_key="generic")
@@ -44,6 +50,9 @@ async def test_start_work_keeps_measurable_minimal_envelope_with_many_failures(m
         async def commit(self):
             return None
 
+        def add(self, row):
+            self.audits.append(row)
+
     async def resolve(self, reference):
         return 7
 
@@ -53,12 +62,15 @@ async def test_start_work_keeps_measurable_minimal_envelope_with_many_failures(m
     monkeypatch.setattr(MemoryScopeResolver, "resolve", resolve)
     monkeypatch.setattr(MemoryReader, "_views", views)
 
-    result = await MemoryReader(Session(), None).start_work(scope_ref="7", budget="minimal")
+    session = Session()
+    result = await MemoryReader(session, None).start_work(scope_ref="7", budget="minimal")
     body = {key: value for key, value in result.items() if key != "request_id"}
     encoded = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
     assert len(encoded) <= 250
     assert body["read_guidance"]
     assert body["counts"]["characters"] == len(encoded)
+    # The additive audit write must not change the package body.
+    assert session.audits and session.audits[-1].channel == "start_work"
 
 
 @pytest.mark.asyncio

@@ -82,11 +82,19 @@ async def test_stable_package_omits_time_sensitive_entries_across_clock_boundari
                "valid_from": (pivot - timedelta(days=1)).isoformat(), "valid_to": None, "expires_at": None}
 
     class Session:
+        def __init__(self):
+            # 014 T029 adds an additive delivered-channel audit write to
+            # start_work; the byte-stability assertions below are unchanged.
+            self.audits = []
+
         async def get(self, model, key):
             return SimpleNamespace(slug="scope", domain_key="generic") if model is KnowledgeScope else SimpleNamespace(description="", memory_policy={})
 
         async def commit(self):
             return None
+
+        def add(self, row):
+            self.audits.append(row)
 
     async def resolve(self, reference):
         return 7
