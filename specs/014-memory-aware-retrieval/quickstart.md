@@ -223,6 +223,21 @@ python ..\eval\run_comparison.py --output ..\eval\runs\<run-id>\retrieval-regres
 - **目标宿主结论不成立**：DSH 必过冒烟未通过（无端点、未观测），按纪律**不得宣布收敛**。
 - 未执行项：013 的 5 项隔离门 E2E、连续性记录/重放双轮与闸门报告、ChatGPT App / Claude Code 冒烟。
 
+---
+
+## 11. T072 `checklists/release-gate.md` 缺口汇报（评审者所有；本条**未**勾选任何 `[x]`）
+
+复核基线：release-gate.md 共 77 项，已勾选 73 项，**未勾选 4 项**（CHK006 / CHK019 / CHK049 / CHK072）。requirements.md 16/16 已勾选。以下为逐条**证据现状**与**残余缺口**，勾选与否由评审者裁定；实现方不得代勾。
+
+| 项 | 问题 | 实现证据现状 | 残余缺口（评审者需裁定） |
+|---|---|---|---|
+| **CHK006** | `start_work` 顶层 `required` 与属性顺序不变、`include_working_set=false` 分支逐字节不变，是否明确？ | **已明确且有断言**：`required == ["scope_ref"]` 不变、六属性 canonical JSON 逐字节不变、只多 `include_working_set`（默认 false）——`tests/contract/test_014_start_work_schema.py`（15 passed）；两种取值下的运行时顶层顺序均被冻结断言；`test_memory_reader_budgets.py` / `test_012_reader_boundaries.py` 的 012 包体字节断言保持绿色 | 014 **输出** schema 的**声明**顺序与运行时顺序不一致（声明 `... package_fingerprint, counts ...`，运行时 `... counts, package_fingerprint ...`）；契约 §3 已记录"以运行时为权威"。评审者需确认该"声明/运行时两序并存 + 文档化"是否满足"顺序不变"的判据 |
+| **CHK019** | agentic 检索路径下附加层与工作集同样受不可信隔离、不得因路径切换而绕过，是否被**显式**规定？ | **已显式实现**：`attachment_triggered(...) and not settings.agentic.enabled` —— agentic 开启时附加层**根本不进入**编排状态机（比"不绕过"更强），未触发响应两路径逐字节一致（`test_agentic_switch_on_keeps_the_untriggered_response_byte_identical`）；`start_work` 工作集不经 agentic 开关，其不可信隔离由同一可见性/状态谓词与 `untrusted` 声明承担（T032/T033/T040 断言） | 评审者需确认"不进入状态机"是"不绕过"的可接受读法，以及是否需要在 spec 中把该读法写成文字（当前依据为批准决议 ④ 与实现断言） |
+| **CHK049** | "人工审核"的记录载体是否被定义，使"经人工审核"可判定而非口头声明？ | **载体已定义且强制**：`_meta.review_status` / `review_notes` / `grounded_source`；允许值集合恰为 `{"reviewed","pending_review"}`；测试**拒绝**任何在 `review_notes` 或 `grounded_source` 为空时声称 `reviewed` 的记录（反伪造）——`tests/contract/test_014_continuity_dataset.py`（含变异证明） | **审核尚未发生**：数据集 16 条全部为 `pending_review`（T053 未执行）。这是本 Feature 唯一需要**人**完成的开放项；在人工审核完成并将 `_meta` 与 sha256 pin 同步更新之前，该判据不成立 |
+| **CHK072** | 顶层字段顺序契约在"契约文档、schema 属性顺序、冻结断言"三处是否一致，且 partial/failed 分支出现条件无冲突？ | **三处一致且已终检**：`field-order-contract.md` §2 文本、`mcp-search-output.schema.json` 的 `properties` 前 8 项、运行时 `ATTACHMENT_FIELD_ORDER` 三者逐字相同（`test_documented_order_equals_the_runtime_and_schema_order`，154 项 014 契约测试全绿）；出现条件亦已澄清：`gaps` 仅 `partial` 或去重致空；`error` 在 014 分支**永不**出现（014 分支只在主检索非 `failed` 时构建），实测以"冻结表剔除缺席键"的子序列断言覆盖 complete/partial/no_evidence | 评审者需确认"子序列而非恒 8 键"的断言形式是否满足该完整性判据（契约 §6.1 已记录该实测补充） |
+
+**T072 结论**：4 项中 3 项（CHK006 / CHK019 / CHK072）已有可复核的实现证据与断言，1 项（CHK049）载体已定义但**人工审核本身未执行**。**本实现方未勾选任何 `[x]`，并主张在 CHK049 的人工审核完成前不应视为全部满足。**
+
 
 ### 9.3 既有测试基线（`cd backend`）
 
