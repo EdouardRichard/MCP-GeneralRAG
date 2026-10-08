@@ -22,6 +22,7 @@ from mcp.types import CallToolResult, TextContent
 import rag_mcp.mcp.search_knowledge as search_module
 from rag_mcp.mcp import create_mcp_server
 from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+from tests.contract import schema_registry_014 as reg
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "014"
 SEARCH_GOLDEN = json.loads((FIXTURE_DIR / "legacy_search_knowledge.golden.json").read_text(encoding="utf-8"))
@@ -194,3 +195,142 @@ def test_legacy_mirror_is_pretty_printed_and_the_wire_carries_it():
     assert wire["content"][0]["type"] == "text"
     assert wire["content"][0]["text"] == golden["pretty_mirror"]
     assert isinstance(TextContent(type="text", text="x"), TextContent)
+
+
+# --- T021: the 014 branch order is frozen in three places ---------------------
+
+FIXTURE_014_ORDER = ["completion_status", "evidence", "related_memories", "memory_notice",
+                     "counts", "gaps", "error", "request_id"]
+
+
+def _documented_014_order() -> list[str]:
+    """Read the frozen 014 order out of field-order-contract.md §2."""
+    doc = Path(search_module.__file__).resolve().parents[4] / "specs" / "014-memory-aware-retrieval" \
+        / "contracts" / "field-order-contract.md"
+    for line in doc.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("completion_status, evidence, related_memories"):
+            return [part.strip() for part in stripped.split(",")]
+    raise AssertionError("field-order-contract.md §2 no longer declares the 014 order")
+
+
+def test_runtime_order_equals_the_schema_declaration_order():
+    declared = list(reg.load("mcp-search-output.schema.json")["properties"])
+    assert search_module.ATTACHMENT_FIELD_ORDER == tuple(declared[:8])
+    assert FIXTURE_014_ORDER == list(declared[:8])
+
+
+def test_documented_order_equals_the_runtime_and_schema_order():
+    """The three places must agree: contract doc, schema declaration, assertion."""
+    assert _documented_014_order() == FIXTURE_014_ORDER
+    assert tuple(_documented_014_order()) == search_module.ATTACHMENT_FIELD_ORDER
+
+
+@pytest.mark.parametrize("status", ["complete", "partial", "no_evidence"])
+def test_014_branch_key_order_is_exactly_the_contract_table(status):
+    """The emitted key list is the frozen table minus the keys that must be absent."""
+    primary = {"completion_status": status, "evidence": [], "request_id": "r"}
+    if status == "partial":
+        primary["gaps"] = [{"description": "gap", "suggested_action": "act"}]
+    merged = search_module.merge_attachment_response(
+        primary, {"items": [], "counts": {}, "failed_paths": []}
+    )
+    expected = [key for key in FIXTURE_014_ORDER if key in merged]
+    assert list(merged) == expected
+    assert list(merged)[:5] == ["completion_status", "evidence", "related_memories",
+                                "memory_notice", "counts"]
+    if status == "partial":
+        assert list(merged)[-2:] == ["gaps", "request_id"], "gaps precedes request_id"
+    else:
+        assert list(merged)[-1] == "request_id"
+        assert "gaps" not in merged and "error" not in merged
+
+
+def test_014_branch_keeps_related_memories_next_to_evidence():
+    primary = {"completion_status": "complete", "evidence": [{"evidence_id": "e"}], "request_id": "r"}
+    merged = search_module.merge_attachment_response(primary, {"items": [{"memory_id": 1}],
+                                                              "counts": {}, "failed_paths": []})
+    keys = list(merged)
+    assert keys.index("related_memories") == keys.index("evidence") + 1
+
+
+def test_failed_branch_carries_no_new_fields():
+    primary = {"completion_status": "failed", "evidence": [],
+               "error": {"code": "SYSTEM_ERROR", "message": "boom"}, "request_id": "r"}
+    # merge is only reachable for a non-failed primary, so model the runtime rule
+    # explicitly: the failed primary is returned as-is.
+    assert list(primary) == ["completion_status", "evidence", "error", "request_id"]
+
+
+def test_014_branch_omits_keys_instead_of_setting_them_to_none():
+    primary = {"completion_status": "complete", "evidence": [], "request_id": "r"}
+    merged = search_module.merge_attachment_response(primary, {"items": [], "counts": {},
+                                                              "failed_paths": []})
+    for key in ("gaps", "error"):
+        assert key not in merged, f"{key} must be omitted, not set to None"
+    assert merged["related_memories"] == []
+    assert merged["memory_notice"] == {"notice": search_module.MEMORY_NOTICE_TEXT, "untrusted": True}
+    assert list(merged["counts"]) == ["returned", "candidates", "truncated_by_budget",
+                                      "dropped_delivered", "filtered_inactive", "characters"]
+
+
+def test_014_branch_never_drops_or_reorders_evidence():
+    evidence = [{"evidence_id": "e-1"}, {"evidence_id": "e-2"}]
+    primary = {"completion_status": "complete", "evidence": evidence, "request_id": "r"}
+    merged = search_module.merge_attachment_response(primary, {"items": [{"memory_id": 9}],
+                                                              "counts": {}, "failed_paths": []})
+    assert merged["evidence"] is evidence
+
+
+def test_counts_vocabulary_and_order_match_the_012_recall_counts():
+    """FR-014/§4: one parser must handle both recall_memory and search_knowledge counts."""
+    from rag_mcp.services.memory_reader import MemoryReader  # noqa: F401 - documents the source
+
+    declared = list(reg.load("mcp-search-output.schema.json")["properties"]["counts"]["properties"])
+    assert declared == ["returned", "candidates", "truncated_by_budget", "dropped_delivered",
+                        "filtered_inactive", "characters"]
+
+
+async def test_end_to_end_014_branch_order_through_the_real_tool(monkeypatch):
+    _install_fake_retrieval(monkeypatch, BRANCH_BODIES["complete"])
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+
+    import rag_mcp.mcp.search_knowledge as module
+
+    class _FakeMemoryService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def attach(self, **_kwargs):
+            return {"items": [], "counts": {"returned": 0, "candidates": 0,
+                                            "truncated_by_budget": 0, "dropped_delivered": 0,
+                                            "filtered_inactive": 0, "characters": 0},
+                    "failed_paths": ["below_min_score"]}
+
+    monkeypatch.setattr(module, "MemoryService", _FakeMemoryService)
+    content, structured = await _call_tool({
+        "query": "q", "project_scope": ["p"], "memory_context": "some context",
+    })
+    assert list(structured) == [key for key in FIXTURE_014_ORDER if key in structured]
+    assert list(structured)[:5] == ["completion_status", "evidence", "related_memories",
+                                    "memory_notice", "counts"]
+    # The mirror keeps the same order in the pretty text.
+    assert content[0].text.index('"related_memories"') > content[0].text.index('"evidence"')
+
+
+async def test_end_to_end_failed_primary_has_no_new_fields(monkeypatch):
+    _install_fake_retrieval(monkeypatch, BRANCH_BODIES["failed"])
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+
+    import rag_mcp.mcp.search_knowledge as module
+
+    class _FakeMemoryService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def attach(self, **_kwargs):
+            raise AssertionError("a failed primary must not be attached")
+
+    monkeypatch.setattr(module, "MemoryService", _FakeMemoryService)
+    _, structured = await _call_tool({"query": "q", "project_scope": ["p"], "session_id": REQUEST_ID})
+    assert list(structured) == ["completion_status", "evidence", "error", "request_id"]

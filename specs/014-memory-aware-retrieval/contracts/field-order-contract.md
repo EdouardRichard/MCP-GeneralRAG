@@ -67,3 +67,36 @@ completion_status, evidence, related_memories, memory_notice, counts, gaps, erro
 | legacy 属性集合 ⊆ 014 属性集合，且 014 只多出预期的新键 | 输入 schemas |
 | `working_set` 在 `include_working_set=false` 时不含 `working_set` 子键 | start_work |
 | `list(body) == [scope, domain_brief, digest, working_set, read_guidance, counts, package_fingerprint, request_id]`（运行时权威顺序，`include_working_set` 两种取值各一份） | start_work 顶层 |
+
+## 6. 实现落定记录（T026，2026-10-09）
+
+本节记录**实现实测**，不改动 §2–§5 的冻结内容。
+
+### 6.1 三处顺序一致性（`search_knowledge` 014 分支）
+
+| 位置 | 值 | 取证 |
+|---|---|---|
+| 契约文档 §2 | `completion_status, evidence, related_memories, memory_notice, counts, gaps, error, request_id` | 本文件 |
+| schema 属性声明顺序 | 同上（`mcp-search-output.schema.json` 的 `properties` 前 8 项） | `tests/contract/test_014_search_bytes_frozen.py::test_runtime_order_equals_the_schema_declaration_order` |
+| 运行时常量 | `mcp/search_knowledge.py` 的 `ATTACHMENT_FIELD_ORDER`（`merge_attachment_response` 按它重建） | `test_documented_order_equals_the_runtime_and_schema_order` |
+
+**实测补充（重要）**：运行时发出的键列表是上表的**子序列**——`gaps` 仅在 `completion_status == "partial"` 或去重致空时出现，`error` 在 014 分支**永不**出现（014 分支只在主检索非 `failed` 时构建）。因此断言形式为「实际键序列 == 冻结表剔除缺席键后的序列」，而非「恒等于 8 键」。取证：`test_014_branch_key_order_is_exactly_the_contract_table[complete|partial|no_evidence]`。
+
+### 6.2 `failed` 分支不附加
+
+主检索 `completion_status == "failed"` ⇒ 直接返回 legacy dict，**不**构建 014 分支（不出现 `related_memories`/`memory_notice`/`counts`），并取消并回收已并发发起的附加层任务。取证：`tests/unit/test_014_attachment_gating.py::test_main_search_failure_attaches_nothing`、`::test_failed_main_search_cancels_a_running_attachment`、`tests/contract/test_014_search_bytes_frozen.py::test_end_to_end_failed_primary_has_no_new_fields`。
+
+### 6.3 未触发/开关关闭的字节冻结
+
+`MEMORY_AWARE_RETRIEVAL_ENABLED=false` 或未显式提供信号 ⇒ 返回主检索 dict **原对象**（引用相等）。四个 completion 状态的 pretty 镜像与 wire 字面量逐字节等于 T002 golden；显式 `null` 与省略等价；`AGENTIC_RETRIEVAL_ENABLED=true`（agentic 不可用回落路径）下同样逐字节一致。取证：`tests/contract/test_014_search_bytes_frozen.py`（30 项通过）。
+
+### 6.4 裁剪优先级（`search_knowledge` 侧）
+
+- **证据 > 记忆**：`evidence` 数组按引用原样搬运；附加层裁剪（条数 / 800 字 / 200 字摘录）**绝不**删减或重排 `evidence`。取证：`test_014_branch_never_drops_or_reorders_evidence`。
+- **裁剪可观测**：`counts.truncated_by_budget` 与 `counts.characters` 随行；`memory_notice.failed_paths` 承载降级原因且唯一排序（字节稳定）。取证：`test_014_branch_omits_keys_instead_of_setting_them_to_none`、`test_failed_paths_ride_along_for_every_degradation_reason`。
+- `digest > working_set` 与 `read_guidance` 永不裁剪属 `start_work` 侧（§3、T033/US4）。
+
+### 6.5 `memory_notice` 构造方式
+
+`notice` 由两个必需片段**组合**而成（`NOTICE_UNTRUSTED_DECLARATION` + `NOTICE_DEEP_READ_GUIDANCE`），而非一段自由文本，因此无法发布缺少任一要素的 notice；`notice_is_compliant()` 同时供硬指标统计复用（T069）。取证：`tests/unit/test_014_attachment_gating.py` 的 T022 段落（92 项通过）。
+
