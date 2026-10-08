@@ -32,6 +32,63 @@ from rag_mcp.services.salience_service import SalienceService
 READ_GUIDANCE = "Verify anchors."
 WEIGHTS = {"dense": 1., "recency": .5, "kind": .3, "salience": .2}
 
+#: 014 replaced 012's 7-day ``expires_at`` dedup window with this short
+#: session-level TTL (approved change, spec SC-015). ``expires_at`` remains the
+#: runtime audit retention and no longer decides delivery dedup.
+DEFAULT_DELIVERED_TTL_SECONDS = 3600
+
+
+def delivered_window_seconds(policies) -> int:
+    """The dedup window for a request: the **shortest** window across its scopes.
+
+    A multi-scope request is served by several domain policies. Taking the minimum
+    is the conservative choice: a wide window from one scope must never mask a
+    duplicate delivery that another scope would already have expired
+    (data-model §5). Policies are validated strictly, so an out-of-range value is
+    rejected rather than silently defaulted.
+    """
+    from rag_mcp.services.memory_policy import MemoryPolicy
+
+    windows = [MemoryPolicy.model_validate(policy or {}).delivered_ttl_seconds for policy in policies]
+    return min(windows) if windows else DEFAULT_DELIVERED_TTL_SECONDS
+
+
+def delivered_cutoff(now, window_seconds: int):
+    """The inclusive-lower bound of the delivered window."""
+    from datetime import timedelta
+
+    return now - timedelta(seconds=window_seconds)
+
+
+def delivered_memory_ids(runs, *, now, window_seconds: int) -> set[int]:
+    """Union of delivered memory ids from runs inside the window, any channel.
+
+    Deliberately channel-agnostic: ``recall``, ``attached`` and ``start_work`` all
+    contribute to one session-level set (FR-016). A run whose timestamp is missing
+    or unusable does not participate.
+    """
+    cutoff = delivered_cutoff(now, window_seconds)
+    delivered: set[int] = set()
+    for run in runs or ():
+        created = _usable_timestamp(run.get("created_at"))
+        if created is None or created <= cutoff:
+            continue
+        for memory_id in run.get("returned_ids") or ():
+            try:
+                delivered.add(int(memory_id))
+            except (TypeError, ValueError):
+                continue
+    return delivered
+
+
+def _usable_timestamp(value):
+    if value is None:
+        return None
+    try:
+        return timestamp(value)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
 
 def memory_visible(row, *, point, now, include_superseded=False):
     allowed = {"active", "superseded"} if include_superseded else {"active"}
@@ -266,9 +323,17 @@ class MemoryReader:
                     eligible[mid] = row
                 delivered = set()
                 if session_id and not include_delivered:
-                    deliveries = (await self.session.execute(select(MemoryRecallRun.returned_ids).where(
-                        MemoryRecallRun.session_id == session_id, MemoryRecallRun.expires_at > now))).scalars().all()
-                    delivered = {mid for ids in deliveries for mid in ids}
+                    # 014: the window is the shortest policy TTL across the resolved
+                    # scopes (approved change replacing 012's 7-day expires_at).
+                    window = await self._delivered_window(scope_ids)
+                    cutoff = delivered_cutoff(now, window)
+                    rows = (await self.session.execute(select(
+                        MemoryRecallRun.returned_ids, MemoryRecallRun.created_at).where(
+                        MemoryRecallRun.session_id == session_id,
+                        MemoryRecallRun.created_at > cutoff))).all()
+                    delivered = delivered_memory_ids(
+                        [{"returned_ids": row[0], "created_at": row[1]} for row in rows],
+                        now=now, window_seconds=window)
                 dropped = len(set(eligible) & delivered)
                 eligible = {mid: row for mid, row in eligible.items() if mid not in delivered}
                 ordered = sorted(eligible, key=lambda mid: (eligible[mid]["observed_at"], mid), reverse=True)
@@ -380,6 +445,15 @@ class MemoryReader:
             except TimeoutError:
                 pass
         return result
+
+    async def _delivered_window(self, scope_ids) -> int:
+        """Resolve the per-request dedup window from the resolved scopes' policies."""
+        policies = []
+        for scope_id in scope_ids:
+            scope = await self.session.get(KnowledgeScope, scope_id)
+            profile = await self.session.get(DomainProfile, scope.domain_key) if scope is not None else None
+            policies.append((profile.memory_policy if profile else None) or {})
+        return delivered_window_seconds(policies)
 
     async def _entries_map(self, scope_id):
         """Complete same-scope entries for optional endpoint revalidation.
@@ -650,5 +724,15 @@ class MemoryReader:
             body["counts"]["characters"] = serialized_characters(body)
             body["package_fingerprint"] = hashlib.sha256(canonical({key: value for key, value in body.items()
                                                                    if key != "package_fingerprint"}).encode()).hexdigest()
+            # 014 T029: start_work is the third delivered channel. The audit row is
+            # additive and does not enter the package body, so the 012 package
+            # bytes are unchanged while the session-level delivered set becomes
+            # genuinely cross-channel (FR-016).
+            request_id = str(uuid4())
+            delivered_ids = [row["memory_id"] for row in digest] + [row["memory_id"] for row in working_set]
+            self.session.add(MemoryRecallRun(
+                request_id=request_id, tool="start_work", mode="package", scope_ids=[sid],
+                channel="start_work", session_id=session_id, returned_ids=delivered_ids,
+                returned_count=len(delivered_ids), degraded=bool(failed_paths), failed_paths=failed_paths))
             await self.session.commit()
-            return {**body, "request_id": str(uuid4())}
+            return {**body, "request_id": request_id}
