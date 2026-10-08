@@ -157,6 +157,56 @@ def _env_trace_body() -> bool:
     return True
 
 
+def _resolved(path_value: str) -> Path:
+    """Absolute, symlink-free resolution used for the overlap guard."""
+    return Path(path_value).expanduser().resolve()
+
+
+def _paths_overlap(first: Path, second: Path) -> bool:
+    """True when the two paths are equal or one contains the other."""
+    return first == second or first in second.parents or second in first.parents
+
+
+def _env_memory_consumption_root() -> str:
+    """014 consumption-layer root (research §7, data-model §4).
+
+    Defaults to ``<DATA_ROOT parent>/memory_projection`` so the read-only
+    consumption layer is a sibling of the uploads root and can never be confused
+    with the existing per-revision projection tree. A configured value that
+    equals, contains or sits inside any ``DATA_ROOT`` fails closed: the layer must
+    not be able to alias the authoritative upload/consumption tree.
+    """
+    data_root = _resolved(os.getenv("DATA_ROOT", "./data/uploads"))
+    raw = os.getenv("MEMORY_CONSUMPTION_ROOT")
+    root = _resolved(raw) if raw is not None and raw.strip() else (data_root.parent / "memory_projection")
+    if not root.is_absolute():  # pragma: no cover - resolve() always yields absolute
+        raise ValueError(f"MEMORY_CONSUMPTION_ROOT must resolve to an absolute path, got {raw!r}")
+    if _paths_overlap(root, data_root):
+        raise ValueError(
+            "MEMORY_CONSUMPTION_ROOT must not overlap DATA_ROOT "
+            f"(root={root}, data_root={data_root})"
+        )
+    return str(root)
+
+
+def _env_memory_consumption_refresh_interval_s() -> int:
+    """Reconciliation period inside the maintenance window (30..3600 seconds)."""
+    raw = os.getenv("MEMORY_CONSUMPTION_REFRESH_INTERVAL_S")
+    if raw is None or raw.strip() == "":
+        return 300
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"MEMORY_CONSUMPTION_REFRESH_INTERVAL_S must be an integer, got {raw!r}") from exc
+    if not 30 <= value <= 3600:
+        raise ValueError(f"MEMORY_CONSUMPTION_REFRESH_INTERVAL_S must be within 30-3600, got {value}")
+    return value
+
+
+def _env_flag(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in _TRUTHY_ENV
+
+
 @dataclass(frozen=True)
 class Settings:
     """Application settings assembled from environment variables."""
@@ -353,6 +403,21 @@ class Settings:
     providers: ProviderSettings = field(default_factory=load_provider_settings)
     # Per-Host timeout profiles (FR-021/FR-022)
     timeout_profiles: TimeoutProfiles = field(default_factory=TimeoutProfiles.from_env)
+
+    # --- 014 (data-model §4): memory-aware retrieval + consumption layer ------
+    # Both switches default to false: the ability ships with the release but the
+    # new behaviour only enters the default path once the continuity gate, the
+    # hard metrics and the regression gate all pass (FR-035, research §12).
+    memory_aware_retrieval_enabled: bool = field(
+        default_factory=lambda: _env_flag("MEMORY_AWARE_RETRIEVAL_ENABLED")
+    )
+    memory_consumption_projection_enabled: bool = field(
+        default_factory=lambda: _env_flag("MEMORY_CONSUMPTION_PROJECTION_ENABLED")
+    )
+    memory_consumption_root: str = field(default_factory=_env_memory_consumption_root)
+    memory_consumption_refresh_interval_s: int = field(
+        default_factory=_env_memory_consumption_refresh_interval_s
+    )
 
     @property
     def graph(self) -> "GraphConfig":
