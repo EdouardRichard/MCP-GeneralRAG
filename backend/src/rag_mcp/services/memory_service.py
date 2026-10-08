@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import func, select, text
 
-from rag_mcp.errors import MemoryContentConflictError
+from rag_mcp.errors import MemoryContentConflictError, attachment_degradation_reason
 from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
@@ -43,7 +45,7 @@ ATTACH_EXCERPT_HARD_LIMIT = 200
 ATTACH_TIMEOUT_MS_HARD_LIMIT = 800
 
 
-def attach_budget(policy) -> dict:
+def attachment_budget(policy) -> dict:
     """Effective attachment budget for one resolved scope policy.
 
     The policy is validated strictly (unknown keys rejected, integers exclude
@@ -64,6 +66,248 @@ def attach_budget(policy) -> dict:
         "min_score_conservative": validated.attach_conservative_min_score,
         "delivered_ttl_seconds": validated.delivered_ttl_seconds,
     }
+
+
+#: Attachment item key order, frozen to the contract declaration order.
+ATTACHMENT_ITEM_KEYS = (
+    "memory_id", "knowledge_scope_id", "kind", "provenance", "confidence", "title",
+    "content_excerpt", "truncated", "content_length", "evidence_refs", "inference_meta",
+    "valid_from", "valid_to", "observed_at", "session_id", "agent_id", "status",
+    "superseded_by", "injection_flags", "attach_reason", "match",
+)
+
+
+def _aware(value):
+    """Parse a timestamp, returning ``None`` for anything unparsable or naive.
+
+    A6 (research §6): a malformed or timezone-naive timestamp must make the row a
+    non-candidate, never raise out of the read path.
+    """
+    if value is None:
+        return None
+    from rag_mcp.orchestration.packing import timestamp as _timestamp
+
+    try:
+        return _timestamp(value)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def attachment_visible(row, *, now) -> bool:
+    """The attachment-layer visibility predicate (FR-007, data-model §7.1).
+
+    Excludes ``quarantined``/``superseded``/``retired`` (status), ``compressed``
+    and ``archived`` (retention stage), closed rows (``valid_to``), expired rows
+    and writes that never completed. Any unusable timestamp fails closed.
+    """
+    if not isinstance(row, Mapping):
+        return False
+    if row.get("status") != "active":
+        return False
+    if row.get("retention_stage") != "active":
+        return False
+    if row.get("valid_to") is not None:
+        return False
+    if row.get("write_status") not in (None, "complete"):
+        return False
+    observed = _aware(row.get("observed_at"))
+    if observed is None:
+        return False
+    valid_from = row.get("valid_from")
+    if valid_from is not None and _aware(valid_from) is None:
+        return False
+    expires = row.get("expires_at")
+    if expires is not None:
+        expiry = _aware(expires)
+        if expiry is None or expiry <= now:
+            return False
+    return True
+
+
+def attachment_hard_anchor_ok(row) -> bool:
+    """A ``hard`` item needs a per-item attribution anchor, or it is excluded.
+
+    ``soft``/``distilled`` items carry their provenance in ``inference_meta``
+    instead, so the anchor requirement applies to ``hard`` only (FR-002/FR-007).
+    """
+    if row.get("provenance") != "hard":
+        return True
+    return bool(row.get("evidence_refs"))
+
+
+def attachment_min_score(policy, *, has_context: bool) -> float:
+    """The threshold actually applied to ``match.dense_similarity``."""
+    budget = attachment_budget(policy)
+    return budget["min_score_with_context"] if has_context else budget["min_score_conservative"]
+
+
+def _entry_text(row) -> tuple[str, int]:
+    """Return ``(available_text, full_content_length)`` for a row or public entry.
+
+    The attachment layer reuses ``MemoryReader.recall`` and therefore normally
+    receives ``public_entry`` dicts, which expose a 300-character
+    ``content_excerpt`` plus the true ``content_length``. Because the 014 excerpt
+    limit (200) is below 300, that is enough to render the attachment excerpt
+    without opening a second query channel. Raw projection rows (``content_text``)
+    are also accepted so the pure selection stays directly testable.
+    """
+    if row.get("content_text") is not None:
+        text = row["content_text"]
+        return text, len(text)
+    excerpt = row.get("content_excerpt")
+    if excerpt is None:
+        return "", int(row.get("content_length") or 0)
+    return excerpt, int(row.get("content_length") or len(excerpt))
+
+
+def attachment_item(row, *, match, attach_reason: str, excerpt_chars: int) -> dict:
+    """Assemble one contract-aligned attachment item, in the frozen key order.
+
+    ``valid_to``/``superseded_by`` are pinned to ``null`` and ``status`` to
+    ``active`` because non-active or closed rows are excluded before this point;
+    the evidence-layer locating fields are never copied (Constitution IV).
+    """
+    text, content_length = _entry_text(row)
+    excerpt = text[:excerpt_chars]
+    item = {
+        "memory_id": row["memory_id"],
+        "knowledge_scope_id": row["knowledge_scope_id"],
+        "kind": row.get("kind"),
+        "provenance": row.get("provenance"),
+        "confidence": row.get("confidence"),
+        "title": row.get("title"),
+        "content_excerpt": excerpt,
+        "truncated": content_length > len(excerpt),
+        "content_length": content_length,
+        "evidence_refs": list(row.get("evidence_refs") or []),
+        "inference_meta": row.get("inference_meta"),
+        "valid_from": row.get("valid_from"),
+        "valid_to": None,
+        "observed_at": row.get("observed_at"),
+        "session_id": row.get("session_id"),
+        "agent_id": row.get("agent_id"),
+        "status": "active",
+        "superseded_by": None,
+        "injection_flags": dict(row.get("injection_flags") or {}),
+        "attach_reason": attach_reason,
+        "match": match,
+    }
+    return {key: item[key] for key in ATTACHMENT_ITEM_KEYS}
+
+
+def attachment_candidates(
+    rows,
+    *,
+    matches=None,
+    policy=None,
+    has_context: bool,
+    session_id=None,
+    now=None,
+    delivered: Iterable[int] = (),
+    include_delivered: bool = False,
+) -> dict:
+    """Pure attachment selection: visibility, threshold, dedup, budget, ordering.
+
+    No IO, no clock and no model: ``now`` is explicit, ordering is by
+    ``(-dense_similarity, memory_id)`` and the budget comes from the validated
+    domain policy clamped by the frozen contract limits.
+    """
+    from rag_mcp.orchestration.packing import text_characters
+
+    budget = attachment_budget(policy)
+    threshold = budget["min_score_with_context"] if has_context else budget["min_score_conservative"]
+    moment = now or datetime.now(UTC)
+    entries = list(rows.values()) if isinstance(rows, Mapping) else list(rows)
+    matches = matches or {}
+    delivered_ids = set(delivered or ())
+
+    visible: list[tuple[int, Mapping, Mapping | None]] = []
+    filtered_inactive = 0
+    for row in entries:
+        if not isinstance(row, Mapping):
+            continue
+        memory_id = row.get("memory_id")
+        if memory_id is None:
+            continue
+        if not attachment_visible(row, now=moment) or not attachment_hard_anchor_ok(row):
+            filtered_inactive += 1
+            continue
+        match = matches.get(memory_id)
+        if match is None:
+            match = row.get("match")
+        if not isinstance(match, Mapping) or match.get("dense_similarity") is None:
+            # Without the dense component the documented threshold cannot be
+            # applied, so the candidate is not admitted (fail closed).
+            continue
+        visible.append((int(memory_id), row, match))
+
+    candidates = len(visible)
+    failed_paths: list[str] = []
+    if not visible:
+        if not matches and entries:
+            failed_paths = ["memory_unavailable"]
+        eligible: list[tuple[int, Mapping, Mapping]] = []
+    else:
+        eligible = [entry for entry in visible if entry[2]["dense_similarity"] >= threshold]
+        if not eligible:
+            failed_paths = ["below_min_score"]
+
+    eligible.sort(key=lambda entry: (-entry[2]["dense_similarity"], entry[0]))
+
+    dropped_delivered = 0
+    if delivered_ids and not include_delivered:
+        dropped_delivered = sum(1 for mid, _, _ in eligible if mid in delivered_ids)
+        eligible = [entry for entry in eligible if entry[0] not in delivered_ids]
+
+    attach_reason = ("session_and_context" if session_id is not None and has_context
+                     else "context_match" if has_context else "session_recent")
+
+    truncated_by_budget = 0
+    selected: list[dict] = []
+    if len(eligible) > budget["top_k"]:
+        truncated_by_budget += len(eligible) - budget["top_k"]
+        eligible = eligible[: budget["top_k"]]
+
+    characters = 0
+    for memory_id, row, match in eligible:
+        item = attachment_item(row, match=match, attach_reason=attach_reason,
+                               excerpt_chars=budget["excerpt_chars"])
+        size = text_characters(item)
+        if characters + size > budget["max_chars"]:
+            truncated_by_budget += 1
+            continue
+        characters += size
+        selected.append(item)
+
+    return {
+        "items": selected,
+        "counts": {
+            "returned": len(selected),
+            "candidates": candidates,
+            "truncated_by_budget": truncated_by_budget,
+            "dropped_delivered": dropped_delivered,
+            "filtered_inactive": filtered_inactive,
+            "characters": characters,
+        },
+        "failed_paths": list(failed_paths),
+    }
+
+
+def detect_context_flags(memory_context):
+    """Run the existing injection detection on ``memory_context``, first.
+
+    Detection is **先行** (Clarifications Q5): it must complete before any recall,
+    scoring, sorting or assembly. It never raises and never relaxes a filter or a
+    threshold — a failed detector degrades to ``detection_degraded`` and the
+    context is still treated as untrusted data only.
+    """
+    if memory_context is None:
+        return {}, []
+    try:
+        sanitized = detect_submission({"content": memory_context})
+    except Exception:  # noqa: BLE001 - detection failure must not block retrieval
+        return {}, ["detection_degraded"]
+    return dict(sanitized.injection_flags or {}), []
 
 
 def _hard_replacement_command(event, target, validation):
@@ -87,6 +331,81 @@ class MemoryService:
     async def recall(self, **parameters):
         from rag_mcp.services.memory_reader import MemoryReader
         return await MemoryReader(self.session, self.projections).recall(**parameters)
+
+    async def attach(self, *, scope_ref, query=None, session_id=None, memory_context=None,
+                     policy=None, include_delivered=False):
+        """014 attachment layer: a parameterised reuse of the existing recall path.
+
+        No new query channel is opened (research §1/§3): the same
+        ``MemoryReader.recall`` performs scope resolution, visibility, delivered
+        dedup, fusion and auditing. This method only
+
+        * runs the existing injection detection on ``memory_context`` **first**,
+          before any recall/scoring/sorting/assembly (Clarifications Q5),
+        * applies the 014 budget, threshold dual track, state re-verification and
+          ordering over the recall result, and
+        * degrades on its own: any failure is reported as a reason and never
+          propagates to the primary retrieval (FR-004/SC-003).
+
+        Returns ``{"items", "counts", "failed_paths", "injection_flags"}``.
+        """
+        from rag_mcp.services.memory_reader import MemoryReader
+
+        budget = attachment_budget(policy)
+        flags, detection_failed = detect_context_flags(memory_context)
+        empty_counts = {"returned": 0, "candidates": 0, "truncated_by_budget": 0,
+                        "dropped_delivered": 0, "filtered_inactive": 0, "characters": 0}
+        result = {"items": [], "counts": dict(empty_counts),
+                  "failed_paths": list(detection_failed), "injection_flags": flags}
+
+        # An explicit memory_context is the recall query; a session-only signal
+        # reuses the primary query with the conservative threshold (research §3).
+        recall_query = memory_context if memory_context is not None else query
+        has_context = memory_context is not None
+        try:
+            async with asyncio.timeout(budget["timeout_ms"] / 1000):
+                recall = await MemoryReader(self.session, self.projections).recall(
+                    scope_ref=scope_ref,
+                    query=recall_query,
+                    session_id=session_id,
+                    limit=max(budget["top_k"], 1) * 4,
+                    include_delivered=include_delivered,
+                    tool="search_knowledge",
+                    channel="attached",
+                )
+        except (TimeoutError, asyncio.TimeoutError):
+            result["failed_paths"] = sorted(set(result["failed_paths"] + ["attachment_timeout"]))
+            return result
+        except Exception as exception:  # noqa: BLE001 - the attachment degrades on its own
+            result["failed_paths"] = sorted(
+                set(result["failed_paths"] + [attachment_degradation_reason(exception)])
+            )
+            return result
+
+        if recall.get("completion_status") == "failed":
+            notice_paths = list((recall.get("memory_notice") or {}).get("failed_paths") or [])
+            result["failed_paths"] = sorted(
+                set(result["failed_paths"] + notice_paths + ["memory_unavailable"])
+            )
+            return result
+
+        selection = attachment_candidates(
+            list(recall.get("memories") or []),
+            policy=policy,
+            has_context=has_context,
+            session_id=session_id,
+            delivered=(),
+            include_delivered=include_delivered,
+        )
+        result["items"] = selection["items"]
+        result["counts"] = {**empty_counts, **selection["counts"]}
+        # Delivered dedup happens once, inside the single read channel; surface
+        # its count rather than recomputing it here.
+        result["counts"]["dropped_delivered"] = int(
+            (recall.get("counts") or {}).get("dropped_delivered") or 0
+        )
+        result["failed_paths"] = sorted(set(result["failed_paths"] + selection["failed_paths"]))
+        return result
 
     async def start_work(self, **parameters):
         from rag_mcp.services.memory_reader import MemoryReader
