@@ -19,6 +19,35 @@ MEMORY_ERROR_CODES = frozenset({
 ERROR_CODES = LEGACY_ERROR_CODES | MEMORY_ERROR_CODES
 
 
+# --- 014: attachment-layer degradation reasons --------------------------------
+# Additive vocabulary only. These are NOT error codes: they ride in
+# ``memory_notice.failed_paths`` / ``counts`` and never replace or rename an
+# entry of ERROR_CODES. The existing code sets above MUST stay unchanged, which
+# tests/unit/test_014_attachment_gating.py freezes explicitly.
+ATTACHMENT_DEGRADATION_REASONS = frozenset({
+    "attachment_timeout",
+    "memory_unavailable",
+    "below_min_score",
+    "budget_exhausted",
+    "state_filtered",
+    "detection_degraded",
+})
+
+
+def attachment_degradation_reason(exception: BaseException) -> str:
+    """Map an attachment-layer failure to its stable degradation reason.
+
+    The attachment layer degrades independently: whatever happens here is
+    reported as a reason on the memory side and never changes the primary
+    retrieval status (FR-004/SC-003).
+    """
+    if isinstance(exception, TimeoutError):
+        return "attachment_timeout"
+    if isinstance(exception, OSError):
+        return "memory_unavailable"
+    return "memory_unavailable"
+
+
 class MemoryContentConflictError(ValueError):
     """Raised only after a matching entry is found in the requested scope."""
 
