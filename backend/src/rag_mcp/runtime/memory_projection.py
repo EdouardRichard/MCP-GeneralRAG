@@ -39,6 +39,7 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rag_mcp.runtime.activity import get_runtime_activity
 from rag_mcp.services.memory_reducer import ReducerState, require_reducer_state
 
 KINDS = ("episodic", "semantic", "procedural")
@@ -544,8 +545,6 @@ class InProcessTreeSource:
 # Consumer: refresh, drift repair, full rebuild, async scheduling
 # ---------------------------------------------------------------------------
 
-from rag_mcp.runtime.activity import get_runtime_activity  # noqa: E402  (cycle-free at import time)
-
 
 class MemoryProjectionConsumer:
     """Owns one consumption root; the only component that may write there."""
@@ -566,7 +565,8 @@ class MemoryProjectionConsumer:
 
     async def apply_tree_state(self, tree: TreeState, *, session=None, force_rebuild=False) -> ProjectionReport:
         require_reducer_state(tree.state)
-        scope_dir, owned = await self._resolve_scope_dir(tree.scope_id, session, expected_slug=tree.scope_slug)
+        scope_dir, _first_publish = await self._resolve_scope_dir(tree.scope_id, session,
+                                                                 expected_slug=tree.scope_slug)
         slug = scope_dir.name
         items = render_tree(tree.state, slug=slug)
         expected = tree_manifest(items)
