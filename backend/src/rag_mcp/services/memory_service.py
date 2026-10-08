@@ -33,6 +33,39 @@ from rag_mcp.services.memory_validators import (
 from rag_mcp.utils.snowflake import generate_id
 
 
+# --- 014 frozen contract constants -------------------------------------------
+# Protocol limits, NOT policy defaults: a domain policy may only tighten them
+# (data-model §3, plan.md "冻结契约常量"). They are module-level so the tool layer
+# and the tests assert the same numbers instead of re-typing them.
+ATTACH_ITEMS_HARD_LIMIT = 5
+ATTACH_CHARACTERS_HARD_LIMIT = 800
+ATTACH_EXCERPT_HARD_LIMIT = 200
+ATTACH_TIMEOUT_MS_HARD_LIMIT = 800
+
+
+def attach_budget(policy) -> dict:
+    """Effective attachment budget for one resolved scope policy.
+
+    The policy is validated strictly (unknown keys rejected, integers exclude
+    bool, floats reject NaN/Infinity) and then clamped by the frozen contract
+    limits, so a misconfigured domain can never widen the protocol budget.
+    """
+    from rag_mcp.services.memory_policy import MemoryPolicy
+
+    validated = MemoryPolicy.model_validate(policy or {})
+    return {
+        "top_k": min(validated.attach_top_k, ATTACH_ITEMS_HARD_LIMIT),
+        "max_chars": min(validated.attach_max_chars, ATTACH_CHARACTERS_HARD_LIMIT),
+        "excerpt_chars": min(validated.attach_excerpt_chars, ATTACH_EXCERPT_HARD_LIMIT),
+        "timeout_ms": min(validated.attach_timeout_ms, ATTACH_TIMEOUT_MS_HARD_LIMIT),
+        # Threshold dual track (research §3): an explicit memory_context uses the
+        # permissive existing key, a session-only signal uses the conservative档.
+        "min_score_with_context": validated.attach_min_score,
+        "min_score_conservative": validated.attach_conservative_min_score,
+        "delivered_ttl_seconds": validated.delivered_ttl_seconds,
+    }
+
+
 def _hard_replacement_command(event, target, validation):
     """Pure adapter called only after the existing record authorization checks."""
     from rag_mcp.services.consolidation_adjudicator import _COMMAND_ISSUER_SEAL, _governed_command

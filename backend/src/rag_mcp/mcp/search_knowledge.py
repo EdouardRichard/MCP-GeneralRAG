@@ -36,6 +36,26 @@ from rag_mcp.services.retrieval_service import RetrievalService, _non_empty_entr
 logger = logging.getLogger(__name__)
 
 
+def attachment_triggered(*, session_id: Any, memory_context: Any, enabled: bool) -> bool:
+    """014 gate: attach memories only on an explicit signal *and* the shipped switch.
+
+    Both conditions are required and both are explicit:
+
+    * at least one of ``session_id`` / ``memory_context`` was actually supplied.
+      ``None`` (whether omitted or passed as an explicit ``null``) is **not** a
+      signal, so an untriggered call keeps the legacy dict untouched.
+    * ``MEMORY_AWARE_RETRIEVAL_ENABLED`` is true. The switch defaults to false:
+      the capability ships with the release but does not enter the default path
+      until the continuity, safety and regression gates pass (FR-035).
+
+    A caller that omits both signals therefore gets zero new fields whether the
+    switch is on or off (contracts/field-order-contract.md §4.1).
+    """
+    if not enabled:
+        return False
+    return session_id is not None or memory_context is not None
+
+
 async def search_knowledge_core(
     *,
     query: str,
