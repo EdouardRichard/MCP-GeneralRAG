@@ -1,0 +1,172 @@
+{
+  "schema_version": "014.1",
+  "report_type": "hard-metrics",
+  "run_id": "014-hard-metrics-20261008185724",
+  "generated_at": "2026-10-08T18:57:51.034511+00:00",
+  "metrics": {
+    "scope_selection": {
+      "evidence_scope": 355308332640108544,
+      "memory_scope": 351986171259125760,
+      "other_scope": 353212999147716608,
+      "note": "denominators reported below refer to these real scopes"
+    },
+    "evidence_locatability": {
+      "passed": 5,
+      "total": 5,
+      "rate": 1.0,
+      "value": 1.0,
+      "fields_checked": [
+        "evidence_id",
+        "source_version",
+        "source_position"
+      ],
+      "caliber": "evidence[] items only",
+      "query_source": "first published chunk of the selected scope",
+      "completion_status": "complete",
+      "reason": null
+    },
+    "mcp_schema_legality": {
+      "passed": 3,
+      "total": 3,
+      "rate": 1.0,
+      "value": 1.0,
+      "checks": [
+        {
+          "instance": "search_knowledge",
+          "arguments": [
+            "domain_scope",
+            "query"
+          ],
+          "valid": true,
+          "errors": []
+        },
+        {
+          "instance": "search_knowledge",
+          "arguments": [
+            "domain_scope",
+            "memory_context",
+            "query"
+          ],
+          "valid": true,
+          "errors": []
+        },
+        {
+          "instance": "start_work(include_working_set=true)",
+          "valid": true,
+          "errors": []
+        }
+      ],
+      "negative_control_rejected": true,
+      "caliber": "real protocol responses against the 014 contract schemas"
+    },
+    "memory_provenance_completeness": {
+      "passed": 2,
+      "total": 2,
+      "rate": 1.0,
+      "value": 1.0,
+      "attachment_items_carrying_evidence_locating_fields": 0,
+      "hard_items_examined": 0,
+      "hard_items_note": "no hard item was produced by the sampled scopes; the hard anchor rule is covered by tests/unit/test_014_attachment_gating.py and tests/contract/test_014_search_attachment_schema.py",
+      "scope_kind": "throwaway acceptance scope created for this measurement",
+      "scope_id": 366660442442956800,
+      "failed_paths": [],
+      "query_source": "fixed acceptance phrase",
+      "caliber": "related_memories[] items only",
+      "real_scope_attempt": {
+        "value": "not_measurable",
+        "reason": "no real candidate scope produced attachment items: the sampled scopes either have no dense-scored candidates or exceed the frozen 800 ms attachment budget",
+        "caliber": "related_memories[] items only",
+        "candidate_attempts": [
+          {
+            "scope_id": 351986171259125760,
+            "items": 0,
+            "failed_paths": []
+          },
+          {
+            "scope_id": 353212999147716608,
+            "items": 0,
+            "failed_paths": []
+          },
+          {
+            "scope_id": 366659111523188736,
+            "items": 0,
+            "failed_paths": []
+          },
+          {
+            "scope_id": 366659014655737856,
+            "items": 0,
+            "failed_paths": []
+          },
+          {
+            "scope_id": 366658899073302528,
+            "items": 0,
+            "failed_paths": []
+          },
+          {
+            "scope_id": 365474063021244416,
+            "items": 0,
+            "failed_paths": []
+          }
+        ]
+      }
+    },
+    "cross_domain_leakage": {
+      "leaks": 0,
+      "examined": 0,
+      "value": 0,
+      "caliber": "memory attachment path",
+      "requested_scope": 353212999147716608,
+      "foreign_scope_present_in_other_scope": false
+    },
+    "context_detection_first": {
+      "passed": 1,
+      "total": 1,
+      "rate": 1.0,
+      "value": 1.0,
+      "high_risk_detected": true,
+      "clean_flags_present": true,
+      "detection_failures_recorded": true,
+      "ordering_evidence": "tests/unit/test_014_attachment_gating.py::test_detection_runs_before_any_recall",
+      "caliber": "detection runs before any recall/scoring/sorting/assembly"
+    },
+    "quarantined_exclusion": {
+      "occurrences": 0,
+      "value": 0,
+      "quarantined_status_observed": "quarantined",
+      "benign_memory_visible_in_recall": false,
+      "caliber": "default recall + attachment + working set"
+    },
+    "memory_notice_completeness": {
+      "passed": 1,
+      "total": 1,
+      "rate": 1.0,
+      "value": 1.0,
+      "caliber": "memory_notice.notice carries both required elements"
+    },
+    "projection_untrusted_completeness": {
+      "passed": 4,
+      "total": 4,
+      "rate": 1.0,
+      "value": 1.0,
+      "root": "D:\\Project_new\\docsToCode\\eval\\runs\\014-projection-20261008184839\\consumption",
+      "caliber": "consumption-layer markdown files incl. DIGEST/INDEX banners"
+    },
+    "view_keys_unchanged": {
+      "value": [
+        "dense",
+        "file",
+        "links",
+        "relation",
+        "salience",
+        "summary"
+      ],
+      "total": 6,
+      "caliber": "MemoryProjectionStore VIEW_KEYS must stay exactly six",
+      "unchanged": true
+    }
+  },
+  "notes": [
+    "each metric names the exact caliber and denominator it used",
+    "unmeasurable metrics are reported as not_measurable with the reason, never as 0 or 100%"
+  ]
+}
