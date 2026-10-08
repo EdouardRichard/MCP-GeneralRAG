@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from time import monotonic
@@ -20,46 +19,18 @@ from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.models.memory_recall_run import MemoryRecallRun
+from rag_mcp.orchestration.packing import (  # noqa: F401 - re-exported for existing importers
+    canonical,
+    serialized_characters,
+    text_characters,
+    timestamp,
+)
 from rag_mcp.services.scope_resolver import MemoryScopeResolver
 from rag_mcp.services.salience_service import SalienceService
 
 
 READ_GUIDANCE = "Verify anchors."
 WEIGHTS = {"dense": 1., "recency": .5, "kind": .3, "salience": .2}
-
-
-def timestamp(value):
-    if value is None:
-        return None
-    result = value if isinstance(value, datetime) else datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if result.tzinfo is None:
-        raise ValueError("MEMORY_PROVENANCE_INVALID: timezone required")
-    return result
-
-
-def canonical(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
-def text_characters(value):
-    if isinstance(value, dict):
-        return sum(text_characters(item) for item in value.values())
-    if isinstance(value, list):
-        return sum(text_characters(item) for item in value)
-    return len(value) if isinstance(value, str) else 0
-
-
-def serialized_characters(value):
-    """Count the exact deterministic JSON body, including its envelope fields."""
-    candidate = dict(value)
-    counts = dict(candidate.get("counts") or {})
-    candidate["counts"] = {**counts, "characters": 0}
-    for _ in range(4):
-        length = len(canonical(candidate))
-        if candidate["counts"]["characters"] == length:
-            break
-        candidate["counts"]["characters"] = length
-    return candidate["counts"]["characters"]
 
 
 def memory_visible(row, *, point, now, include_superseded=False):
