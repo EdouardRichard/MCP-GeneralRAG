@@ -208,7 +208,17 @@ class MemoryReader:
 
     async def recall(self, *, scope_ref, query=None, memory_ids=None, kind=None, session_id=None,
                      agent_id=None, time_window=None, as_of=None, include_superseded=False,
-                     include_delivered=False, limit=10, include_linked=False, include_context=False):
+                     include_delivered=False, limit=10, include_linked=False, include_context=False,
+                     tool="recall_memory", channel="recall"):
+        """Read memories, audited under ``tool``/``channel``.
+
+        014 T016: ``tool``/``channel`` default to the historical
+        ``recall_memory``/``recall`` values, so existing callers keep the exact
+        audit row they wrote before. The attachment layer passes
+        ``search_knowledge``/``attached`` and ``start_work`` passes
+        ``start_work``/``start_work``, which is what makes the session-level
+        delivered set a genuinely cross-channel set (FR-016).
+        """
         for flag in (include_linked, include_context):
             if not isinstance(flag, bool):
                 # The error contract maps ValueError to MEMORY_PROVENANCE_INVALID.
@@ -354,8 +364,9 @@ class MemoryReader:
                 if result["completion_status"] == "failed":
                     await self.session.rollback()
                     await self.session.execute(text("SET LOCAL ROLE rag_memory_reader"))
-                self.session.add(MemoryRecallRun(request_id=request_id, tool="recall_memory", mode=mode,
-                    scope_ids=scope_ids, session_id=session_id, returned_ids=[row["memory_id"] for row in result["memories"]],
+                self.session.add(MemoryRecallRun(request_id=request_id, tool=tool, mode=mode,
+                    scope_ids=scope_ids, channel=channel, session_id=session_id,
+                    returned_ids=[row["memory_id"] for row in result["memories"]],
                     returned_count=len(result["memories"]), degraded=bool(failed_paths), failed_paths=failed_paths,
                     latency_ms=(monotonic() - started) * 1000))
                 await self.session.commit()
