@@ -68,9 +68,29 @@ def notice_is_compliant(text: Any) -> bool:
             and all(marker in lowered for marker in NOTICE_DEEP_READ_MARKERS))
 
 
-def memory_notice(failed_paths: Any = ()) -> dict[str, Any]:
+#: Explanation appended when the attachment layer had candidates but every one of
+#: them was already delivered in this session (FR-017). The empty state must be
+#: *explained*, not left implicit.
+NOTICE_DEDUPED_EMPTY = (
+    "No memory is currently available: every eligible memory was already delivered in this "
+    "session, so pass include_delivered=true to recall_memory, or start a new session, to see "
+    "it again."
+)
+
+#: The actionable gap returned alongside a dedup-to-empty attachment layer. It is
+#: additive: the primary retrieval's own gaps are preserved and neither
+#: ``completion_status`` nor ``evidence`` is rewritten (FR-017/FR-018).
+DEDUPED_EMPTY_GAP = {
+    "description": "No available memory: every eligible memory was already delivered in this session.",
+    "suggested_action": "Call recall_memory with include_delivered=true, or start a new session, to see "
+                        "the previously delivered memories again.",
+}
+
+
+def memory_notice(failed_paths: Any = (), *, deduped_empty: bool = False) -> dict[str, Any]:
     """Build the 014 ``memory_notice`` object (012 keeps the same field an object)."""
-    notice: dict[str, Any] = {"notice": MEMORY_NOTICE_TEXT, "untrusted": True}
+    text = f"{MEMORY_NOTICE_TEXT} {NOTICE_DEDUPED_EMPTY}" if deduped_empty else MEMORY_NOTICE_TEXT
+    notice: dict[str, Any] = {"notice": text, "untrusted": True}
     reasons = sorted({str(path) for path in (failed_paths or ())})
     if reasons:
         notice["failed_paths"] = reasons
@@ -116,21 +136,27 @@ def merge_attachment_response(primary: dict[str, Any], attachment: dict[str, Any
     items = list(attachment.get("items") or [])
     failed_paths = sorted({str(path) for path in (attachment.get("failed_paths") or [])})
     counts = attachment.get("counts") or {}
+    dropped_delivered = int(counts.get("dropped_delivered") or 0)
+    deduped_empty = not items and dropped_delivered > 0
+
+    gaps = primary.get("gaps")
+    if deduped_empty:
+        gaps = [*(gaps or []), dict(DEDUPED_EMPTY_GAP)]
 
     candidate = {
         "completion_status": primary.get("completion_status"),
         "evidence": primary.get("evidence"),
         "related_memories": items,
-        "memory_notice": memory_notice(failed_paths),
+        "memory_notice": memory_notice(failed_paths, deduped_empty=deduped_empty),
         "counts": {
             "returned": int(counts.get("returned") or 0),
             "candidates": int(counts.get("candidates") or 0),
             "truncated_by_budget": int(counts.get("truncated_by_budget") or 0),
-            "dropped_delivered": int(counts.get("dropped_delivered") or 0),
+            "dropped_delivered": dropped_delivered,
             "filtered_inactive": int(counts.get("filtered_inactive") or 0),
             "characters": int(counts.get("characters") or 0),
         },
-        "gaps": primary.get("gaps"),
+        "gaps": gaps,
         "error": primary.get("error"),
         "request_id": primary.get("request_id"),
     }
