@@ -1,0 +1,51 @@
+{
+  "description": "Legacy (untriggered) search_knowledge serialization, frozen by T002",
+  "tool": "search_knowledge",
+  "serializer": "pydantic_core.to_json(dict, fallback=str, indent=2) as TextContent + CallToolResult.model_dump_json(by_alias=True, exclude_none=True)",
+  "arguments": {
+    "query": "q",
+    "project_scope": [
+      "p"
+    ]
+  },
+  "branches": {
+    "complete": {
+      "body_keys": [
+        "completion_status",
+        "evidence",
+        "request_id"
+      ],
+      "pretty_mirror": "{\n  \"completion_status\": \"complete\",\n  \"evidence\": [\n    {\n      \"evidence_id\": \"e-1\",\n      \"content_excerpt\": \"excerpt\",\n      \"source_version\": 1,\n      \"source_position\": \"doc.md#L1\",\n      \"knowledge_scope_id\": \"1\",\n      \"knowledge_scope_type\": \"project\",\n      \"relevance_score\": 0.9\n    }\n  ],\n  \"request_id\": \"00000000-0000-4000-8000-000000000000\"\n}",
+      "wire": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"completion_status\\\": \\\"complete\\\",\\n  \\\"evidence\\\": [\\n    {\\n      \\\"evidence_id\\\": \\\"e-1\\\",\\n      \\\"content_excerpt\\\": \\\"excerpt\\\",\\n      \\\"source_version\\\": 1,\\n      \\\"source_position\\\": \\\"doc.md#L1\\\",\\n      \\\"knowledge_scope_id\\\": \\\"1\\\",\\n      \\\"knowledge_scope_type\\\": \\\"project\\\",\\n      \\\"relevance_score\\\": 0.9\\n    }\\n  ],\\n  \\\"request_id\\\": \\\"00000000-0000-4000-8000-000000000000\\\"\\n}\"}],\"structuredContent\":{\"completion_status\":\"complete\",\"evidence\":[{\"evidence_id\":\"e-1\",\"content_excerpt\":\"excerpt\",\"source_version\":1,\"source_position\":\"doc.md#L1\",\"knowledge_scope_id\":\"1\",\"knowledge_scope_type\":\"project\",\"relevance_score\":0.9}],\"request_id\":\"00000000-0000-4000-8000-000000000000\"},\"isError\":false}"
+    },
+    "partial": {
+      "body_keys": [
+        "completion_status",
+        "evidence",
+        "request_id",
+        "gaps"
+      ],
+      "pretty_mirror": "{\n  \"completion_status\": \"partial\",\n  \"evidence\": [\n    {\n      \"evidence_id\": \"e-1\",\n      \"content_excerpt\": \"excerpt\",\n      \"source_version\": 1,\n      \"source_position\": \"doc.md#L1\",\n      \"knowledge_scope_id\": \"1\",\n      \"knowledge_scope_type\": \"project\",\n      \"relevance_score\": 0.9\n    }\n  ],\n  \"request_id\": \"00000000-0000-4000-8000-000000000000\",\n  \"gaps\": [\n    {\n      \"description\": \"insufficient evidence\",\n      \"suggested_action\": \"broaden the query\"\n    }\n  ]\n}",
+      "wire": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"completion_status\\\": \\\"partial\\\",\\n  \\\"evidence\\\": [\\n    {\\n      \\\"evidence_id\\\": \\\"e-1\\\",\\n      \\\"content_excerpt\\\": \\\"excerpt\\\",\\n      \\\"source_version\\\": 1,\\n      \\\"source_position\\\": \\\"doc.md#L1\\\",\\n      \\\"knowledge_scope_id\\\": \\\"1\\\",\\n      \\\"knowledge_scope_type\\\": \\\"project\\\",\\n      \\\"relevance_score\\\": 0.9\\n    }\\n  ],\\n  \\\"request_id\\\": \\\"00000000-0000-4000-8000-000000000000\\\",\\n  \\\"gaps\\\": [\\n    {\\n      \\\"description\\\": \\\"insufficient evidence\\\",\\n      \\\"suggested_action\\\": \\\"broaden the query\\\"\\n    }\\n  ]\\n}\"}],\"structuredContent\":{\"completion_status\":\"partial\",\"evidence\":[{\"evidence_id\":\"e-1\",\"content_excerpt\":\"excerpt\",\"source_version\":1,\"source_position\":\"doc.md#L1\",\"knowledge_scope_id\":\"1\",\"knowledge_scope_type\":\"project\",\"relevance_score\":0.9}],\"request_id\":\"00000000-0000-4000-8000-000000000000\",\"gaps\":[{\"description\":\"insufficient evidence\",\"suggested_action\":\"broaden the query\"}]},\"isError\":false}"
+    },
+    "no_evidence": {
+      "body_keys": [
+        "completion_status",
+        "evidence",
+        "request_id"
+      ],
+      "pretty_mirror": "{\n  \"completion_status\": \"no_evidence\",\n  \"evidence\": [],\n  \"request_id\": \"00000000-0000-4000-8000-000000000000\"\n}",
+      "wire": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"completion_status\\\": \\\"no_evidence\\\",\\n  \\\"evidence\\\": [],\\n  \\\"request_id\\\": \\\"00000000-0000-4000-8000-000000000000\\\"\\n}\"}],\"structuredContent\":{\"completion_status\":\"no_evidence\",\"evidence\":[],\"request_id\":\"00000000-0000-4000-8000-000000000000\"},\"isError\":false}"
+    },
+    "failed": {
+      "body_keys": [
+        "completion_status",
+        "evidence",
+        "error",
+        "request_id"
+      ],
+      "pretty_mirror": "{\n  \"completion_status\": \"failed\",\n  \"evidence\": [],\n  \"error\": {\n    \"code\": \"SYSTEM_ERROR\",\n    \"message\": \"boom\"\n  },\n  \"request_id\": \"00000000-0000-4000-8000-000000000000\"\n}",
+      "wire": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"completion_status\\\": \\\"failed\\\",\\n  \\\"evidence\\\": [],\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"SYSTEM_ERROR\\\",\\n    \\\"message\\\": \\\"boom\\\"\\n  },\\n  \\\"request_id\\\": \\\"00000000-0000-4000-8000-000000000000\\\"\\n}\"}],\"structuredContent\":{\"completion_status\":\"failed\",\"evidence\":[],\"error\":{\"code\":\"SYSTEM_ERROR\",\"message\":\"boom\"},\"request_id\":\"00000000-0000-4000-8000-000000000000\"},\"isError\":false}"
+    }
+  }
+}

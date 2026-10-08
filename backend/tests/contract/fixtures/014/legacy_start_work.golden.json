@@ -1,0 +1,25 @@
+{
+  "description": "Legacy start_work serialization (include_working_set=false), frozen by T002",
+  "tool": "start_work",
+  "serializer": "json.dumps(body, ensure_ascii=False, separators=(',', ':')) via memory_result + CallToolResult.model_dump_json(by_alias=True, exclude_none=True)",
+  "include_working_set_false": {
+    "arguments": {
+      "scope_ref": "1"
+    },
+    "body_keys": [
+      "scope",
+      "domain_brief",
+      "digest",
+      "working_set",
+      "read_guidance",
+      "counts",
+      "package_fingerprint",
+      "request_id"
+    ],
+    "working_set_keys": [
+      "memories"
+    ],
+    "mirror": "{\"scope\":{\"knowledge_scope_id\":1,\"slug\":\"demo\"},\"domain_brief\":{\"domain_key\":\"coding\",\"description\":\"brief\",\"policy_fingerprint\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"digest\":{\"memories\":[]},\"working_set\":{\"memories\":[]},\"read_guidance\":\"Verify anchors.\",\"counts\":{\"returned\":0,\"characters\":1,\"failed_paths\":[],\"truncated_by_budget\":0},\"package_fingerprint\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"request_id\":\"00000000-0000-4000-8000-000000000000\"}",
+    "wire": "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"scope\\\":{\\\"knowledge_scope_id\\\":1,\\\"slug\\\":\\\"demo\\\"},\\\"domain_brief\\\":{\\\"domain_key\\\":\\\"coding\\\",\\\"description\\\":\\\"brief\\\",\\\"policy_fingerprint\\\":\\\"0000000000000000000000000000000000000000000000000000000000000000\\\"},\\\"digest\\\":{\\\"memories\\\":[]},\\\"working_set\\\":{\\\"memories\\\":[]},\\\"read_guidance\\\":\\\"Verify anchors.\\\",\\\"counts\\\":{\\\"returned\\\":0,\\\"characters\\\":1,\\\"failed_paths\\\":[],\\\"truncated_by_budget\\\":0},\\\"package_fingerprint\\\":\\\"1111111111111111111111111111111111111111111111111111111111111111\\\",\\\"request_id\\\":\\\"00000000-0000-4000-8000-000000000000\\\"}\"}],\"structuredContent\":{\"scope\":{\"knowledge_scope_id\":1,\"slug\":\"demo\"},\"domain_brief\":{\"domain_key\":\"coding\",\"description\":\"brief\",\"policy_fingerprint\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"digest\":{\"memories\":[]},\"working_set\":{\"memories\":[]},\"read_guidance\":\"Verify anchors.\",\"counts\":{\"returned\":0,\"characters\":1,\"failed_paths\":[],\"truncated_by_budget\":0},\"package_fingerprint\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"request_id\":\"00000000-0000-4000-8000-000000000000\"},\"isError\":false}"
+  }
+}
