@@ -90,6 +90,11 @@ def _usable_timestamp(value):
         return None
 
 
+def _derived_count(derived) -> int:
+    """Total derived working-set items across the three buckets."""
+    return sum(len(derived.get(bucket) or ()) for bucket in ("open_items", "recent_activity", "procedural"))
+
+
 def memory_visible(row, *, point, now, include_superseded=False):
     allowed = {"active", "superseded"} if include_superseded else {"active"}
     if row["status"] not in allowed or point is None and row.get("retention_stage") == "archived":
@@ -642,9 +647,13 @@ class MemoryReader:
                       and memory_visible(row, point=None, now=now)]
         return sorted(candidates, key=lambda row: (row["observed_at"], row["memory_id"]), reverse=True)
 
-    async def start_work(self, *, scope_ref, session_id=None, task_hint=None, agent_id=None, include="both", budget="standard"):
+    async def start_work(self, *, scope_ref, session_id=None, task_hint=None, agent_id=None, include="both",
+                         budget="standard", include_working_set=False):
         if include != "both" or budget not in {"standard", "compact", "minimal"}:
             raise ValueError("MEMORY_PROVENANCE_INVALID: package options")
+        if not isinstance(include_working_set, bool):
+            # StrictBool at the tool boundary; the service rejects a non-bool too.
+            raise ValueError("MEMORY_PROVENANCE_INVALID: include_working_set")
         if session_id is not None:
             UUID(session_id)
         async with asyncio.timeout(2):
@@ -721,6 +730,61 @@ class MemoryReader:
                 body["counts"].pop("returned", None)
             if package_size() > total:
                 raise ValueError("MEMORY_PROVENANCE_INVALID: start_work budget cannot fit required envelope")
+
+            if include_working_set:
+                # 014 (T035): the derived working set is appended *inside the same
+                # ``working_set`` object*, so the legacy form stays byte-identical
+                # and the two shapes are mutually exclusive. read_guidance is never
+                # cropped; the derived buckets yield first, then the digest.
+                from rag_mcp.orchestration.working_set import assemble_working_set
+                from rag_mcp.services.memory_policy import MemoryPolicy
+
+                policy = MemoryPolicy.model_validate(profile.memory_policy or {})
+                limits = {
+                    "open_items": policy.working_set_max_open_items,
+                    "recent_activity": policy.working_set_max_recent_activity,
+                    "procedural": policy.working_set_max_procedural,
+                }
+                derived = assemble_working_set(
+                    rows=rows,
+                    explicit_session_id=session_id,
+                    snapshot_at=None,
+                    remaining_characters=10 ** 9,
+                    limits=limits,
+                )
+                body["working_set"]["working_set"] = derived
+                body["counts"]["working_set_returned"] = _derived_count(derived)
+
+                def derived_total():
+                    return _derived_count(derived)
+
+                while package_size() > total:
+                    trimmed = False
+                    for bucket in ("procedural", "recent_activity", "open_items"):
+                        if derived[bucket]:
+                            removed = derived[bucket].pop()
+                            derived["truncated"] = True
+                            derived["decisions"].append(
+                                {"memory_id": removed["memory_id"], "decision": "truncated"})
+                            body["counts"]["truncated_by_budget"] += 1
+                            trimmed = True
+                            break
+                    if not trimmed and digest:
+                        digest.pop()
+                        body["counts"]["returned"] = len(digest) + len(working_set)
+                        body["counts"]["truncated_by_budget"] += 1
+                        trimmed = True
+                    if not trimmed and working_set:
+                        working_set.pop()
+                        body["counts"]["returned"] = len(digest) + len(working_set)
+                        body["counts"]["truncated_by_budget"] += 1
+                        trimmed = True
+                    if not trimmed:
+                        break
+                body["counts"]["working_set_returned"] = derived_total()
+                if package_size() > total:
+                    raise ValueError("MEMORY_PROVENANCE_INVALID: start_work budget cannot fit required envelope")
+
             body["counts"]["characters"] = serialized_characters(body)
             body["package_fingerprint"] = hashlib.sha256(canonical({key: value for key, value in body.items()
                                                                    if key != "package_fingerprint"}).encode()).hexdigest()
