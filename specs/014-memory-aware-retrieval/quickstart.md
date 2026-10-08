@@ -169,21 +169,32 @@ python ..\eval\run_comparison.py --output ..\eval\runs\<run-id>\retrieval-regres
 | 工具面（writer / reader） | writer = `search_knowledge, get_evidence, list_knowledge_domains, recall_memory, start_work, record_memory`（6）；reader = 去掉 `record_memory`（5） | `python -m pytest tests/contract/test_012_actual_tool_surface.py -q` → **13 passed in 8.28s** |
 | `search_knowledge` 输入面 | 9 属性 `query/project_scope/domain_scope/top_k/task_context`（+ 007/009 既有）；**不调用 `close_input_schema`** | `backend/src/rag_mcp/mcp/search_knowledge.py` 无 `close_input_schema` 调用点 |
 
-### 9.2 依赖服务可用性（2026-10-09 实测 TCP 探针，timeout 0.4s）
+### 9.2 依赖服务可用性（2026-10-09 实测）
 
-| 服务 | 端点 | 状态 |
+**修正（同日，T031 执行期间发现）**：最初只探测了 `127.0.0.1`，得出"PG/Qdrant 关闭"的结论是**不完整**的。仓库根 `.env` 把两个服务都指向远端主机：
+
+| 服务 | 配置来源与端点 | 状态 |
 |---|---|---|
-| PostgreSQL | `127.0.0.1:5432` | **CLOSED**（TimeoutError） |
-| Qdrant | `127.0.0.1:6333` | **CLOSED**（TimeoutError） |
+| PostgreSQL | `.env` 的 `DATABASE_URL` → `postgresql+asyncpg://***@106.55.49.216:7899/rag_mcp` | **可用**（实测） |
+| Qdrant | `.env` 的 `QDRANT_URL` → `http://106.55.49.216:6333` | **可用**（实测，dense 路径实际返回分数） |
+| 本机 PostgreSQL | `127.0.0.1:5432` | CLOSED（本地未部署） |
+| 本机 Qdrant | `127.0.0.1:6333` | CLOSED（本地未部署） |
 | DSH Web GUI | `127.0.0.1:3080` | OPEN |
-| MCP writer 端点 | `127.0.0.1:18080` | **CLOSED** |
-| MCP reader 端点 | `127.0.0.1:18081` | **CLOSED** |
-| MCP 默认端点 | `127.0.0.1:8080` | **CLOSED** |
+| MCP writer / reader / 默认 端点 | `127.0.0.1:18080` / `18081` / `8080` | **CLOSED**（未启动 MCP 服务） |
 
-**结论**：本机当前**不具备** PostgreSQL/Qdrant/MCP 端点前置条件。因此：
+**可用性实测证据（本轮真实执行）**：
 
-- §2（附加层与独立降级）、§3（已交付集）、§6（对照闸门）、§7（三宿主冒烟与回归）中依赖真实 PG/Qdrant/MCP 的步骤，在本基线环境下**未执行**；
-- 未执行项**不得**记为通过；实施期只能以「契约/纯函数层测试 + 静态守卫 + 隔离 FS 验证」作为可复现代理证据，并在最终报告中如实标注真实环境证据缺口。
+| 命令 | 实测结果 |
+|---|---|
+| `python -m pytest tests/integration/test_012_live_reader.py -q` | **5 passed in 34.24s**（证明远端 PG 可用，dense/Qdrant 路径可用） |
+| `python -m pytest tests/integration/test_014_memory_e2e.py -q` | **3 passed in 23.45s**（014 三通道去重 / 致空态 / 跨域隔离，真实 PG+Qdrant） |
+| `python -m pytest tests/unit/test_consolidation_link_expansion.py -q` | 3 failed（**013 写入隔离门**：需显式 `CONSOLIDATION_ISOLATED_DATABASE`，属既有纪律，不是 014 回归） |
+| `python -m pytest tests/integration/test_012_memory_e2e.py`、`tests/integration/test_013_consolidation_e2e.py` | **未执行**（T062 待跑；013 需隔离库） |
+
+**结论**：本环境**具备** PG/Qdrant 前置条件（远端共享实例，仓库既有 012 live 验收即写此库），但**不具备** MCP 端点与"显式隔离库"。因此 §2、§3、§5、§7 中真实 PG/Qdrant 可执行步骤**必须实际执行**并留证；仅依赖 MCP 端点或隔离库的步骤（宿主冒烟、013 写入类 E2E）不得记为通过。写入均为随机命名的临时作用域（`reader-<snowflake>`），不修改既有数据。
+
+**副作用如实记录**：T031 首次执行时测试前提有误（对未携带该 `session_id` 的记忆做会话过滤），产生 4 个临时作用域与少量事件/审计行的写入；已修正为"记录时即绑定 session_id"，并保留本注记。
+
 
 ### 9.3 既有测试基线（`cd backend`）
 
