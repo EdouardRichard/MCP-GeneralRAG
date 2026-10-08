@@ -58,9 +58,32 @@ class MemoryPolicy(BaseModel):
     consolidation: ConsolidationPolicy | None = None
     link_expansion_enabled: StrictBool = False
     attach_min_score: float = Field(default=0., ge=0, le=1, allow_inf_nan=False)
+    # --- 014 (data-model §3): additive optional keys for memory-aware retrieval.
+    # Every new key has a default, so an existing profile without it keeps the
+    # current behaviour inactive. `attach_min_score` above is deliberately NOT
+    # re-defaulted: changing it would move the domain `policy_hash` that 013's
+    # gate registrations were bound to.
+    attach_conservative_min_score: float = Field(default=.50, ge=0, le=1, allow_inf_nan=False)
+    attach_top_k: int = Field(default=3, ge=1, le=5)
+    attach_max_chars: int = Field(default=800, ge=200, le=800)
+    attach_excerpt_chars: int = Field(default=200, ge=1, le=200)
+    attach_timeout_ms: int = Field(default=800, ge=1, le=800)
+    delivered_ttl_seconds: int = Field(default=3600, ge=60, le=86400)
+    working_set_max_open_items: int = Field(default=3, ge=1, le=5)
+    working_set_max_recent_activity: int = Field(default=3, ge=1, le=5)
+    working_set_max_procedural: int = Field(default=2, ge=1, le=5)
 
     @model_validator(mode="after")
     def explicit_consolidation(self):
         if self.consolidation_enabled and self.consolidation is None:
             raise ValueError("enabled consolidation requires explicit configuration")
+        return self
+
+    @model_validator(mode="after")
+    def ordered_attach_thresholds(self):
+        # Fail closed rather than silently clamping: a conservative threshold below
+        # the permissive one would make the "no memory_context"档 less strict than
+        # the documented "宁缺勿滥" behaviour.
+        if self.attach_conservative_min_score < self.attach_min_score:
+            raise ValueError("attach_conservative_min_score must be >= attach_min_score")
         return self
