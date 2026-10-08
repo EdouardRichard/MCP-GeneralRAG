@@ -1,0 +1,26 @@
+{
+  "schema_version": "014.1",
+  "report_type": "target-host-smoke",
+  "run_id": "014-projection-20261008184839",
+  "generated_at": "2026-10-08T18:48:57.131180+00:00",
+  "hosts": {
+    "dsh": {
+      "must_pass": true,
+      "status": "failed",
+      "work_package_continuation_observed": false,
+      "projection_direct_read_observed": false,
+      "reason": "no DSH/MCP endpoint was reachable, so neither the work-package continuation nor a host read of the projection path was observed; an unobserved must-pass host is recorded as failed"
+    },
+    "chatgpt_app": {
+      "must_pass": false,
+      "status": "not_executed",
+      "reason": "no ChatGPT App MCP client is configured in this environment; availability only, never recorded as passed"
+    },
+    "claude_code": {
+      "must_pass": false,
+      "status": "not_executed",
+      "reason": "the Claude Code MCP configuration lists no rag-mcp server; availability only, never recorded as passed"
+    }
+  },
+  "summary": "convergence is NOT declared: the DSH must-pass smoke did not pass"
+}
