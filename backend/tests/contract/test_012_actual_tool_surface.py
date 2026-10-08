@@ -38,7 +38,10 @@ async def test_generated_memory_schema_exposes_contract_inputs_only():
         "recall_memory": {"scope_ref", "query", "memory_ids", "kind", "session_id", "agent_id", "time_window",
                           "as_of", "include_superseded", "include_delivered", "limit",
                           "include_linked", "include_context"},
-        "start_work": {"scope_ref", "session_id", "task_hint", "agent_id", "include", "budget"},
+        "start_work": {"scope_ref", "session_id", "task_hint", "agent_id", "include", "budget",
+                       # 014 T036: one additive explicit StrictBool switch selecting the
+                       # derived working-set form; default false keeps the 012 package.
+                       "include_working_set"},
     }
     for name, fields in expected.items():
         schema = tools[name].inputSchema
