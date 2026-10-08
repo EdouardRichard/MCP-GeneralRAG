@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/working-set-item.schema.json",
+  "title": "Working Set Item (014)",
+  "description": "工作集三类派生桶（open_items / recent_activity / procedural）共用的条目形态。由 orchestration/working_set.py 纯函数产出：无 LLM、无 IO、无墙钟；相同输入与相同数据版本必须字节一致。条目一律满足共享可见性谓词（status=active、retention_stage=active、valid_to 为空、未过期、valid_from 不晚于 observed_at），其中有效期与过期判定相对数据派生的 snapshot_at（该作用域内 max(observed_at)），不使用墙钟。作用域由包级 scope 承载（单次组装只服务一个已解析作用域，条目 MUST NOT 越域），因此条目不重复携带 scope 字段；provenance/evidence_refs 为条目的可定位性依据（宪法 IV 记忆侧语义，不含 source_position）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "kind",
+    "provenance",
+    "confidence",
+    "evidence_refs",
+    "inference_meta",
+    "content_excerpt",
+    "truncated",
+    "observed_at"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "enum": [
+        "episodic",
+        "semantic",
+        "procedural"
+      ]
+    },
+    "provenance": {
+      "enum": [
+        "hard",
+        "soft",
+        "distilled"
+      ],
+      "description": "必带 provenance 标注"
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "evidence_refs": {
+      "type": "array"
+    },
+    "inference_meta": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "content_excerpt": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "observed_at": {
+      "type": "string"
+    }
+  }
+}

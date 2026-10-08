@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/mcp-start-work.input.schema.json",
+  "title": "start_work Input Schema (014)",
+  "description": "会话开局包输入（014 工作集扩展）。既有六个属性、required 与 additionalProperties:false 逐字节保持 012 形态；仅追加一个显式开关 include_working_set（默认 false）。开关为 false 时包体形态与字节与 012 一致；不得改用 session_id 作为新形态开关，因为既有调用本就传 session_id 且期望旧的会话过滤形态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope_ref"
+  ],
+  "properties": {
+    "scope_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "task_hint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "include": {
+      "enum": [
+        "both"
+      ],
+      "default": "both"
+    },
+    "budget": {
+      "enum": [
+        "standard",
+        "compact",
+        "minimal"
+      ],
+      "default": "standard"
+    },
+    "include_working_set": {
+      "type": "boolean",
+      "default": false,
+      "description": "014 新增，显式请求工作集组装新形态。false（默认）时 working_set 保持 012 的 {memories} 形态且字节稳定；true 时在同一 working_set 对象内追加三类派生桶与决策记录。不写会话行、不落盘包快照。"
+    }
+  }
+}

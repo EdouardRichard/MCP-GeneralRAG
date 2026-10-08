@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/mcp-start-work.output.schema.json",
+  "title": "start_work Output Schema (014)",
+  "description": "会话开局包输出（014 工作集扩展）。顶层 required 与属性声明顺序沿用 012 schema（仅为声明用途）；运行时与冻结断言的权威顺序为 `scope, domain_brief, digest, working_set, read_guidance, counts, package_fingerprint, request_id`（见 field-order-contract.md §3）。working_set 内部在本 Feature 明确了两种互斥形态：legacy（仅 memories）与 014（memories + 三类派生桶 + 决策记录）。包体不含 request_id/生成时刻等易变字段（L3 注入剔除）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope",
+    "domain_brief",
+    "digest",
+    "working_set",
+    "read_guidance",
+    "package_fingerprint",
+    "counts",
+    "request_id"
+  ],
+  "properties": {
+    "scope": {
+      "type": "object"
+    },
+    "domain_brief": {
+      "type": "object"
+    },
+    "digest": {
+      "type": "object"
+    },
+    "working_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memories": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "legacy 形态与 014 形态都存在：按既有规则装箱的条目"
+        },
+        "working_set": {
+          "type": "object",
+          "description": "014 形态（include_working_set=true）时存在；legacy 调用不出现该键",
+          "additionalProperties": false,
+          "required": [
+            "open_items",
+            "recent_activity",
+            "procedural",
+            "decisions",
+            "truncated",
+            "session_resolved"
+          ],
+          "properties": {
+            "open_items": {
+              "type": "array",
+              "maxItems": 5,
+              "description": "未决事项：无 valid_to 的开放 episodic（合取 active/retention/有效期谓词）",
+              "items": {
+                "$ref": "working-set-item.schema.json"
+              }
+            },
+            "recent_activity": {
+              "type": "array",
+              "maxItems": 5,
+              "description": "已解析会话内的近期 episodic；无会话时为空数组",
+              "items": {
+                "$ref": "working-set-item.schema.json"
+              }
+            },
+            "procedural": {
+              "type": "array",
+              "maxItems": 5,
+              "description": "相关的 procedural 经验；不看相似度、不看频次",
+              "items": {
+                "$ref": "working-set-item.schema.json"
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "description": "append-only 的装箱决策（沿 005 context_selection 词表），使裁剪可观测",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "memory_id",
+                  "decision"
+                ],
+                "properties": {
+                  "memory_id": {
+                    "type": "integer"
+                  },
+                  "decision": {
+                    "enum": [
+                      "selected",
+                      "truncated",
+                      "deduped"
+                    ]
+                  }
+                }
+              }
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "session_resolved": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "解析出的最近会话标识；未解析为 null（计数可见，不报错、不扩大 scope）"
+            }
+          }
+        }
+      }
+    },
+    "read_guidance": {
+      "type": "string"
+    },
+    "package_fingerprint": {
+      "type": "string"
+    },
+    "counts": {
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    }
+  }
+}

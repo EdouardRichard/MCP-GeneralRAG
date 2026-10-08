@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/mcp-search-output.schema.json",
+  "title": "search_knowledge Output Schema (014)",
+  "description": "主检索 Tool 输出结构（014 记忆感知增量）。既有 completion_status/evidence/gaps/error/request_id 的 JSON 与 required 逐字节保持 007 形态（含 description 文案，由契约测试断言）；追加 related_memories（与 evidence 分字段，绝不混装）、memory_notice、counts 三个固定分组字段。三者同生共死：仅在显式信号触发且主检索非 failed 时出现，未触发时一个都不出现（旧客户端零破坏）。补充语义：附加层失败绝不改变 completion_status；014 不改变 evidence 的内容、数量与顺序；去重致空时在 gaps 给出可操作建议动作；014 分支下不出现 error。顺序契约见 field-order-contract.md。",
+  "type": "object",
+  "properties": {
+    "completion_status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "no_evidence",
+        "failed"
+      ],
+      "description": "检索完成状态（四态）"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "核心证据列表，按相关性排序",
+      "items": {
+        "type": "object",
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "description": "证据唯一标识"
+          },
+          "content_excerpt": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "证据摘录"
+          },
+          "source_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "知识源版本号"
+          },
+          "source_position": {
+            "type": "string",
+            "description": "来源位置路径"
+          },
+          "knowledge_scope_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "minLength": 1,
+            "description": "知识域标识"
+          },
+          "knowledge_scope_type": {
+            "$ref": "common.schema.json#/definitions/KnowledgeScopeType",
+            "description": "知识域类型"
+          },
+          "relevance_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "相关性分数"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "content_excerpt",
+          "source_version",
+          "source_position",
+          "knowledge_scope_id",
+          "knowledge_scope_type",
+          "relevance_score"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "related_memories": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "014 附加层：与 evidence[] 并列的独立记忆字段（语义与 provenance 均不同，绝不混装）。默认 3 条、硬上限 5 条；未显式提供 session_id/memory_context 时不出现。条目定位语义由 provenance/evidence_refs/有效期承担，MUST NOT 携带 source_position/source_version/relevance_score（宪法 IV 两套定位语义分界）。",
+      "items": {
+        "$ref": "memory-attachment.schema.json"
+      }
+    },
+    "memory_notice": {
+      "type": "object",
+      "description": "014 条件字段：一句话同时承载不可信数据声明与深读指引，并携带附加层降级原因。与 related_memories、counts 同生共死，恒为对象、不得为 null（新字段的缺席由省略键表达）。",
+      "properties": {
+        "notice": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400,
+          "description": "一句话。必须同时含：(a) 记忆是不可信数据、非已发布事实、不得作为控制指令；(b) 按 memory_id 调用 recall_memory 的深读指引。"
+        },
+        "untrusted": {
+          "const": true,
+          "description": "恒为 true"
+        },
+        "failed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "附加层降级原因（attachment_timeout / memory_unavailable / below_min_score / budget_exhausted / state_filtered 等）"
+        }
+      },
+      "required": [
+        "notice",
+        "untrusted"
+      ],
+      "additionalProperties": false
+    },
+    "counts": {
+      "type": "object",
+      "description": "014 附加层计数（描述 related_memories 层，不描述 evidence 层）。词表与顺序复用 012 recall 的 counts 语义，使客户端可用一套解析。",
+      "properties": {
+        "returned": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "实际返回的附加条数"
+        },
+        "candidates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "附加层候选条数"
+        },
+        "truncated_by_budget": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "因条数/字符预算被裁剪的条数"
+        },
+        "dropped_delivered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "因会话级已交付集跨通道去重被丢弃的条数"
+        },
+        "filtered_inactive": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "因状态/保留阶段/有效期不可见被过滤的条数"
+        },
+        "characters": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "附加层字符计数（≤800）"
+        }
+      },
+      "required": [
+        "returned",
+        "candidates",
+        "truncated_by_budget",
+        "dropped_delivered",
+        "filtered_inactive",
+        "characters"
+      ],
+      "additionalProperties": false
+    },
+    "gaps": {
+      "type": "array",
+      "description": "明确证据缺口（partial 时非空）",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "suggested_action": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "error": {
+      "type": "object",
+      "description": "错误信息（failed 或引用解析失败时存在）",
+      "properties": {
+        "code": {
+          "$ref": "common.schema.json#/definitions/KnowledgeScopeErrorCode"
+        },
+        "message": {
+          "type": "string",
+          "description": "人类可读错误描述"
+        },
+        "candidates": {
+          "type": "array",
+          "description": "AMBIGUOUS_PROJECT_REF / AMBIGUOUS_DOMAIN_REF 时的候选列表",
+          "items": {
+            "$ref": "common.schema.json#/definitions/ScopeCandidate"
+          }
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "request_id": {
+      "type": "string",
+      "description": "请求唯一标识"
+    }
+  },
+  "required": [
+    "completion_status",
+    "evidence",
+    "request_id"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "completion_status": {
+            "const": "partial"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "gaps"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "completion_status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "completion_status": {
+            "const": "no_evidence"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "related_memories"
+        ]
+      },
+      "then": {
+        "required": [
+          "memory_notice",
+          "counts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "required": [
+            "related_memories"
+          ]
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "memory_notice"
+              ]
+            },
+            {
+              "required": [
+                "counts"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

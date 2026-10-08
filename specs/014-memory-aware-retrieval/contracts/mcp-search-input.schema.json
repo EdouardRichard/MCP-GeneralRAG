@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/mcp-search-input.schema.json",
+  "title": "search_knowledge Input Schema (014)",
+  "description": "主检索 Tool 输入参数（014 记忆感知增量）。既有五个属性 query/project_scope/domain_scope/task_context/top_k 的 JSON、required、anyOf 与 additionalProperties:false 逐字节保持 009 形态；仅追加两个可选参数 session_id 与 memory_context。两者均未显式提供时不得产生任何新增输出字段，响应行为与字节与 014 之前完全一致（纯 scope 检索不附加）。运行时不得对 search_knowledge 施加 extra=forbid（须保持历史多余字段被忽略的行为）。",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "自然语言查询或事实性问题",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "project_scope": {
+      "type": "array",
+      "description": "显式项目作用域（兼容形式）。稳定 ID、别名或仓库路径；不提供 domain_scope 时至少一个。",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "maxItems": 10
+    },
+    "domain_scope": {
+      "type": "array",
+      "description": "显式知识域作用域（新形式）。数字 knowledge_scope_id / scope slug / type:name；与 project_scope 并集去重后进入统一解析器。",
+      "items": {
+        "$ref": "common.schema.json#/definitions/KnowledgeDomainReference"
+      },
+      "minItems": 1,
+      "maxItems": 10
+    },
+    "task_context": {
+      "type": "object",
+      "description": "可选任务上下文（域中立）。current_file/current_symbol/work_phase 为编码域约定字段（向后兼容存量客户端）；activity 为任意知识域当前工作描述（域中立一等信号）；additional_context 为补充背景兜底。",
+      "properties": {
+        "current_file": {
+          "type": "string",
+          "description": "编码域约定字段（向后兼容）：当前正在编辑的文件路径"
+        },
+        "current_symbol": {
+          "type": "string",
+          "description": "编码域约定字段（向后兼容）：当前关注的符号名称"
+        },
+        "work_phase": {
+          "type": "string",
+          "enum": [
+            "requirements",
+            "design",
+            "implementation",
+            "testing",
+            "review"
+          ],
+          "description": "编码域约定字段（向后兼容）：当前工作阶段"
+        },
+        "activity": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "当前正在做的事的短描述（任意知识域通用，域中立一等信号）"
+        },
+        "additional_context": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "补充背景兜底（除活动外的约束/偏好/参考等）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "top_k": {
+      "type": "integer",
+      "description": "返回最大证据条数。默认 5，最大 20。",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 20
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "description": "014 新增，可选会话标识（显式信号之一）。显式提供（非 null）时触发附加层，并参与会话级已交付记忆集的跨通道去重；同时为工作集续接提供会话依据。"
+    },
+    "memory_context": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "014 新增，可选记忆上下文（显式信号之一，域中立自由文本，视为不可信数据）。显式提供（非 null）时作为附加层的召回查询并使用 attach_min_score；仅提供 session_id 而未提供本字段时改用更保守的 attach_conservative_min_score（宁缺勿滥）。"
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "project_scope"
+      ]
+    },
+    {
+      "required": [
+        "domain_scope"
+      ]
+    }
+  ],
+  "additionalProperties": false
+}

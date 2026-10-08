@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/memory-attachment.schema.json",
+  "title": "Memory Attachment (014)",
+  "description": "search_knowledge 附加层条目。本 schema 是 014 新增对外契约：字段名与类型沿用 012 memory-entry 的共享词汇（比对基准为 012 memory-entry.schema.json 的字段名/类型/枚举清单 + 运行时 public_entry 形态，由契约测试断言不漂移），并把 content_excerpt 收紧到 200 字、把 injection_flags 与 attach_reason 列为必带，另把 valid_to/superseded_by 固定为 null。与 evidence[] 语义独立，绝不混装：附加条目不得通过 mcp-search-output 的 evidence item schema，反之亦然。定位语义分界（宪法 IV）：记忆条目的可定位性由 provenance/evidence_refs/有效期承担，故本 schema 不定义、也不接受 source_position/source_version/relevance_score；两套定位语义不得混写。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "knowledge_scope_id",
+    "kind",
+    "provenance",
+    "confidence",
+    "content_excerpt",
+    "truncated",
+    "content_length",
+    "evidence_refs",
+    "inference_meta",
+    "valid_from",
+    "valid_to",
+    "observed_at",
+    "session_id",
+    "agent_id",
+    "status",
+    "superseded_by",
+    "injection_flags",
+    "attach_reason",
+    "match"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "记忆唯一标识"
+    },
+    "knowledge_scope_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "必须等于请求解析出的 scope 之一（隔离键随行）"
+    },
+    "kind": {
+      "enum": [
+        "episodic",
+        "semantic",
+        "procedural"
+      ]
+    },
+    "provenance": {
+      "enum": [
+        "hard",
+        "soft",
+        "distilled"
+      ],
+      "description": "必带 provenance 标注；缺失即整条不合格"
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "hard 为 null；soft/distilled 为 [0,1] 有限数"
+    },
+    "title": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "content_excerpt": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "014 收紧：≤200 字（012 memory-entry 为 300）"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "content_length": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "evidence_refs": {
+      "type": "array"
+    },
+    "inference_meta": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "soft/distilled 必非空且含五元键 source/confidence/model_version/time/supporting_evidence"
+    },
+    "valid_from": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "valid_to": {
+      "type": "null",
+      "description": "附加条目恒为 null（未关闭）；非 null 即缺陷"
+    },
+    "observed_at": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "agent_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "active"
+      ],
+      "description": "仅 active 可进入附加层；quarantined/superseded/retired/archived/过期在组装前排除"
+    },
+    "superseded_by": {
+      "type": "null",
+      "description": "附加条目恒为 null"
+    },
+    "injection_flags": {
+      "type": "object",
+      "description": "注入标记随行；无标记时为 {}"
+    },
+    "attach_reason": {
+      "enum": [
+        "session_recent",
+        "context_match",
+        "session_and_context"
+      ],
+      "description": "附加原因（可读枚举，供宿主与审计理解触发依据）"
+    },
+    "match": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "原始排序分量（dense_similarity/recency_rank/kind_rank/salience/fused_score）；阈值判定的取值为本对象内的 dense_similarity（见 FR-006/T017），保留原始分量、不合成 relevance_score"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "enum": [
+              "soft",
+              "distilled"
+            ]
+          }
+        },
+        "required": [
+          "provenance"
+        ]
+      },
+      "then": {
+        "required": [
+          "inference_meta"
+        ],
+        "properties": {
+          "inference_meta": {
+            "type": "object",
+            "required": [
+              "source",
+              "confidence",
+              "model_version",
+              "time",
+              "supporting_evidence"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "const": "hard"
+          }
+        },
+        "required": [
+          "provenance"
+        ]
+      },
+      "then": {
+        "properties": {
+          "confidence": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

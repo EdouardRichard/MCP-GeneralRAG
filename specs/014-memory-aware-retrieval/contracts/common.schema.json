@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/014/common.schema.json",
+  "title": "Common Schema Definitions (014, carried from 009 + 007 ScopeCandidate)",
+  "description": "检索编排域中立化共享类型定义。SourcePosition 描述由 Java 符号单例替换为定位前缀规范表（对齐 008 locator-prefixes.md）。KnowledgeDomainReference 等定义沿用 007。其他 009 schema 通过 $ref 引用本文件 definitions。",
+  "type": "object",
+  "definitions": {
+    "DomainKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "域档案稳定标识（se-project / generic / legal …）"
+    },
+    "ScopeSlug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "知识域全局唯一按名寻址标识（跨 project/public；仅 domain_scope 参数内解析；创建后不可变）"
+    },
+    "KnowledgeDomainReference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "domain_scope 条目：数字 knowledge_scope_id（任意 scope_type，限活跃域）、scope slug，或 type:name 限定引用（如 public:法规库）"
+    },
+    "KnowledgeScopeType": {
+      "type": "string",
+      "enum": [
+        "project",
+        "public"
+      ],
+      "description": "知识域结构轴类型（闭合二元）"
+    },
+    "ScopeCandidate": {
+      "type": "object",
+      "description": "引用歧义时返回的候选（AMBIGUOUS_PROJECT_REF 旧形态 / AMBIGUOUS_DOMAIN_REF 新形态的统一超集；旧码响应字节级保持 1.0 形态，新码响应增量携带 scope_type/domain_key/slug）",
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "description": "项目稳定 ID（仅旧 project_scope 形态候选）"
+        },
+        "scope_id": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "知识域稳定 ID（仅 domain_scope 形态候选）"
+        },
+        "name": {
+          "type": "string",
+          "description": "名称"
+        },
+        "alias": {
+          "type": "string",
+          "description": "项目别名（仅旧形态候选，如有）"
+        },
+        "repo_path": {
+          "type": "string",
+          "description": "仓库路径（仅旧形态候选，如有）"
+        },
+        "scope_type": {
+          "$ref": "#/definitions/KnowledgeScopeType",
+          "description": "知识域类型（仅 domain_scope 形态候选）"
+        },
+        "domain_key": {
+          "$ref": "#/definitions/DomainKey",
+          "description": "域档案标识（仅 domain_scope 形态候选）"
+        },
+        "slug": {
+          "$ref": "#/definitions/ScopeSlug",
+          "description": "按名寻址标识（仅 domain_scope 形态候选）"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeScopeErrorCode": {
+      "type": "string",
+      "enum": [
+        "SYSTEM_ERROR",
+        "MISSING_PROJECT_SCOPE",
+        "AMBIGUOUS_PROJECT_REF",
+        "INVALID_PROJECT_REF",
+        "INDEX_UNAVAILABLE",
+        "MISSING_KNOWLEDGE_SCOPE",
+        "AMBIGUOUS_DOMAIN_REF"
+      ],
+      "description": "错误码枚举（只增不删）：旧码沿用，新增 domain_scope 双轨新码（MISSING_KNOWLEDGE_SCOPE / AMBIGUOUS_DOMAIN_REF）"
+    },
+    "SourcePosition": {
+      "type": "string",
+      "description": "来源位置路径（定位前缀规范表，对齐 008 locator-prefixes.md）。前缀/形态：`# 标题路径`（markdown/word/转换层 html/pptx，如 `# 安装 > ## 配置`）；`page:N [§ 编号路径]`（pdf，如 `page:3 § 2.1`）；全限定符号路径（java/go/python，如 `com.example.Foo#bar()`）；结构路径（openapi 如 `GET /pets`、ddl 如 `schema.table`）；`sheet:<名>`（xlsx 工作表名 / csv 文件基名）；`path:/key/sub`（json/yaml/xml 键/元素路径）；`msg:<Subject>`（eml）。转换层格式定位粒度为转换后表示，不做原文档锚点还原（docx 段 ID、PDF 坐标、Excel 单元格坐标）。"
+    }
+  }
+}
