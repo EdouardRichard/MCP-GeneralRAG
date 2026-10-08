@@ -108,13 +108,26 @@ def build_report(bound, *, variant='consolidated_candidate_expansion', passed=Tr
             'evidence_paths': ['evidence/test.txt'], 'failed_paths': []}
 
 
+def default_expiry():
+    """A proof installed right now carries an expiry relative to the wall clock.
+
+    It must not be a fixed calendar stamp: production paths such as
+    ``MemoryService.recall`` evaluate the gate at the real time, so tying the
+    default to the frozen ``NOW`` silently turned every default registry into an
+    expired one the day after it was written (observed on 2026-10-08, when
+    ``NOW + 1 day`` was already in the past). The frozen ``NOW`` remains the
+    evaluation clock for the pure gate tests that pass it explicitly.
+    """
+    return datetime.now(UTC) + timedelta(days=1)
+
+
 def install_registry(directory, bound, report_body, *, expires=None):
     """Deployer-style atomic install of one registry entry plus its report bytes."""
     directory = Path(directory)
     raw = json.dumps(report_body).encode()
     entry = {'gate_binding': bound, 'report_path': 'reports/report.json',
              'report_sha256': sha256(raw).hexdigest(),
-             'expires_at': (expires or (NOW + timedelta(days=1))).isoformat()}
+             'expires_at': (expires or default_expiry()).isoformat()}
     (directory / 'reports').mkdir(parents=True, exist_ok=True)
     (directory / 'reports/report.json').write_bytes(raw)
     registry = directory / 'registry.json'
