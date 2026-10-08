@@ -1,0 +1,492 @@
+{
+  "dataset_version": "014.eval.1",
+  "frozen": {
+    "budget": "014.budget.1: k=5, attach_top_k=3, attach_max_items=5, attach_max_chars=800, attach_excerpt_chars=200, attach_timeout_ms=800",
+    "clock": "2026-10-07T04:53:29+00:00",
+    "implementation": "b2a7932f32c40ce9d616eeab2520f89bbf8240dd",
+    "model": "none",
+    "policy": "014.memory_policy.1: delivered_ttl_seconds=3600 (approved replacement of 012's 7-day expires_at dedup window), include_delivered=false, both 014 deployment switches default false",
+    "prompt": "none (014 has no LLM in the control path)",
+    "recall": "014.recall.1: memory_context-first recall with session_id filter pushdown; attach_min_score with context, conservative attach_conservative_min_score without",
+    "schema": "urn:rag-mcp:014:memory-attachment:1 + urn:rag-mcp:014:working-set-item:1",
+    "snapshot": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
+    "vocabulary": "014.counts.1: returned/candidates/truncated_by_budget/dropped_delivered/filtered_inactive/characters"
+  },
+  "snapshot_hash": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
+  "scope_id": "366084747748704256",
+  "source": {
+    "scope_id": "366084747748704256",
+    "scope_slug": "generic-eval-meeting-notes",
+    "corpus": "eval/corpora/generic/team_meeting_notes.md",
+    "snapshot": "sealed 013 authority snapshot of the same frozen scope; its digest, frozen clock and the real memory event lineage are recorded in eval/consolidation_eval_dataset.json",
+    "grounding": [
+      "eval/consolidation_eval_dataset.json",
+      "eval/corpora/generic/team_meeting_notes.md",
+      "eval/ingest_domain_corpora.py"
+    ],
+    "ai_drafted": true,
+    "human_review": "pending T053 human review; every query _meta.review_status is pending_review"
+  },
+  "k": 5,
+  "explicit_criterion": {
+    "minimum_completed_with_memory": 12,
+    "per_category_minimum_completed": 1,
+    "queries_total": 16,
+    "source": "pre-frozen with the dataset before any run (contracts/continuity-evaluation-contract.md §3: default >=12/15 and each of the four categories >=1; queries_total is 16 here)"
+  },
+  "queries": [
+    {
+      "query_id": "q_resume_01",
+      "category": "resume_after_break",
+      "language": "en",
+      "question": "I am resuming work after a session break. Which outstanding action item about CPU reranker latency is still open, who owns it, and what is its due date?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "memory_id": "366085127752646656",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-owner-wei",
+          "reason": "the CPU reranker latency benchmark is owned by Li, never by Wei",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must name Li as the owner and 2026-09-08 as the due date of the outstanding CPU reranker latency benchmark; it must not assign that action item to Wei.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): resume_after_break scenario built from the real 2026-09-01 action item 'Li: benchmark reranker latency on CPU instances (due 2026-09-08)'; the required item is anchored on the heading plus the stable action token, and the cited memory event is the real procedural duplicate recorded in the frozen snapshot.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync' (action items 1-2); real memory event lineage in eval/consolidation_eval_dataset.json (366085127752646656)"
+      }
+    },
+    {
+      "query_id": "q_resume_02",
+      "category": "resume_after_break",
+      "language": "zh",
+      "question": "断线重连后继续之前的工作：2026-09-01 周会上魏（Wei）认领的待办是什么，截止日期是哪天？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-eval-dataset-owner-li",
+          "reason": "该待办由 Wei 认领，归给 Li 即判不通过",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须给出 Wei 认领的「发布格式扩展评测数据集」待办且截止日期为 2026-09-05；不得把该待办归给 Li。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 断点续接场景，取自真实行动项 'Wei: publish the new eval dataset for format expansion (due 2026-09-05)'；本轮不使用运行时 memory_id，仅靠作用域 slug + 标题/条目锚点定位。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync' (action item 1)"
+      }
+    },
+    {
+      "query_id": "q_resume_03",
+      "category": "resume_after_break",
+      "language": "en",
+      "question": "Where did we leave the frontend management console rewrite: who owns it now, and which stack was chosen?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "memory_id": "366085087126618112",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "reason": "the Wei Zhang assignment was superseded and must not be presented as the current owner",
+          "kind": "superseded_item"
+        }
+      ],
+      "criterion": "The answer must name Maria Rodriguez as the current owner of the frontend management console rewrite (React + antd); it must not present Wei Zhang as the current owner.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): resume_after_break framing on the real corrected ownership ('Maria will own the frontend management console rewrite (React + antd)'), with the superseded Wei Zhang assignment frozen as the forbidden item.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync'; real memory events in eval/consolidation_eval_dataset.json (366085087126618112 current, 366085076624080896 superseded)"
+      }
+    },
+    {
+      "query_id": "q_resume_04",
+      "category": "resume_after_break",
+      "language": "zh",
+      "question": "恢复上次被中断的会话：请列出当前仍开放的待办清单（负责人 + 截止日期）。",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "require_citation": true
+        },
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "memory_id": "366085127752646656",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:open-items-none",
+          "reason": "至少有两项待办仍未完成，声称没有开放待办即判不通过",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须同时给出两项开放待办：Wei 的格式扩展评测数据集发布（截止 2026-09-05）与 Li 的 CPU 重排延迟基准（截止 2026-09-08）；不得声称当前没有开放待办。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 断点续接的完整恢复清单，要求两条真实行动项同时命中且各自可定位引用；禁止项覆盖『无开放待办』的空态误答。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync' (action items 1-2); real memory event in eval/consolidation_eval_dataset.json (366085127752646656)"
+      }
+    },
+    {
+      "query_id": "q_recall_01",
+      "category": "recall_last_decision",
+      "language": "en",
+      "question": "Which embedding model upgrade did the team approve in the 2026-09-01 sync, and which model did it replace?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "memory_id": "366085067493081088",
+          "require_citation": true
+        },
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "memory_id": "366085059708452864",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:text-embedding-3-large-is-current",
+          "reason": "text-embedding-3-large was superseded by BAAI/bge-m3 and must not be presented as the approved upgrade",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must name BAAI/bge-m3 as the approved upgrade and text-embedding-3-large as the superseded predecessor; it must not present text-embedding-3-large as the current choice.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): recall_last_decision on the real correction pair (approved upgrade -> BAAI/bge-m3, predecessor -> text-embedding-3-large); both historical and current lineage entries must be cited.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync'; real memory events in eval/consolidation_eval_dataset.json (366085067493081088 current, 366085059708452864 superseded)"
+      }
+    },
+    {
+      "query_id": "q_recall_02",
+      "category": "recall_last_decision",
+      "language": "zh",
+      "question": "2026-08-25 架构评审定下的检索作用域规则是什么？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:implicit-whole-library-search-allowed",
+          "reason": "隐式全库检索被明令禁止，声称其被允许即判不通过",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须给出「每个检索请求都必须携带显式作用域引用，禁止隐式全库检索」这一结论；不得声称允许隐式全库检索。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 上次决策召回，锚定架构评审纪要中的作用域规则段；memory_id 为冻结快照内真实事件，仅作同快照一致性校验。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085012090519552)"
+      }
+    },
+    {
+      "query_id": "q_recall_03",
+      "category": "recall_last_decision",
+      "language": "en",
+      "question": "How does the team express per-domain format and vocabulary differences, per the 2026-08-25 architecture review?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles",
+          "memory_id": "366085099046830080",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:domain-code-branches-required",
+          "reason": "domain differences are declared through domain profiles, not code branches",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must state that domain differences are expressed declaratively through domain profiles instead of code paths; it must not state that per-domain code branches are required.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): recall_last_decision on the architecture review's declarative-domain-profiles decision; the required anchor is the heading plus the stable decision token, and the memory event is a real recorded duplicate of that decision.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085099046830080)"
+      }
+    },
+    {
+      "query_id": "q_recall_04",
+      "category": "recall_last_decision",
+      "language": "zh",
+      "question": "2026-09-01 周会上混合检索 A/B 实验的 Recall@5 结论是什么？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-not-significant",
+          "reason": "A/B 实验已达统计显著，声称未达显著即判不通过",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须给出混合检索 Recall@5 从 0.71 提升到 0.79 且相对稠密基线达到统计显著；不得声称该 A/B 实验未达统计显著。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 周会决策召回，事实取自真实会议纪要正文（0.71 -> 0.79，statistical significance）；该结论只有语料结构锚点、无对应记忆事件，故本轮不写 memory_id。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync' (agenda and decisions)"
+      }
+    },
+    {
+      "query_id": "q_lesson_01",
+      "category": "lesson_effective",
+      "language": "en",
+      "question": "A teammate proposes assigning the frontend management console rewrite to Wei Zhang again. Applying the lesson we already learned, what must the answer correct?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "memory_id": "366085087126618112",
+          "require_citation": true
+        },
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "memory_id": "366085076624080896",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-owner-still-wei",
+          "reason": "accepting the stale assignment repeats the corrected mistake",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must correct the proposal: the assignment to Wei Zhang was superseded and Maria Rodriguez is the current owner; it must not accept Wei Zhang as the current owner.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): lesson_effective scenario that forces the correction lineage (superseded Wei Zhang assignment + current Maria Rodriguez ownership) to be applied against a repeated proposal.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync'; real memory events in eval/consolidation_eval_dataset.json (366085087126618112 current, 366085076624080896 superseded)"
+      }
+    },
+    {
+      "query_id": "q_lesson_02",
+      "category": "lesson_effective",
+      "language": "zh",
+      "question": "有人再次提议把 text-embedding-3-large 作为下一个版本的嵌入模型；根据已有教训，应如何纠正？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "memory_id": "366085067493081088",
+          "require_citation": true
+        },
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "memory_id": "366085059708452864",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:text-embedding-3-large-is-current",
+          "reason": "把已被取代的模型当作当前批准方案即判不通过",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须纠正该提议：已批准的升级是 BAAI/bge-m3，text-embedding-3-large 已被取代；不得把 text-embedding-3-large 当作当前批准方案。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 教训生效场景，要求复用已被纠正的模型升级决策，阻止旧决策被再次采纳；两条 lineage 条目都必须被引用。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-09-01 Weekly Sync'; real memory events in eval/consolidation_eval_dataset.json (366085067493081088 current, 366085059708452864 superseded)"
+      }
+    },
+    {
+      "query_id": "q_lesson_03",
+      "category": "lesson_effective",
+      "language": "en",
+      "question": "A new retrieval endpoint is being designed to search the whole library when no scope is given. What lesson from the architecture review applies?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:implicit-whole-library-search-allowed",
+          "reason": "the review forbade implicit whole-library search; permitting it repeats the mistake",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must apply the lesson that every retrieval request carries an explicit scope reference and implicit whole-library search is forbidden; it must not permit the implicit whole-library search.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): lesson_effective framing of the architecture review's scope rule against a design that would repeat the forbidden implicit whole-library search.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085012090519552)"
+      }
+    },
+    {
+      "query_id": "q_lesson_04",
+      "category": "lesson_effective",
+      "language": "zh",
+      "question": "为避免重蹈覆辙：为什么不能再按域新增代码分支来表达格式与词表差异？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles",
+          "memory_id": "366085112481185792",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:domain-code-branches-required",
+          "reason": "继续新增按域代码分支即重复已被否决的做法",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须说明域差异通过 domain profiles 声明式表达、不得再用域专属代码分支；不得主张继续新增按域代码分支。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 教训生效场景，复用架构评审的声明式域配置决策；本条的 memory_id 是同一等价组内的第二个真实事件，锚点仍为标题 + 决策 token。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085112481185792)"
+      }
+    },
+    {
+      "query_id": "q_pref_01",
+      "category": "preference_applied",
+      "language": "en",
+      "question": "Following the team's onboarding preference, what should a new member read first, and where is the baseline-rerun procedure documented?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "memory_id": "366085053198893056",
+          "require_citation": true
+        },
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:blueprint-before-constitution",
+          "reason": "the onboarding preference puts the constitution first, not the blueprint",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must state that new members read the constitution first and then the 1.0 architecture blueprint, and that the eval/ README documents how to rerun every baseline report; it must not state that the blueprint comes first.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): preference_applied scenario using the real onboarding preference (constitution first, then the 1.0 blueprint) plus the documented baseline-rerun procedure; the second item is corpus-structural only and carries no memory_id.",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-18 Onboarding Notes'; real memory event in eval/consolidation_eval_dataset.json (366085053198893056)"
+      }
+    },
+    {
+      "query_id": "q_pref_02",
+      "category": "preference_applied",
+      "language": "zh",
+      "question": "按团队约定，新成员的第一份阅读材料应该是什么？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "memory_id": "366085053198893056",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:blueprint-before-constitution",
+          "reason": "约定是先读宪法再读 1.0 架构蓝图",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须指出新成员先读宪法（constitution）、再读 1.0 架构蓝图；不得声称先读 1.0 架构蓝图。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 偏好应用场景，考察既有的入职阅读顺序偏好是否被应用（宪法 -> 1.0 蓝图）。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-18 Onboarding Notes'; real memory event in eval/consolidation_eval_dataset.json (366085053198893056)"
+      }
+    },
+    {
+      "query_id": "q_pref_03",
+      "category": "preference_applied",
+      "language": "en",
+      "question": "A new retrieval client is being wired up. Which standing team preference must every retrieval call in this scope satisfy?",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:scope-optional",
+          "reason": "the scope reference is mandatory, so calling it optional fails the task",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "The answer must state that every retrieval call carries an explicit scope reference and implicit whole-library search is forbidden; it must not state that the scope reference is optional.",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): preference_applied framing of the standing scope-reference requirement (the same real decision anchored with the preference role token to record how it is being applied, not merely recalled).",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085012090519552)"
+      }
+    },
+    {
+      "query_id": "q_pref_04",
+      "category": "preference_applied",
+      "language": "zh",
+      "question": "团队偏好如何表达各域支持的格式与图词表差异？",
+      "scope_id": "366084747748704256",
+      "required_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles",
+          "memory_id": "366085099046830080",
+          "require_citation": true
+        }
+      ],
+      "forbidden_items": [
+        {
+          "locator": "generic-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:domain-code-branches-required",
+          "reason": "团队偏好是声明式域配置，不是按域代码分支",
+          "kind": "banned_claim"
+        }
+      ],
+      "criterion": "答案必须说明团队偏好用 domain profiles 声明式表达各域格式与图词表差异；不得主张用域专属代码分支表达。",
+      "_meta": {
+        "review_status": "pending_review",
+        "review_notes": "AI-drafted, pending human review (T053): 偏好应用场景，考察声明式域配置偏好是否被套用到新的域差异表达需求上。",
+        "grounded_source": "eval/corpora/generic/team_meeting_notes.md > '## 2026-08-25 Architecture Review'; real memory event in eval/consolidation_eval_dataset.json (366085099046830080)"
+      }
+    }
+  ]
+}
