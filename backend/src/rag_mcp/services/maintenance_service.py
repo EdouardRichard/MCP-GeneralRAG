@@ -500,6 +500,44 @@ async def recover_promotion_observations(session):
     return recovered
 
 
+async def run_memory_consumption_reconciliation(session_factory=None, *, scopes=None, now=None) -> dict:
+    """014 T050: reconcile the read-only consumption layer inside the window.
+
+    The periodic maintenance window is the *supplementary* full-layer check
+    required by FR-031a — the event-driven per-scope worker stays the primary
+    trigger. This entry point is: 
+
+    * a no-op (report only) while ``MEMORY_CONSUMPTION_PROJECTION_ENABLED`` is
+      false, so the 012/013 maintenance behaviour is byte-for-byte unchanged;
+    * writer-only, like every other maintenance path;
+    * failure-isolated: a reconciliation error is reported, never raised into the
+      maintenance tick, and never touches a write result.
+
+    It consults the consumption layer only for drift (bytes/mode), never for a
+    fact or a status judgement (FR-029).
+    """
+    settings = get_settings()
+    report = {"enabled": bool(settings.memory_consumption_projection_enabled),
+              "scopes": 0, "repaired": [], "processed": [], "reason_code": None}
+    if not report["enabled"]:
+        return report
+    if settings.instance_mode != "writer":
+        raise PermissionError("MEMORY_WRITE_UNAVAILABLE")
+    from rag_mcp.runtime.memory_projection import reconcile
+
+    try:
+        result = await reconcile(None if scopes is None else (scopes[0] if len(scopes) == 1 else None),
+                                 session_factory=session_factory)
+    except Exception as error:  # noqa: BLE001 - maintenance must keep going
+        logger.exception("memory consumption reconciliation failed")
+        report["reason_code"] = type(error).__name__
+        return report
+    report["scopes"] = result["scopes"]
+    report["processed"] = result["processed"]
+    report["repaired"] = [item["scope_id"] for item in result["processed"] if item.get("repaired")]
+    return report
+
+
 async def purge_expired_memory_runtime(session, now=None):
     from rag_mcp.models.memory_recall_run import MemoryRecallRun
     from rag_mcp.models.session import MemorySession

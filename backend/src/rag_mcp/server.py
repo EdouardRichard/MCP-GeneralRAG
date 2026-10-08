@@ -202,6 +202,7 @@ async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> 
         purge_expired_agentic_runs,
         purge_expired_retrieval_runs,
         run_consolidation_maintenance,
+        run_memory_consumption_reconciliation,
         run_memory_maintenance,
     )
 
@@ -215,6 +216,13 @@ async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> 
                 await purge_expired_agentic_runs(session)
                 await session.commit()
                 await run_memory_maintenance(session)
+            # 014 T050: the window also does the full-layer consumption-layer
+            # check (drift -> per-scope rebuild) and reclaims settled refresh
+            # workers. Both are no-ops while the 014 switch is false.
+            from rag_mcp.runtime.memory_projection import recycle_settled_workers
+
+            recycle_settled_workers()
+            await run_memory_consumption_reconciliation(factory)
 
         try:
             if supervisor is None or owner is None:

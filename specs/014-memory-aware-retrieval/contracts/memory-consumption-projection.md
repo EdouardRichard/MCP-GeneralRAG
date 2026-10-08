@@ -72,6 +72,42 @@ untrusted: true
 - **目录在两端一律保持 `0755`**：实测 Windows 忽略目录的只读属性（在 `0o555` 目录内仍可创建/删除文件），而 POSIX 的 `0555` 目录会阻断重建所需的删除与重命名。锁目录既无效又会破坏重建。
 - **能力边界必须显式声明**：文件级只读是绊线而非安全边界（root / 管理员 / `CAP_DAC_OVERRIDE` 可绕过，文件属主可改回）；安全结论由应用层守卫与漂移检测承担，不得声称 OS 权限提供保护。
 
+### 4.1 `guard_state`（预期形态登记，T046）
+
+`memory_consumption_projection.guard_state ∈ {readonly, writable}` 只登记**本次成功刷新时期望的 OS 形态**，供对账报告比对，**不构成**任何事实或状态判定：
+
+| 取值 | 含义 | 判定依据 |
+|---|---|---|
+| `readonly` | 刷新结束时已对消费层文件置只读（POSIX `0o444` / Windows `S_IREAD`） | `MEMORY_CONSUMPTION_PROJECTION_ENABLED=true` 且刷新成功 |
+| `writable` | 纵深守卫未启用（开关关闭），文件按普通权限落盘 | 开关关闭或未启用纵深 |
+
+- 对账时逐文件比对期望形态，落在 `mode_mismatch[]` 中；**形态差异不进入 `tree_fingerprint`**（见 §6），也不单独触发重建。
+- 深度守卫由开关控制；**规范守卫（reducer 状态门 + 路径限定 + 无公开写 API + AST inventory）无条件生效**，与 `guard_state` 取值无关。
+- 递归删除/重建前 MUST 在同一 worker 内先清除只读位（Windows 下只读文件 `unlink` 抛 `PermissionError`，实测确认），完成后再置回；`memory_projection_meta` 永不参与。
+
+### 4.2 能力边界（实测 2026-10-09，Windows 10/11 + Python 3.12）
+
+| 断言 | 实测结果 | 结论 |
+|---|---|---|
+| `chmod(dir, 0o555)` 阻止目录内创建/删除文件 | **否**（仍可创建并删除） | 目录不可锁；目录一律 `0o755` |
+| `chmod(file, S_IREAD)` 使 `write_text` 抛错 | **是**（`PermissionError`） | 文件位可作为绊线 |
+| `chmod(file, S_IREAD)` 使 `unlink` 抛错 | **是**（`PermissionError`） | 重建/清理前必须先清位 |
+| 属主清除只读位后写入 | **成功** | OS 位可被绕过 |
+| root / Administrator / `CAP_DAC_OVERRIDE` | 可绕过文件位（POSIX 语义） | 非安全边界 |
+
+**因此**：
+
+1. **应用层为规范（normative）**：只从 `MemoryHistory.load(scope_id).state`（已复验 authority-id 相等、归档校验与快照指纹）渲染并经 `require_reducer_state`；所有目标路径 `resolve()` 后必须位于消费层根内并拒绝符号链接/目录逃逸；无公开写 API（唯一入口为内部刷新/重建函数，只接受已校验状态与作用域，不接受任意路径或正文）；AST inventory 断言消费层不含 `_upsert`、不含事件追加、且 `services/memory_projection_store.py` 仍是唯一 `_upsert` 调用点。
+2. **OS 文件位仅为纵深（defence in depth）**：它是"绊线"，用于让宿主直写与误操作**尽早失败并留下可检测痕迹**，**不是**安全边界。`SC-012` 的"绕过校验直写成功次数为 0"由**应用层守卫 + 漂移检测 + 报告**证成，**不得**以文件位作证。
+3. **限定语必须随结论出现**：任何"消费层只读"的验收陈述 MUST 写成"应用层规范守卫只读 + 文件位纵深（root/管理员可绕过；Windows 忽略目录位）"，MUST NOT 简写为"文件系统强制只读"。
+
+**构造性与否定性证据（T046）**：
+
+- **构造性（正例）**：`backend/tests/unit/test_014_projection_render.py` 断言成功刷新后文件无写位（`stat.S_IWUSR` 未置）、目录保持 `S_IWUSR|S_IXUSR`、重建前清位后重渲染成功、DIGEST/INDEX 与记忆文件字节稳定。
+- **否定性（被拒 + 能力边界）**：同文件断言越界目标（根外、兄弟目录、根本身）抛 `ProjectionPathError` 且不产生字节；断言属主**可以**清位后直写成功 —— 即"直写被拒"来自应用层约定，而不是 OS 权限。
+- **静态**：`backend/tests/integration/test_014_no_bypass.py` 的 AST inventory 断言无 `_upsert`、无事件追加、无公开写 API、并在安装纵深守卫的**关闭开关**路径上仍受规范守卫约束。
+
+
 ## 5. 异步刷新、对账与重建
 
 - **触发**：`record()` 成功 commit 后 O(1) 登记脏作用域并调度（沿既有活动跟踪 + `loop.create_task`；无运行循环则跳过），**绝不 await**，绝不进入写入关键路径。
@@ -83,4 +119,12 @@ untrusted: true
 
 ## 6. 漂移与完整性报告
 
-每次刷新/对账输出报告：`scope_id`、`scope_slug`、`source_event_id`、`file_count`、`tree_fingerprint`、`status`、`guard_state`、`unexpected_paths`（消费层内不符合期望的路径）、`missing_paths`、`mode_mismatch`、`reason_code`、`repaired`（是否已重建）。**读路径从不就地修复**；只由刷新/对账 worker 修复。
+每次刷新/对账输出报告：`scope_id`、`scope_slug`、`source_event_id`、`file_count`（不含 `DIGEST.md`/`INDEX.md`）、`tree_fingerprint`、`status`、`guard_state`、`unexpected_paths`（消费层内不符合期望的路径）、`missing_paths`、`mode_mismatch`、`reason_code`、`repaired`（是否已重建）。**读路径从不就地修复**；只由刷新/对账 worker 修复。
+
+**树指纹定义（唯一）**：`tree_fingerprint = sha256(canonical(json({相对路径 → sha256(文件字节)})))`，其中：
+
+- 相对路径以作用域目录为基准、POSIX 分隔符、`rglob("*")` 中的**文件**（含 `DIGEST.md`/`INDEX.md`），按路径升序；
+- `canonical` = `json.dumps(..., sort_keys=True, separators=(",",":"), ensure_ascii=False, allow_nan=False)`，UTF-8 编码；列表元素已显式排序，故不存在集合迭代序依赖；
+- **只对字节计算**：生成时刻、mtime、inode、进程 id、**OS 权限位**一律不入指纹。文件位差异落在 `mode_mismatch[]`（§4.1）而不改变指纹，否则在 Windows 上会把"位未生效"误报为漂移。
+
+**漂移判定与修复**：读路径只观测（`missing_paths` / `unexpected_paths` / `mode_mismatch`）并记录，**从不**就地修复；刷新/对账 worker 命中漂移时**只**清空并重建该作用域子树（读取前先清只读位），把 `reason_code` 记为 `drift_detected`、`repaired=true` 并更新登记的 last-good 指纹。
