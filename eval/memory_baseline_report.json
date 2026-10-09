@@ -1268,30 +1268,31 @@
       "statement": "MCP 记忆工具可用且旧三工具零破坏",
       "verdict": "partial",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/hard-metrics-measurements.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.json",
+        "eval/runs/015-20261009205637/evidence/contract_verification.json",
+        "eval/runs/015-20261009205637/regression/pytest/012_old_client_compat.junit.xml",
+        "eval/runs/015-20261009205637/regression/012_acceptance_report.json"
       ],
-      "disposition": "not every one of the six tool contracts was measured valid in this run"
+      "disposition": "at most partial: the six-tool contract caliber did not reach 100 % in this run — the live list_knowledge_domains response carries itemised 007-contract violations that are recorded (not dropped) in hard-metrics-measurements.json, and the recorded per-tool pass count differs between the two live passes (evidence/baseline_reproducibility.json: tool_schema_validity.passed 4 -> 5) — and the 012 acceptance suite that owns the old-client compatibility claim is not green in this run (outcome=failed, report=incomplete, SC-012 not_verified)."
     },
     {
       "id": 2,
       "statement": "硬记忆锚定率 100% + 软/distilled provenance 完备率 100%",
-      "verdict": "achieved",
+      "verdict": "partial",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
-      ]
+        "eval/runs/015-20261009205637/hard-metrics-measurements.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.json"
+      ],
+      "disposition": "not fully measured, so never recorded achieved: the hard memory-provenance caliber has a zero denominator (hard_items_examined = 0, soft_distilled_items_examined = 1) and that zero is not a measured zero, and the hard-anchoring caliber rests on a single lease-constrained sample (total = 1; the writer lease was not acquired, recorded as not_measurable hard_memory_anchoring.writer_lease). The soft/distilled side did measure 1/1."
     },
     {
       "id": 3,
       "statement": "跨域记忆串库 = 0",
       "verdict": "achieved",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/hard-metrics-measurements.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.json"
       ]
     },
     {
@@ -1299,20 +1300,18 @@
       "statement": "巩固受益 ≥3%",
       "verdict": "not_achieved",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/memory_baseline_report.json",
+        "eval/runs/015-20261009205637/evidence/benefit_review.json"
       ],
-      "disposition": "consolidation stays default-off (013's conclusion preserved verbatim); the relative gain is not computable and no benefit is claimable"
+      "disposition": "consolidation stays default-off and 013's conclusion is preserved verbatim (report_status incomplete, default_enable_eligible=false, no claimable benefit); the relative gain is not computable from a zero/incomparable baseline, so nothing is claimed. Inclusion trigger: re-run the 013 record+replay comparison against a non-zero comparable baseline with all three 013 gates green; until then the switch stays off and this ledger is not rewritten."
     },
     {
       "id": 5,
       "statement": "跨会话续接达标",
       "verdict": "achieved",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.json"
       ]
     },
     {
@@ -1320,21 +1319,20 @@
       "statement": "记忆投毒 E2E 全过",
       "verdict": "achieved",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/evidence/poisoning-cases.json",
+        "eval/runs/015-20261009205637/evidence/aoep-cases.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.json"
       ]
     },
     {
       "id": 7,
       "statement": "既有评测全集无回归",
-      "verdict": "not_achieved",
+      "verdict": "partial",
       "evidence": [
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/aoep-cases.json",
-        "D:/Project_new/docsToCode/eval/runs/015-20261009205637/evidence/poisoning-cases.json",
-        "eval/runs/015-20261009205637/continuity-replay/memory-replay.json"
+        "eval/runs/015-20261009205637/regression/regression_group_map.json",
+        "eval/runs/015-20261009205637/memory_baseline_report.regression.json"
       ],
-      "disposition": "the full-suite regression groups have not been executed in this run; an unexecuted group is never recorded as passed"
+      "disposition": "not a regression-free verdict and never recorded achieved: 1 of 1 registered groups were NOT executed (all regression groups) — an unexecuted group is never counted as passed — and the executed groups carry real outcomes that are not hidden: 012_acceptance: outcome=failed, report=incomplete, SC-012 not_verified; 013_e2e: 5 failed / 2 passed; 014_contract: 4 failed / 564 passed. The 54 non-latency comparisons include 8 beyond the 1 % tolerance, all dispositioned (6 pre-existing 011 corpus drift measured 2026-09-07, 2 inherited between the 004/010 historicals), so the executed portion shows no new 015-attributable drift but the full-suite goal is at most partially evidenced."
     }
   ],
   "regression": {

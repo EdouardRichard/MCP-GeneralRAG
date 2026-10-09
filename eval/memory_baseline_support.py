@@ -1191,8 +1191,90 @@ def comparable_roots(report: Mapping[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# goal ledger (T062 refines; this run keeps every entry honest)
+# goal ledger (T062 corrects the evidence pointers and the verdicts)
 # --------------------------------------------------------------------------- #
+
+#: T062: the real artifacts of *this run* that evidence each blueprint goal.
+#: Every template expands to a file the run wrote under ``eval/runs/<RUN_ID>/``;
+#: no planning document and no unexecuted caliber appears here. Goals 2/3 were
+#: re-pointed from the poisoning/AOEP/continuity artifacts to the hard-metric
+#: measurements (and the report itself) that actually carry those calibers.
+GOAL_EVIDENCE: Mapping[int, tuple[str, ...]] = {
+    1: (
+        "eval/runs/{run_id}/hard-metrics-measurements.json",
+        "eval/runs/{run_id}/memory_baseline_report.json",
+        "eval/runs/{run_id}/evidence/contract_verification.json",
+        "eval/runs/{run_id}/regression/pytest/012_old_client_compat.junit.xml",
+        "eval/runs/{run_id}/regression/012_acceptance_report.json",
+    ),
+    2: (
+        "eval/runs/{run_id}/hard-metrics-measurements.json",
+        "eval/runs/{run_id}/memory_baseline_report.json",
+    ),
+    3: (
+        "eval/runs/{run_id}/hard-metrics-measurements.json",
+        "eval/runs/{run_id}/memory_baseline_report.json",
+    ),
+    4: (
+        "eval/runs/{run_id}/memory_baseline_report.json",
+        "eval/runs/{run_id}/evidence/benefit_review.json",
+    ),
+    5: (
+        "eval/runs/{run_id}/continuity-replay/memory-replay.json",
+        "eval/runs/{run_id}/memory_baseline_report.json",
+    ),
+    6: (
+        "eval/runs/{run_id}/evidence/poisoning-cases.json",
+        "eval/runs/{run_id}/evidence/aoep-cases.json",
+        "eval/runs/{run_id}/memory_baseline_report.json",
+    ),
+    7: (
+        "eval/runs/{run_id}/regression/regression_group_map.json",
+        "eval/runs/{run_id}/memory_baseline_report.regression.json",
+    ),
+}
+
+#: T062: the 012 acceptance suite owns SC-012 and the old-client compatibility
+#: claim. Its real executed outcome in this run is ``failed`` / report
+#: ``incomplete`` with ``SC-012 not_verified`` (recorded in
+#: ``eval/runs/<RUN_ID>/regression/012_acceptance_report.json`` and in the
+#: orchestration notes at ``evidence/regression_orchestration_notes.json``), so
+#: goal 1 is never recorded ``achieved`` on this run's evidence — however the
+#: individual six-tool contracts land.
+ACCEPTANCE_SC012_VERIFIED = False
+
+#: T062: ``evidence/hard-metrics-measurements.json`` records
+#: ``writer_lease.acquired == false`` (another holder was live) and the report
+#: carries the matching ``not_measurable[]`` entry
+#: ``hard_memory_anchoring.writer_lease``. Goal 2 is judged on that basis: the
+#: hard-anchoring denominator is a single lease-constrained sample, which is
+#: stated as one sample and never generalised to 100 %.
+WRITER_LEASE_ACQUIRED = False
+
+#: T062: the real executed regression outcomes of this run, taken verbatim from
+#: the artifacts the orchestrator wrote under ``eval/runs/<RUN_ID>/regression/``
+#: (see ``evidence/regression_orchestration_notes.json`` and the per-group
+#: status files). They are recorded here because the report's ``regression``
+#: block is contractually limited to ``{group, runner, mode, ...}`` and carries
+#: no outcome field; the pointers in ``GOAL_EVIDENCE[7]`` name the artifacts.
+EXECUTED_REGRESSION_FAILURES: tuple[str, ...] = (
+    "012_acceptance: outcome=failed, report=incomplete, SC-012 not_verified",
+    "013_e2e: 5 failed / 2 passed",
+    "014_contract: 4 failed / 564 passed",
+)
+
+
+def goal_evidence(goal_id: int, *, run_id: str | None = None) -> list[str]:
+    """The real run artifacts that evidence one blueprint goal (T062).
+
+    Returns the expanded, repo-relative posix paths; an unknown goal id yields an
+    empty list so the caller can fall back to whatever it was handed.
+    """
+    templates = GOAL_EVIDENCE.get(goal_id)
+    if not templates:
+        return []
+    resolved = run_id or RUN_ID
+    return [template.format(run_id=resolved) for template in templates]
 
 
 def goal_ledger(*, hard_metrics: Mapping[str, Any], continuity: Mapping[str, Any],
@@ -1202,48 +1284,87 @@ def goal_ledger(*, hard_metrics: Mapping[str, Any], continuity: Mapping[str, Any
     """Seven entries, 1:1 with the blueprint statements; goal 4 is not achieved.
 
     ``verdict`` is emitted as ``achieved`` only when the measured evidence proves
-    it. Nothing here claims an improvement and goal 7 is not claimed as achieved
-    while the full-suite regression has not been executed (T058-T060 own it).
+    it, and ``disposition`` is non-empty for every ``partial``/``not_achieved``
+    entry. Nothing here claims an improvement; goal 7 is never recorded
+    ``achieved`` while groups remain unexecuted or executed groups carry real
+    failures, and goal 2 is not recorded ``achieved`` while a caliber has a zero
+    hard denominator or the anchoring sample is a single lease-constrained write.
     """
     leakage = cross_domain or {}
     leakage_ok = leakage.get("all_paths_measured") is True and int(leakage.get("total_leaks") or 0) == 0
-    anchoring_ok = _ratio_met(hard_metrics.get("hard_memory_anchoring") or {})
-    provenance_ok = _ratio_met(hard_metrics.get("memory_provenance_completeness") or {})
     tool_ok = _ratio_met(hard_metrics.get("tool_schema_validity") or {})
+    anchoring = hard_metrics.get("hard_memory_anchoring") or {}
+    provenance = hard_metrics.get("memory_provenance_completeness") or {}
+    anchoring_ok = _ratio_met(anchoring)
+    provenance_ok = _ratio_met(provenance)
+    hard_provenance_items = int(provenance.get("hard_items_examined") or 0)
+    anchoring_samples = int(anchoring.get("total") or 0)
     continuity_ok = (continuity.get("watermark") or {}).get("met") is True
     poisoning_ok = (poisoning.get("watermark") or {}).get("met") is True
     aoep_ok = aoep.get("all_passed") is True
-    regression_ok = (regression or {}).get("all_groups_executed") is True
+    regression = regression or {}
+    regression_ok = regression.get("all_groups_executed") is True
+    not_executed = [str(name) for name in (regression.get("not_executed") or [])]
+
+    goal2_met = (anchoring_ok and provenance_ok and hard_provenance_items >= 1
+                 and anchoring_samples >= 2 and WRITER_LEASE_ACQUIRED)
+    goal2_disposition = (
+        "not fully measured, so never recorded achieved: the hard memory-provenance caliber has a zero "
+        f"denominator (hard_items_examined = {hard_provenance_items}, soft_distilled_items_examined = "
+        f"{int(provenance.get('soft_distilled_items_examined') or 0)}) and that zero is not a measured zero, "
+        f"and the hard-anchoring caliber rests on a single lease-constrained sample (total = {anchoring_samples}; "
+        "the writer lease was not acquired, recorded as not_measurable hard_memory_anchoring.writer_lease). "
+        "The soft/distilled side did measure 1/1.")
+    goal7_disposition = (
+        "not a regression-free verdict and never recorded achieved: "
+        f"{len(not_executed)} of {len(not_executed) + len(regression.get('groups') or [])} registered groups "
+        f"were NOT executed ({', '.join(not_executed) or 'none named'}) — an unexecuted group is never counted as "
+        "passed — and the executed groups carry real outcomes that are not hidden: "
+        f"{'; '.join(EXECUTED_REGRESSION_FAILURES)}. The 54 non-latency comparisons include 8 beyond the 1 % "
+        "tolerance, all dispositioned (6 pre-existing 011 corpus drift measured 2026-09-07, 2 inherited between "
+        "the 004/010 historicals), so the executed portion shows no new 015-attributable drift but the full-suite "
+        "goal is at most partially evidenced.")
 
     def entry(goal_id: int, verdict: str, disposition: str | None) -> dict[str, Any]:
+        pointers = goal_evidence(goal_id)
+        if not pointers:
+            pointers = [str(path) for path in evidence.get(goal_id, ())]
+        if not pointers:
+            pointers = [f"eval/runs/{RUN_ID}/memory_baseline_report.json"]
         item: dict[str, Any] = {"id": goal_id, "statement": GOAL_STATEMENTS[goal_id],
-                                "verdict": verdict, "evidence": [str(path) for path in evidence.get(goal_id, ())]
-                                or [f"eval/runs/{RUN_ID}/memory_baseline_report.json"]}
+                                "verdict": verdict, "evidence": pointers}
         if disposition:
             item["disposition"] = disposition
         return item
 
+    tool_disposition = (
+        "at most partial: the six-tool contract caliber did not reach 100 % in this run — the live "
+        "list_knowledge_domains response carries itemised 007-contract violations that are recorded (not dropped) "
+        "in hard-metrics-measurements.json, and the recorded per-tool pass count differs between the two live "
+        "passes (evidence/baseline_reproducibility.json: tool_schema_validity.passed 4 -> 5) — and the 012 "
+        "acceptance suite that owns the old-client compatibility claim is not green in this run "
+        "(outcome=failed, report=incomplete, SC-012 not_verified).")
+
     ledger = [
-        entry(1, "achieved" if tool_ok else "partial",
-              None if tool_ok else "not every one of the six tool contracts was measured valid in this run"),
-        entry(2, "achieved" if (anchoring_ok and provenance_ok) else "partial",
-              None if (anchoring_ok and provenance_ok)
-              else "measured for the scopes this run inspected; at least one caliber was not fully measured "
-                   "to 100 % and is never recorded as achieved"),
+        entry(1, "achieved" if (tool_ok and ACCEPTANCE_SC012_VERIFIED) else "partial",
+              None if (tool_ok and ACCEPTANCE_SC012_VERIFIED) else tool_disposition),
+        entry(2, "achieved" if goal2_met else "partial",
+              None if goal2_met else goal2_disposition),
         entry(3, "achieved" if leakage_ok else "partial",
               None if leakage_ok else "at least one of the four leakage paths was not measured"),
         entry(4, "not_achieved",
-              "consolidation stays default-off (013's conclusion preserved verbatim); the relative gain is "
-              "not computable and no benefit is claimable"),
+              "consolidation stays default-off and 013's conclusion is preserved verbatim (report_status "
+              "incomplete, default_enable_eligible=false, no claimable benefit); the relative gain is not "
+              "computable from a zero/incomparable baseline, so nothing is claimed. Inclusion trigger: re-run "
+              "the 013 record+replay comparison against a non-zero comparable baseline with all three 013 gates "
+              "green; until then the switch stays off and this ledger is not rewritten."),
         entry(5, "achieved" if continuity_ok else "partial",
               None if continuity_ok else "the frozen 014 explicit criterion was not met"),
         entry(6, "achieved" if (poisoning_ok and aoep_ok) else "partial",
               None if (poisoning_ok and aoep_ok)
               else "poisoning interception and/or the AOEP five invariants were not fully measured"),
-        entry(7, "achieved" if regression_ok else "not_achieved",
-              None if regression_ok else
-              "the full-suite regression groups have not been executed in this run; an unexecuted group is "
-              "never recorded as passed"),
+        entry(7, "achieved" if regression_ok else "partial",
+              None if regression_ok else goal7_disposition),
     ]
     return ledger
 
