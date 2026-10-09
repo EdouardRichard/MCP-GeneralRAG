@@ -520,14 +520,27 @@ GROUP_SPECS: list[dict] = [
         "mode": "single_round",
         "model_dependent": False,
         "test_module": "backend/tests/integration/test_012_memory_e2e.py",
-        "historical": None,
-        "artifact": None,
-        "caliber": "012 final acceptance report (suite junit + memory trace + host evidence + diagnostics + regression list)",
-        "not_executed_reason": (
-            "the runner requires --suite/--trace/--host/--diagnostics inputs produced by a live 012 acceptance run; "
-            "those historical inputs are not present in this worktree, and an output path that already exists makes "
-            "the parser refuse, so a fresh acceptance report cannot be produced from here. Recorded not_executed."
-        ),
+        "historical": "eval/runs/012-20261005-final-regression-h/final-memory-report-verified.json",
+        "artifact": "regression/012_acceptance_report.json",
+        "extract": None,
+        "caliber": "012 final acceptance report: the 012-era suite junit, memory trace, host evidence and read "
+                   "diagnostics are read as real inputs and the runner re-validates the assembled report against the "
+                   "012 acceptance-report schema; the exit code is the acceptance verdict",
+        "inputs_are_read_only": [
+            "eval/runs/012-20261005-final-regression-h/backend-pytest.xml",
+            "eval/runs/012-20261005-final-regression-h/memory-trace.json",
+            "eval/runs/012-20261005-final-regression-h/host-evidence.json",
+            "eval/runs/012-20261005-final-regression-h/read-diagnostics.json"
+        ],
+        "command": ["{python}", "-X", "utf8", "eval/run_memory_acceptance.py",
+                    "--suite", "eval/runs/012-20261005-final-regression-h/backend-pytest.xml",
+                    "--trace", "eval/runs/012-20261005-final-regression-h/memory-trace.json",
+                    "--host", "eval/runs/012-20261005-final-regression-h/host-evidence.json",
+                    "--diagnostics", "eval/runs/012-20261005-final-regression-h/read-diagnostics.json",
+                    "--output", "{artifact}",
+                    "--suite-command",
+                    "python -m pytest -vv --tb=short --durations=30 "
+                    "--junitxml=eval/runs/012-20261005-final-regression-h/backend-pytest.xml"],
     },
     {
         "group": "012_e2e",
