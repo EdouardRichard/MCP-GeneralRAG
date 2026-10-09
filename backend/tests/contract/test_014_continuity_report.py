@@ -83,7 +83,11 @@ from run_memory_comparison import (  # noqa: E402
 )
 
 DATASET_PATH = ROOT / "eval" / "memory_continuity_eval_dataset.json"
-DATASET_SHA256 = "8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4"
+# Updated by 015 T012 together with the same pin in test_014_continuity_dataset.py:
+# the frozen 014 dataset's sanctioned human-review rewrite changed only
+# $.source.human_review (queries[] byte-identical), so this data-derived pin moves
+# with it. Session-owner approved 2026-10-09.
+DATASET_SHA256 = "cbf2ab331ef8b901b71984b633ed585fda8237cb3858157a384d19b5ec414407"
 GREEN_LEGACY_NEW_FIELDS = ("related_memories", "memory_notice", "counts", "working_set")
 
 

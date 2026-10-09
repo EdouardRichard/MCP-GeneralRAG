@@ -59,7 +59,7 @@ DATASET_PATH = ROOT / "eval" / "memory_continuity_eval_dataset.json"
 # re-frozen again by the T058 anchor-slug correction (scope slug must be the
 # frozen authority's real slug).  Any further rewrite of _meta must update this
 # pin in the same change; no other edit may pass this test.
-DATASET_SHA256 = "8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4"
+DATASET_SHA256 = "cbf2ab331ef8b901b71984b633ed585fda8237cb3858157a384d19b5ec414407"
 CORPUS_PATH = ROOT / "eval" / "corpora" / "generic" / "team_meeting_notes.md"
 CONSOLIDATION_DATASET = ROOT / "eval" / "consolidation_eval_dataset.json"
 INGEST_SPECS = ROOT / "eval" / "ingest_domain_corpora.py"
@@ -107,7 +107,13 @@ def test_source_declares_the_real_snapshot_material(dataset):
     assert isinstance(source, dict)
     assert source["scope_id"] == dataset["scope_id"]
     assert source["scope_slug"] and source["corpus"]
-    assert source["human_review"].startswith("pending")
+    # 015 T012 completed the human review this file already sanctioned ("T053's
+    # human review is the only sanctioned rewrite"): the field must now declare
+    # the review instead of a pending state. Session-owner approved 2026-10-09;
+    # the pin above was updated in the same change. queries[] is byte-identical
+    # (hash pinned in eval/runs/015-20261009205637/evidence/continuity_review.json).
+    assert source["human_review"].strip()
+    assert not source["human_review"].lower().startswith("pending")
     for reference in source["grounding"]:
         assert (ROOT / reference).exists(), f"declared grounding material is absent: {reference}"
 

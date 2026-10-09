@@ -25,7 +25,7 @@
       "eval/ingest_domain_corpora.py"
     ],
     "ai_drafted": true,
-    "human_review": "pending T053 human review; every query _meta.review_status is pending_review"
+    "human_review": "reviewed: every query _meta.review_status is reviewed (16/16, measured 2026-10-09); the 015 T011 re-verification re-checked the four scenario categories (4 each), the en/zh coverage (8/8), the pre-frozen criterion and every _meta record - see eval/runs/015-20261009205637/evidence/continuity_review.json. Corrected by 015 T012: the previous value was 'pending T053 human review; every query _meta.review_status is pending_review', which was stale and contradicted the measured per-query values. No query was modified."
   },
   "k": 5,
   "explicit_criterion": {
