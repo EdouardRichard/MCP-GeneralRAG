@@ -657,7 +657,12 @@ class MemoryService:
         scope_id = payload.get("scope_id")
         scope = await self.session.get(KnowledgeScope, scope_id) if isinstance(scope_id, int) else None
         if not scope or scope.status != "active":
-            raise ValueError("MISSING_KNOWLEDGE_SCOPE")
+            # FR-061/FR-018: the rejection must carry the candidate domains, exactly
+            # like the resolver-level rejection (ScopeBindingError is a ValueError,
+            # so existing callers and their `match=` assertions are unaffected).
+            from rag_mcp.services.scope_resolver import missing_scope_error
+
+            raise await missing_scope_error(self.session)
         clean = redact_submission(payload)
         validation = await MemoryProvenanceValidator(self.session).validate(clean)
         sanitized = detect_submission(clean)
