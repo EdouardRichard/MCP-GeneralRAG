@@ -152,29 +152,36 @@ class MemoryEvalEvidenceBundle:
 
     @staticmethod
     def _write(path: Path, document, *, case_count: int = 0):
-        """Zero-overwrite export, isomorphic in spirit with the 013 bundle.
+        """Zero-overwrite export that never blocks a later run.
 
-        * identical bytes -> idempotent success
-        * absent -> write
-        * different bytes -> refuse (RuntimeError), UNLESS the new document holds
-          no cases at all (never clobber collected evidence with an empty dump
-          produced by an unrelated run), or the operator explicitly opted into
-          replacing the transient session dump with
-          ``MEMORY_EVAL_EVIDENCE_REPLACE=1`` for the one authoritative run.
+        The 013 bundle raises when the target holds different bytes. That cannot
+        work here: the documents embed ``started_at``/``generated_at``/``notes``,
+        so no two pytest invocations can ever be byte-identical, and a second
+        invocation sharing the directory would abort at session finish (found by
+        the T016 owner, 2026-10-09). The 015 rule is therefore:
+
+        * identical bytes -> idempotent success;
+        * an empty dump never clobbers collected evidence;
+        * a differing document is written to a timestamped sibling
+          (``<stem>.<utc>.json``) instead, so the first file is preserved and the
+          later run is recorded rather than lost or raised away.
+
+        Nothing is ever overwritten, and no run can block another.
         """
         raw = json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            if path.read_bytes() == raw:
-                return sha256(raw).hexdigest()
-            replace = os.environ.get("MEMORY_EVAL_EVIDENCE_REPLACE") == "1"
-            if case_count == 0 and not replace:
-                return None
-            if replace:
-                path.unlink()
-            else:
-                raise RuntimeError(f"015 memory-eval evidence exists with different content: {path}")
-        with path.open("xb") as stream:
+        if not path.exists():
+            with path.open("xb") as stream:
+                stream.write(raw)
+            return sha256(raw).hexdigest()
+        if path.read_bytes() == raw:
+            return sha256(raw).hexdigest()
+        if case_count == 0:
+            # A run that observed no case of this kind must not shadow real evidence.
+            return None
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        sibling = path.with_name(f"{path.stem}.{stamp}{path.suffix}")
+        with sibling.open("xb") as stream:
             stream.write(raw)
         return sha256(raw).hexdigest()
 
