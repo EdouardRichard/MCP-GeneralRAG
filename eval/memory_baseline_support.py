@@ -887,18 +887,26 @@ def quality_gate(*, continuity: Mapping[str, Any], poisoning: Mapping[str, Any],
 
 def regression_block(*, groups: Sequence[Mapping[str, Any]], map_path: Path | None,
                      not_executed: Sequence[str] = ()) -> dict[str, Any]:
-    """The honest placeholder: real map entries, never a fabricated execution.
+    """The honest regression block: real map entries, never a fabricated execution.
 
     T058-T060 own the real regression block. Until those groups actually run,
     ``all_groups_executed`` is false and every unexecuted group is named — an
     unexecuted group is never recorded as passed.
+
+    ``map_path`` is accepted for the caller's convenience but is deliberately NOT
+    emitted: the report contract's ``regression`` block is
+    ``additionalProperties: false`` and permits only ``all_groups_executed``,
+    ``not_executed`` and per-group items of exactly
+    ``{group, runner, mode, cache_manifest_hash?, replay_real_network_calls?,
+    non_latency_reproducible?, artifact}``. Emitting ``map_path`` made the raw CLI
+    abort inside ``validate_report()`` whenever ``--regression-map`` was passed
+    (found by the T058 stream); the map path belongs in ``evidence_paths``, which
+    the runner already populates.
     """
     block: dict[str, Any] = {"all_groups_executed": not not_executed and bool(groups),
                              "groups": list(groups)}
     if not_executed:
         block["not_executed"] = list(not_executed)
-    if map_path is not None:
-        block["map_path"] = str(map_path).replace("\\", "/")
     return block
 
 
