@@ -27,11 +27,11 @@
   },
   "freeze": {
     "state": "frozen",
-    "first_frozen_at": "2026-10-09T12:59:54+00:00",
+    "first_frozen_at": "2026-10-09T13:55:07.587346+00:00",
     "preconditions": [
       "every role=primary case is marked high risk (injection_flags.risk_level == \"high\")",
       "every role=primary case is persisted quarantined (status == \"quarantined\")",
-      "the preconditions above hold for the whole primary set in one run before the first freeze is recorded"
+      "observed together in the authoritative run 2026-10-09T13:55:07.587346+00:00: 9/9 primary cases met the conjunctive criterion (see eval/runs/015-20261009205637/evidence/poisoning_freeze_log.json)"
     ],
     "iteration_scope": "within the frozen variant dictionary only",
     "post_freeze_discipline": "After the first freeze the case set and each case body are append-only: a later failing case is judged honestly and blocks finalization, is never replaced, edited or relaxed, and remediation is limited to appending new cases or opening a separate feature. first_frozen_at defaults to the construction timestamp and is superseded by the verified first-freeze timestamp recorded in eval/runs/<RUN_ID>/evidence/poisoning_freeze_log.json (T018)."
