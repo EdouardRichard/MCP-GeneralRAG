@@ -1,0 +1,1663 @@
+#!/usr/bin/env python3
+"""015 T058/T059/T060 - 001-014 full-suite regression orchestration (FR-054/FR-059/SC-020).
+
+What this runner is allowed to do (and what it refuses to do)
+------------------------------------------------------------
+* **Reuse, never rewrite.** Every 001-014 caliber is re-run through its *existing*
+  runner (`run_eval.py`, `run_comparison.py`, `run_graph_comparison.py`,
+  `run_agentic_comparison.py`, `run_cross_reference_comparison.py`,
+  `run_domain_baseline.py`, `run_multi_domain_acceptance.py`,
+  `run_regression_011.py`, `run_memory_comparison.py`, pytest) exactly as the
+  011 precedent does. No existing runner or test is modified.
+* **History zero-overwrite.** Every artifact this runner writes lives under
+  ``eval/runs/<RUN_ID>/``; the target path must not exist before a write, and
+  ``_guard_command`` refuses any runner argument that names an output outside
+  the run directory. The tracked ``eval/memory_baseline_report.json`` and the
+  001-014 historical reports are never touched.
+* **Not executed is not passed.** A group is ``executed`` only when its round(s)
+  really ran and produced the artifact the caliber names. A group whose record
+  or replay round could not be produced is ``not_executed`` with a reason.
+* **record + replay (T059).** Model-dependent groups run a *record* round that
+  freezes the model responses and the cache fingerprint, then a *replay* round
+  whose **measured** real provider transports must be 0; only the replay round is
+  a pass basis. The live round is never a pass basis.
+* **No metric is written without being measured.** ``replay_real_network_calls``
+  comes from a socket-audit-hook census (`_netcount_015.py`, generated below),
+  never from a constant; a missing measurement stays ``null``.
+
+Usage
+-----
+    python eval/run_regression_015.py --list
+    python eval/run_regression_015.py --group 001_dense_11
+    python eval/run_regression_015.py --emit-map
+    python eval/run_regression_015.py --emit-report        # T060
+
+T060 note (honest defect record): the frozen T028 runner adds a non-contract
+``map_path`` key to the regression block whenever ``--regression-map`` is passed
+(``eval/memory_baseline_support.py::regression_block`` L900-901), and the report
+contract's ``regression`` block is ``additionalProperties: false`` - so the raw
+CLI aborts in ``validate_report`` before writing. ``eval/run_memory_baseline.py``
+and ``eval/memory_baseline_support.py`` are outside this task's write scope, so
+``--emit-report`` invokes the frozen runner's own ``main()`` with that single
+non-contract key suppressed (``map_path=None``); nothing else about the report
+changes. The raw-CLI refusal is reproduced and stored as evidence.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+EVAL_DIR = REPO_ROOT / "eval"
+BACKEND_DIR = REPO_ROOT / "backend"
+PY = sys.executable
+
+DEFAULT_RUN_ID = "015-20261009205637"
+TOLERANCE = 0.01          # non-latency relative tolerance (research R14)
+NETCOUNT_NAME = "_netcount_015.py"
+GROUPS_MAP_NAME = "regression_group_map.json"
+
+_NETCOUNT_SOURCE = '''"""Measured real-network-call counter for one 015 regression round (T059).
+
+PRIMARY INSTRUMENT - provider HTTP requests at the httpx transport layer.
+Every model-provider call this process makes must pass through an httpx transport,
+so wrapping ``HTTPTransport.handle_request`` / ``AsyncHTTPTransport.handle_async_request``
+counts them exactly, independently of any local HTTP proxy or TUN device.
+``provider_calls`` is that count, restricted to the configured provider host(s)
+(``NETCOUNT_PROVIDER_HOSTS``, default ``api.deepseek.com``).
+
+SECONDARY, ADVISORY - socket audit census. It is recorded for transparency only:
+on this host the ``socket.connect`` audit event does not observe most connects
+(measured with eval/runs/015-20261009205637/_debug/netcount_probe_015.py, which
+opened real PostgreSQL, Qdrant and provider connections and was seen as a single
+connect), so the census is never used as the provider-call count.
+"""
+import json
+import os
+import runpy
+import sys
+
+MARKER = "015-T059-netcount-v2"
+_CENSUS = {}
+_REQUESTS = {}
+_HOSTS = tuple(part.strip().lower()
+               for part in (os.environ.get("NETCOUNT_PROVIDER_HOSTS") or "api.deepseek.com").split(",")
+               if part.strip())
+
+
+def _is_provider(host):
+    host = (host or "").lower()
+    return any(host == candidate or host.endswith("." + candidate) for candidate in _HOSTS)
+
+
+def _count(request):
+    host = getattr(getattr(request, "url", None), "host", "") or ""
+    _REQUESTS[host] = _REQUESTS.get(host, 0) + 1
+
+
+_instrument_error = None
+try:
+    import httpx
+
+    _async_handle = httpx.AsyncHTTPTransport.handle_async_request
+    _sync_handle = httpx.HTTPTransport.handle_request
+
+    async def _patched_async(self, request):
+        _count(request)
+        return await _async_handle(self, request)
+
+    def _patched_sync(self, request):
+        _count(request)
+        return _sync_handle(self, request)
+
+    httpx.AsyncHTTPTransport.handle_async_request = _patched_async
+    httpx.HTTPTransport.handle_request = _patched_sync
+except Exception as _error:  # noqa: BLE001 - a failed instrument is recorded, never hidden
+    _instrument_error = "%s: %s" % (type(_error).__name__, _error)
+
+
+def _hook(event, args):
+    if event != "socket.connect":
+        return
+    try:
+        address = args[1]
+    except Exception:  # noqa: BLE001 - a malformed audit payload is not a call
+        return
+    if isinstance(address, (tuple, list)) and len(address) >= 2:
+        host, port = address[0], address[1]
+    else:
+        host, port = str(address), None
+    key = "%s:%s" % (host, port)
+    _CENSUS[key] = _CENSUS.get(key, 0) + 1
+
+
+sys.addaudithook(_hook)
+_target = sys.argv[1]
+sys.argv = sys.argv[1:]
+_code = 0
+try:
+    runpy.run_path(_target, run_name="__main__")
+except SystemExit as exc:
+    _code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+finally:
+    _provider = sum(count for host, count in _REQUESTS.items() if _is_provider(host))
+    _payload = {
+        "instrument": MARKER,
+        "counting_rule": (
+            "primary: provider_calls == httpx transport handle_request/handle_async_request calls whose "
+            "request URL host is one of the configured provider hosts; secondary: a socket audit census "
+            "that is advisory only because this host's socket.connect audit event does not observe every "
+            "connect"
+        ),
+        "provider_calls": _provider,
+        "provider_hosts": list(_HOSTS),
+        "requests_by_host": _REQUESTS,
+        "instrument_error": _instrument_error,
+        "socket_census": _CENSUS,
+        "socket_census_advisory": True,
+    }
+    _out = os.environ.get("NETCOUNT_OUT")
+    if _out:
+        with open(_out, "w", encoding="utf-8", newline="\\n") as _handle:
+            json.dump(_payload, _handle, ensure_ascii=False, indent=2, sort_keys=True)
+            _handle.write("\\n")
+raise SystemExit(_code)
+'''
+
+
+# --------------------------------------------------------------------------- #
+# metric extractors (the same calibers run_regression_011.py uses)
+# --------------------------------------------------------------------------- #
+
+
+def _dense_metrics(report: dict) -> dict[str, float]:
+    metrics = report["metrics"]
+    return {"recall_at_k": metrics["recall_at_k"]["mean"], "mrr": metrics["mrr"]["mean"],
+            "ndcg_at_k": metrics["ndcg_at_k"]["mean"]}
+
+
+def _comparison_metrics(report: dict) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for arm, key in (("baseline", "baseline_metrics"), ("hybrid", "hybrid_metrics")):
+        metrics = report[key]
+        for metric in ("recall_at_k", "mrr", "ndcg_at_k"):
+            out[f"{arm}.{metric}"] = metrics[metric]["mean"]
+    return out
+
+
+def _graph_metrics(report: dict) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for arm, key in (("baseline", "baseline_metrics"), ("graph", "graph_metrics")):
+        metrics = report[key]
+        for metric in ("recall_at_k", "mrr", "ndcg_at_k"):
+            out[f"{arm}.{metric}"] = metrics[metric]["mean"]
+    return out
+
+
+def _agentic_metrics(report: dict) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for arm, key in (("baseline", "baseline_metrics"), ("agentic", "agentic_metrics")):
+        metrics = report[key]
+        for metric in ("recall_at_k", "mrr", "ndcg_at_k"):
+            out[f"{arm}.{metric}"] = metrics[metric]["mean"]
+    return out
+
+
+def _smoke_metrics(report: dict) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for form in ("writer", "reader"):
+        means = report["instance_forms"][form]["means"]
+        for metric in ("recall_at_k", "mrr", "ndcg_at_k"):
+            out[f"{form}.{metric}"] = means[metric]
+    return out
+
+
+EXTRACTORS = {"dense": _dense_metrics, "comparison": _comparison_metrics,
+              "graph": _graph_metrics, "agentic": _agentic_metrics, "smoke": _smoke_metrics}
+
+
+# --------------------------------------------------------------------------- #
+# group registry (T058): every group names its runner, command, test module and
+# artifact. `command` uses {python}/{run}/{datasets}/{regression} placeholders.
+# --------------------------------------------------------------------------- #
+
+NO_DEDICATED_MODULE = ("n/a (runner-based caliber; no dedicated pytest module exists for this caliber)")
+
+
+def _dataset(datasets: Path, count: int) -> Path:
+    return datasets / f"eval_dataset_{count}.json"
+
+
+GROUP_SPECS: list[dict] = [
+    {
+        "group": "001_dense_11",
+        "runner": "eval/run_eval.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/baseline_report.json",
+        "artifact": "regression/001_dense_11_report.json",
+        "extract": "dense",
+        "caliber": "001 dense baseline: eval_dataset.json entries 0-10 (11), --mode dense",
+        "command": ["{python}", "-X", "utf8", "eval/run_eval.py", "--dataset", "{datasets}/eval_dataset_11.json",
+                    "--mode", "dense", "--output", "{artifact}", "--no-reproducibility-check"],
+    },
+    {
+        "group": "002_hybrid_18",
+        "runner": "eval/run_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/hybrid_comparison_report.json",
+        "artifact": "regression/002_hybrid_18_report.json",
+        "extract": "comparison",
+        "caliber": "002 hybrid baseline: eval_dataset.json --limit 18 (dense vs hybrid)",
+        "command": ["{python}", "-X", "utf8", "eval/run_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "18",
+                    "--format-report", "{regression}/002_hybrid_18_format_report.json"],
+    },
+    {
+        "group": "003_format_37",
+        "runner": "eval/run_eval.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/regression_report.json",
+        "artifact": "regression/003_format_37_report.json",
+        "extract": "dense",
+        "caliber": "003 format expansion: eval_dataset.json entries 0-36 (37), --mode hybrid",
+        "command": ["{python}", "-X", "utf8", "eval/run_eval.py", "--dataset", "{datasets}/eval_dataset_37.json",
+                    "--mode", "hybrid", "--output", "{artifact}", "--no-reproducibility-check"],
+    },
+    {
+        "group": "004_graph_37",
+        "runner": "eval/run_graph_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/010_graph_regression_report.json",
+        "artifact": "regression/004_graph_37_report.json",
+        "extract": "graph",
+        "caliber": "004 graph enhancement: eval_dataset.json --limit 37 (010 regression caliber, 1% non-latency)",
+        "command": ["{python}", "-X", "utf8", "eval/run_graph_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "37", "--skip-reproducibility"],
+    },
+    {
+        "group": "005_agentic_63",
+        "runner": "eval/run_agentic_comparison.py",
+        "mode": "record_then_replay",
+        "model_dependent": True,
+        "test_module": "backend/tests/unit/test_query_planner_schema.py (005/009 structural equivalence precedent)",
+        "historical": "eval/agentic_comparison_report.json",
+        "artifact": "regression/005_agentic_replay.json",
+        "extract": "agentic",
+        "cache_dir": "regression/005-llm-cache",
+        "caliber": "005 agentic orchestration: combined eval_dataset.json + agentic_eval_dataset.json (63), "
+                   "judged on the replay round only (real provider transports must be 0)",
+        "rounds": [
+            {"round": "record", "artifact": "regression/005_agentic_record.json", "instrumented": True,
+             "command": ["{python}", "-X", "utf8", "eval/run_agentic_comparison.py",
+                         "--dataset", "eval/eval_dataset.json",
+                         "--agentic-dataset", "eval/agentic_eval_dataset.json",
+                         "--llm-cache-dir", "{cachedir}",
+                         "--output", "{artifact}", "--skip-repeatability"]},
+            {"round": "replay", "artifact": "regression/005_agentic_replay.json", "instrumented": True,
+             "command": ["{python}", "-X", "utf8", "eval/run_agentic_comparison.py",
+                         "--dataset", "eval/eval_dataset.json",
+                         "--agentic-dataset", "eval/agentic_eval_dataset.json",
+                         "--llm-cache-dir", "{cachedir}", "--keep-llm-cache",
+                         "--output", "{artifact}", "--skip-repeatability"]},
+        ],
+    },
+    {
+        "group": "006_smoke_11x2",
+        "runner": "rag_mcp.eval.instance_form_smoke.run_form_smoke (direct call; run_instance_form_smoke.py fixes its own path)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_006_instance_forms.py",
+        "historical": "eval/instance_form_smoke_report.json",
+        "artifact": "regression/006_instance_form_smoke_report.json",
+        "extract": "smoke",
+        "direct": "smoke",
+        "caliber": "006 instance-form smoke: writer + reader, the first 11 baseline queries each",
+    },
+    {
+        "group": "007_hybrid_18",
+        "runner": "eval/run_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/unit/test_query_planner_schema.py (007 domain-profile caliber precedent)",
+        "historical": "eval/007_hybrid_report.json",
+        "artifact": "regression/007_hybrid_18_report.json",
+        "extract": "comparison",
+        "caliber": "007 domain generalization, hybrid caliber: eval_dataset.json --limit 18",
+        "command": ["{python}", "-X", "utf8", "eval/run_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "18",
+                    "--format-report", "{regression}/007_hybrid_18_format_report.json"],
+    },
+    {
+        "group": "007_graph_37",
+        "runner": "eval/run_graph_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/unit/test_query_planner_schema.py (007 domain-profile caliber precedent)",
+        "historical": "eval/007_graph_report.json",
+        "artifact": "regression/007_graph_37_report.json",
+        "extract": "graph",
+        "caliber": "007 domain generalization, graph caliber: eval_dataset.json --limit 37",
+        "command": ["{python}", "-X", "utf8", "eval/run_graph_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "37", "--skip-reproducibility"],
+    },
+    {
+        "group": "008_regression",
+        "runner": "eval/run_eval.py (attribution not recorded in 008)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/008_regression_report.json",
+        "artifact": None,
+        "caliber": "008 ingestion-channel regression re-run",
+        "not_executed_reason": (
+            "the caliber that produced eval/008_regression_report.json is not recorded anywhere in the repo "
+            "(specs/008-universal-ingestion-channel/tasks.md T045 names only `python eval/run_eval.py` with no "
+            "output path or dataset slice), so no command can be attributed to it without guessing; a guessed "
+            "caliber is not a re-run of the recorded one, so this group is not executed"
+        ),
+    },
+    {
+        "group": "009_graph_37",
+        "runner": "eval/run_graph_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/unit/test_query_planner_schema.py (009 domain-neutral caliber precedent)",
+        "historical": "eval/graph_enhanced_comparison_report.json",
+        "artifact": "regression/009_graph_37_report.json",
+        "extract": "graph",
+        "caliber": "009 domain-neutral rerun of the 004 deterministic set: eval_dataset.json full (56 entries, "
+                   "graph caliber) against the 004 historical report",
+        "command": ["{python}", "-X", "utf8", "eval/run_graph_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "37", "--skip-reproducibility"],
+    },
+    {
+        "group": "009_agentic_63",
+        "runner": "eval/run_agentic_comparison.py",
+        "mode": "record_then_replay",
+        "model_dependent": True,
+        "test_module": "backend/tests/unit/test_query_planner_schema.py (009 structural equivalence precedent)",
+        "historical": "eval/agentic_comparison_report.json",
+        "artifact": None,
+        "caliber": "009 rerun of the 005 agentic caliber (63 combined entries)",
+        "not_executed_reason": (
+            "identical runner, dataset and caliber to 005_agentic_63 (the 009 verification reran 004+005 and its "
+            "re-run was not persisted under a 009-prefixed artifact); executing it again would duplicate the same "
+            "live model round and could not be told apart from 005_agentic_63, so it is recorded as not_executed "
+            "rather than double-counted"
+        ),
+    },
+    {
+        "group": "010_graph_regression",
+        "runner": "eval/run_graph_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/010_graph_regression_report.json",
+        "artifact": "regression/010_graph_regression_report.json",
+        "extract": "graph",
+        "caliber": "010 graph-relation-registry regression: eval_dataset.json --limit 37 rerun of the same caliber "
+                   "004 compares against; own artifact so the two groups are measured separately",
+        "command": ["{python}", "-X", "utf8", "eval/run_graph_comparison.py", "--dataset", "eval/eval_dataset.json",
+                    "--output", "{artifact}", "--limit", "37", "--skip-reproducibility"],
+    },
+    {
+        "group": "010_cross_reference",
+        "runner": "eval/run_cross_reference_comparison.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/cross_reference_comparison_report.json",
+        "artifact": "regression/010_cross_reference_report.json",
+        "extract": None,
+        "caliber": "010 cross-reference benefit comparison on the legal-domain benefit subset",
+        "command": ["{python}", "-X", "utf8", "eval/run_cross_reference_comparison.py",
+                    "--dataset", "eval/cross_reference_eval_dataset.json", "--output", "{artifact}"],
+    },
+    {
+        "group": "011_ingest_domain_corpora",
+        "runner": "eval/ingest_domain_corpora.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": None,
+        "artifact": "regression/011_ingest_domain_corpora.outcome.json",
+        "extract": None,
+        "no_artifact_expected": True,
+        "caliber": "011 domain-corpus idempotent ingestion (personal/generic/legal, one scope per file)",
+        "command": ["{python}", "-X", "utf8", "eval/ingest_domain_corpora.py"],
+    },
+    {
+        "group": "011_legal_benefit",
+        "runner": "eval/run_legal_benefit.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/legal_benefit_result.json",
+        "artifact": "regression/011_legal_benefit_result.json",
+        "extract": None,
+        "caliber": "011 cross-reference benefit re-verification (Q1=A dual-branch gate; a new artifact path keeps "
+                   "the historical eval/legal_benefit_result.json untouched)",
+        "command": ["{python}", "-X", "utf8", "eval/run_legal_benefit.py", "--output", "{artifact}"],
+    },
+    {
+        "group": "011_domain_baseline_generic",
+        "runner": "eval/run_domain_baseline.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/generic_domain_baseline_report.json",
+        "artifact": "regression/011_generic_domain_baseline_report.json",
+        "extract": "dense",
+        "caliber": "011 personal/generic domain baseline (non-binding anchor, dense/hybrid 13 queries)",
+        "command": ["{python}", "-X", "utf8", "eval/run_domain_baseline.py",
+                    "--dataset", "eval/generic_domain_eval_dataset.json",
+                    "--output", "{artifact}", "--domain-key", "personal"],
+    },
+    {
+        "group": "011_domain_baseline_legal",
+        "runner": "eval/run_domain_baseline.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/legal_domain_baseline_report.json",
+        "artifact": "regression/011_legal_domain_baseline_report.json",
+        "extract": "dense",
+        "caliber": "011 legal domain baseline (non-binding anchor, 11 queries)",
+        "command": ["{python}", "-X", "utf8", "eval/run_domain_baseline.py",
+                    "--dataset", "eval/legal_domain_eval_dataset.json",
+                    "--output", "{artifact}", "--domain-key", "legal",
+                    "--benefit-report", "eval/legal_benefit_result.json"],
+    },
+    {
+        "group": "011_multi_domain_acceptance",
+        "runner": "eval/run_multi_domain_acceptance.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/multi_domain_acceptance_report.json",
+        "artifact": "regression/011_multi_domain_acceptance_report.json",
+        "extract": None,
+        "caliber": "011 multi-domain end-to-end acceptance (scenarios + the three hard metrics, per-item measurement)",
+        "command": ["{python}", "-X", "utf8", "eval/run_multi_domain_acceptance.py", "--output", "{artifact}"],
+    },
+    {
+        "group": "011_regression_011",
+        "runner": "eval/run_regression_011.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": NO_DEDICATED_MODULE,
+        "historical": "eval/011_regression_summary.json",
+        "artifact": "regression/011_regression/012_regression_summary.json",
+        "extract": None,
+        "caliber": "011's own six-group rerun, narrowed to the deterministic groups (001/002/003/004/006) because the "
+                   "011 group set also contains the model-dependent 005 agentic caliber, which T059 requires to be "
+                   "judged by a record+replay round - the live 005 result must not be the pass basis",
+        "prepare_empty_dir": "regression/011_regression",
+        "command": ["{python}", "-X", "utf8", "eval/run_regression_011.py",
+                    "--output-dir", "{regression}/011_regression",
+                    "--group", "001_dense_11", "--group", "002_hybrid_18", "--group", "003_format_37",
+                    "--group", "004_graph_37", "--group", "006_smoke_11x2"],
+    },
+    {
+        "group": "012_acceptance",
+        "runner": "eval/run_memory_acceptance.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_012_memory_e2e.py",
+        "historical": None,
+        "artifact": None,
+        "caliber": "012 final acceptance report (suite junit + memory trace + host evidence + diagnostics + regression list)",
+        "not_executed_reason": (
+            "the runner requires --suite/--trace/--host/--diagnostics inputs produced by a live 012 acceptance run; "
+            "those historical inputs are not present in this worktree, and an output path that already exists makes "
+            "the parser refuse, so a fresh acceptance report cannot be produced from here. Recorded not_executed."
+        ),
+    },
+    {
+        "group": "012_e2e",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_012_memory_e2e.py",
+        "historical": None,
+        "artifact": "regression/pytest/012_e2e.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_012_memory_e2e.py",
+        "caliber": "012 memory E2E suite as run by the 014 regression-evidence listing",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_012_memory_e2e.py", "-q", "--no-header",
+                    "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "012_old_client_compat",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/contract/test_012_old_tool_compat.py",
+        "historical": None,
+        "artifact": "regression/pytest/012_old_client_compat.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/contract/test_012_old_tool_compat.py",
+        "caliber": "012 old-client byte compatibility contract suite",
+        "command": ["{python}", "-m", "pytest", "tests/contract/test_012_old_tool_compat.py", "-q", "--no-header",
+                    "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "012_reader_boundaries",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_012_reader_boundaries.py",
+        "historical": None,
+        "artifact": "regression/pytest/012_reader_boundaries.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_012_reader_boundaries.py",
+        "caliber": "012 reader boundary suite",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_012_reader_boundaries.py", "-q",
+                    "--no-header", "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "013_e2e",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_013_consolidation_e2e.py",
+        "historical": None,
+        "artifact": "regression/pytest/013_e2e.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_013_consolidation_e2e.py",
+        "caliber": "013 consolidation E2E suite (014 regression-evidence listing)",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_013_consolidation_e2e.py", "-q",
+                    "--no-header", "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "014_e2e",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_014_memory_e2e.py",
+        "historical": None,
+        "artifact": "regression/pytest/014_e2e.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_014_memory_e2e.py",
+        "caliber": "014 memory-aware retrieval E2E suite (014 regression-evidence listing)",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_014_memory_e2e.py", "-q", "--no-header",
+                    "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "014_contract",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/contract (whole directory, as listed by run_014_regression_evidence.SUITES)",
+        "historical": None,
+        "artifact": "regression/pytest/014_contract.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/contract",
+        "caliber": "014 regression-evidence contract listing: the whole backend/tests/contract directory",
+        "command": ["{python}", "-m", "pytest", "tests/contract", "-q", "--no-header",
+                    "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "014_consumption_projection",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_014_consumption_projection.py",
+        "historical": None,
+        "artifact": "regression/pytest/014_consumption_projection.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_014_consumption_projection.py",
+        "caliber": "014 consumption-projection suite (014 regression-evidence listing)",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_014_consumption_projection.py", "-q",
+                    "--no-header", "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "014_no_bypass",
+        "runner": "python -m pytest (cwd backend)",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "backend/tests/integration/test_014_no_bypass.py",
+        "historical": None,
+        "artifact": "regression/pytest/014_no_bypass.junit.xml",
+        "extract": None,
+        "pytest": True,
+        "pytest_target": "tests/integration/test_014_no_bypass.py",
+        "caliber": "014 no-bypass suite (014 regression-evidence listing)",
+        "command": ["{python}", "-m", "pytest", "tests/integration/test_014_no_bypass.py", "-q",
+                    "--no-header", "-p", "no:cacheprovider", "--junitxml", "{artifact}"],
+    },
+    {
+        "group": "013_consolidation_comparison",
+        "runner": "eval/run_consolidation_comparison.py",
+        "mode": "record_then_replay",
+        "model_dependent": True,
+        "test_module": "backend/tests/unit/test_consolidation_comparison_runner.py",
+        "historical": "eval/memory-gate-report-014.json",
+        "artifact": None,
+        "caliber": "013 consolidation record -> replay comparison (frozen six-query dataset, six independent restorations)",
+        "not_executed_reason": (
+            "the runner's contract CLI requires --snapshot <authority-snapshot.json> for the frozen scope, and no "
+            "valid 013 authority snapshot exists anywhere in the repo or on this host (`.superpowers/sdd/013-tasks` "
+            "is empty; C:\\t097 is empty; C:\\t102\\capsule\\capsule.json carries no policy/scope_id and is not a 013 "
+            "snapshot). Manufacturing one would be a fabricated caliber, so the group is not executed."
+        ),
+    },
+    {
+        "group": "014_continuity_gate",
+        "runner": "eval/run_memory_comparison.py + eval/archive_memory_gate_report.py",
+        "mode": "record_then_replay",
+        "model_dependent": True,
+        "test_module": "backend/tests/integration/test_014_memory_e2e.py",
+        "historical": "eval/memory-gate-report-014.json",
+        "artifact": "eval/runs/015-20261009205637/continuity-replay/memory-replay.json",
+        "extract": None,
+        "reuse_measured_evidence": True,
+        "caliber": "014 memory-aware retrieval gate: record round freezes the model responses and the cache fingerprint, "
+                   "then the replay round (measured real provider transports = 0) is the only pass basis",
+        "reuse": {
+            "produced_by": "phase 5 of this same run id (eval/runs/015-20261009205637/continuity-replay/)",
+            "record_artifact": None,
+            "replay_artifact": "eval/runs/015-20261009205637/continuity-replay/memory-replay.json",
+            "summary_artifact": "eval/runs/015-20261009205637/continuity-replay/run-summary-replay.json",
+            "measured_fields": ["cache.manifest_hash", "cache.record_real_network_calls",
+                                "cache.replay_real_network_calls", "gates.replay_zero_network"],
+            "why_reused": "the parent task explicitly allows reusing this record+replay evidence; the measured counters "
+                          "are read from the artifact, never typed in, and a fresh record round would repeat 32 live "
+                          "provider transports against a shared development PostgreSQL",
+        },
+    },
+    {
+        "group": "014_hard_metrics",
+        "runner": "eval/hard_metrics_014.py",
+        "mode": "single_round",
+        "model_dependent": False,
+        "test_module": "n/a (the module has no CLI and no test entry point)",
+        "historical": "eval/hard-metrics-014.json",
+        "artifact": None,
+        "caliber": "014 hard-metrics five-piece measurement",
+        "not_executed_reason": (
+            "eval/hard_metrics_014.py has no argparse/CLI, reads RUN_ID/RUN_DIR at import time, and its main() "
+            "(L433-435) unconditionally rewrites the tracked eval/hard-metrics-014.json - the one place in this "
+            "repository that violates history-zero-overwrite. Running it would overwrite a 014 historical artifact, "
+            "so it is not executed; the 015 runner reads the same measurement kernel through explicit paths instead."
+        ),
+    },
+]
+
+GROUPS_BY_ID = {spec["group"]: spec for spec in GROUP_SPECS}
+
+
+# --------------------------------------------------------------------------- #
+# paths and small helpers
+# --------------------------------------------------------------------------- #
+
+
+class Run:
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        self.dir = EVAL_DIR / "runs" / run_id
+        self.regression = self.dir / "regression"
+        self.datasets = self.regression / "datasets"
+        self.logs = self.regression / "logs"
+        self.status = self.regression / "_status"
+        self.evidence_dir = self.dir / "evidence"
+        self.netcount = self.regression / NETCOUNT_NAME
+
+    def ensure(self) -> None:
+        for path in (self.dir, self.regression, self.datasets, self.logs, self.status, self.evidence_dir):
+            path.mkdir(parents=True, exist_ok=True)
+        if not self.netcount.exists() or "015-T059-netcount-v2" not in self.netcount.read_text(
+                encoding="utf-8", errors="replace"):
+            # generated instrument of this run (never a historical artifact): refresh it
+            # in place when it is missing or pre-dates the current counting rule.
+            self.netcount.write_text(_NETCOUNT_SOURCE, encoding="utf-8", newline="\n")
+
+    def artifact(self, relative: str) -> Path:
+        return (REPO_ROOT / relative) if relative.startswith("eval/") else (self.dir / relative)
+
+    def relative(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    return _sha256_bytes(path.read_bytes())
+
+
+def _load_json(path: Path):
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _render(command: list[str], run: Run, artifact_rel: str | None, cache_dir: str | None) -> list[str]:
+    mapping = {
+        "python": PY,
+        "run": str(run.dir),
+        "regression": str(run.regression),
+        "datasets": str(run.datasets),
+        "artifact": str(run.artifact(artifact_rel)) if artifact_rel else "",
+        "cachedir": str(run.artifact(cache_dir)) if cache_dir else "",
+    }
+    rendered: list[str] = []
+    for token in command:
+        for key, value in mapping.items():
+            token = token.replace("{" + key + "}", value)
+        rendered.append(token)
+    return rendered
+
+
+def _guard_command(command: list[str], run: Run) -> list[str]:
+    """Refuse any runner argument that would write outside the run directory."""
+    output_flags = {"--output", "--format-report", "--cache-manifest", "--run-out",
+                    "--output-dir", "--junitxml", "--evidence-dir"}
+    guarded = list(command)
+    for index, token in enumerate(guarded):
+        if token in output_flags and index + 1 < len(guarded):
+            value = guarded[index + 1]
+            if not value.startswith(("http://", "https://")):
+                resolved = Path(value)
+                resolved = resolved if resolved.is_absolute() else (REPO_ROOT / resolved)
+                resolved = resolved.resolve()
+                try:
+                    resolved.relative_to(run.dir.resolve())
+                except ValueError as error:
+                    raise SystemExit(
+                        f"history zero-overwrite refusal: {token} {value} escapes the run directory "
+                        f"{run.dir} (would touch a historical artifact / the tracked report)") from error
+    return guarded
+
+
+def _write_new_json(path: Path, payload: dict) -> None:
+    """Zero-overwrite: never replace an existing file with different bytes."""
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
+    if path.exists():
+        if path.read_bytes() == text.encode("utf-8"):
+            return
+        raise SystemExit(f"refusing to overwrite {path}: it already exists with different bytes")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def _write_run_owned(run: "Run", path: Path, payload: dict) -> None:
+    """Refresh a derived index/record that belongs to *this* run.
+
+    Used for the regression group map (regenerated as groups complete) and for the
+    T060 block-validation record. It refuses any target outside the run directory
+    and any existing file that is not a record of this same run id, so a
+    historical artifact can never be clobbered through it. Every per-group
+    caliber artifact still goes through the strict ``_write_new_json``.
+    """
+    try:
+        path.resolve().relative_to(run.dir.resolve())
+    except ValueError as error:
+        raise SystemExit(f"refusing to write {path}: it is outside the run directory {run.dir}") from error
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8-sig"))
+        except ValueError as error:
+            raise SystemExit(f"refusing to overwrite unreadable {path}") from error
+        if existing.get("run_id") != payload.get("run_id"):
+            raise SystemExit(f"refusing to overwrite {path}: it is not a record of run {payload.get('run_id')}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
+                    encoding="utf-8", newline="\n")
+
+
+def _run_process(command: list[str], log_path: Path, timeout: int, cwd: Path,
+                 env_extra: dict[str, str] | None = None) -> dict:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    environment = dict(os.environ)
+    if env_extra:
+        environment.update(env_extra)
+    started = time.time()
+    with open(log_path, "w", encoding="utf-8", newline="\n") as log:
+        try:
+            completed = subprocess.run(command, cwd=str(cwd), stdout=log, stderr=subprocess.STDOUT,
+                                       env=environment, timeout=timeout, check=False)
+            code: int | None = completed.returncode
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            code, timed_out = None, True
+    return {"command": command, "exit_code": code, "timed_out": timed_out,
+            "duration_seconds": round(time.time() - started, 3),
+            "log": str(log_path), "started_at": datetime.fromtimestamp(started, UTC).isoformat()}
+
+
+def _tail(path: Path, lines: int = 25) -> str:
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    return "\n".join(content[-lines:])
+
+
+# --------------------------------------------------------------------------- #
+# prepare helpers
+# --------------------------------------------------------------------------- #
+
+
+def _prepare_datasets(run: Run) -> dict[str, str]:
+    source = _load_json(EVAL_DIR / "eval_dataset.json")
+    for count in (11, 37):
+        target = _dataset(run.datasets, count)
+        payload = json.dumps(source[:count], ensure_ascii=False, indent=2) + "\n"
+        if target.exists() and target.read_bytes() != payload.encode("utf-8"):
+            raise SystemExit(f"refusing to overwrite {target} with different bytes")
+        target.write_text(payload, encoding="utf-8", newline="\n")
+    return {"dataset_11": str(_dataset(run.datasets, 11)), "dataset_37": str(_dataset(run.datasets, 37))}
+
+
+def _cache_manifest(cache_dir: Path) -> dict:
+    """Fingerprint of the frozen model-response cache written by the record round."""
+    if not cache_dir.exists():
+        return {"manifest_hash": None, "file_count": 0, "bytes": 0, "files": [],
+                "reason": f"the record round wrote no cache directory at {cache_dir}"}
+    entries = []
+    for path in sorted(p for p in cache_dir.rglob("*") if p.is_file()):
+        entries.append({"path": path.relative_to(cache_dir).as_posix(), "sha256": _sha256_file(path),
+                        "bytes": path.stat().st_size})
+    payload = json.dumps(entries, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    return {"manifest_hash": _sha256_bytes(payload), "file_count": len(entries),
+            "bytes": sum(entry["bytes"] for entry in entries),
+            "files": [entry["path"] for entry in entries], "cache_dir": str(cache_dir)}
+
+
+def _compare_to_historical(spec: dict, artifact: Path) -> dict | None:
+    """Non-latency 1% relative tolerance against the historical caliber report."""
+    extractor = EXTRACTORS.get(spec.get("extract") or "")
+    historical_rel = spec.get("historical")
+    if extractor is None or not historical_rel or not artifact.exists():
+        return None
+    historical = REPO_ROOT / historical_rel
+    if not historical.exists():
+        return {"non_latency_reproducible": None,
+                "reason": f"historical reference {historical_rel} is not present"}
+    try:
+        new_metrics = extractor(_load_json(artifact))
+        old_metrics = extractor(_load_json(historical))
+    except Exception as error:  # noqa: BLE001 - an unreadable caliber is not a measurement
+        return {"non_latency_reproducible": None,
+                "reason": f"caliber metrics could not be extracted: {type(error).__name__}: {error}"}
+    checks = []
+    reproducible = bool(old_metrics) and set(new_metrics) == set(old_metrics)
+    for name in sorted(set(new_metrics) & set(old_metrics)):
+        old, new = old_metrics[name], new_metrics[name]
+        if old == 0 and new == 0:
+            delta, within = 0.0, True
+        elif old == 0 or new == 0:
+            delta, within = abs(old - new), abs(old - new) <= TOLERANCE
+        else:
+            delta = abs(old - new) / max(abs(old), abs(new))
+            within = delta <= TOLERANCE
+        reproducible = reproducible and within
+        checks.append({"metric": name, "historical": round(old, 6), "rerun": round(new, 6),
+                       "relative_delta": round(delta, 6), "tolerance": TOLERANCE, "passed": within})
+    return {"non_latency_reproducible": reproducible, "tolerance": TOLERANCE,
+            "historical_report": historical_rel, "checks": checks,
+            "caliber": "non-latency metrics only, 1% relative tolerance (latency.env_sensitive is excluded)"}
+
+
+# --------------------------------------------------------------------------- #
+# group execution
+# --------------------------------------------------------------------------- #
+
+
+def _not_executed(spec: dict, reason: str, rounds: list[dict] | None = None) -> dict:
+    return {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+            "model_dependent": bool(spec.get("model_dependent")), "test_module": spec["test_module"],
+            "caliber": spec.get("caliber"), "command": _command_text(spec, rounds),
+            "rounds": rounds or [], "executed": False, "artifact": None,
+            "historical": spec.get("historical"), "not_executed_reason": reason,
+            "cache_manifest_hash": None, "replay_real_network_calls": None,
+            "non_latency_reproducible": None, "checked_at": _now()}
+
+
+def _command_text(spec: dict, rounds: list[dict] | None = None) -> str:
+    if rounds:
+        parts = []
+        for item in rounds:
+            command = item.get("command")
+            if isinstance(command, (list, tuple)):
+                command = " ".join(str(token) for token in command)
+            parts.append(f"{item.get('round', 'single')}: {command}")
+        return " | ".join(parts)
+    return " ".join(_render(spec.get("command") or [], _ACTIVE_RUN, spec.get("artifact"),
+                            spec.get("cache_dir")))
+
+
+_ACTIVE_RUN: Run | None = None
+
+
+def run_smoke_group(run: Run, artifact_rel: str, timeout: int) -> dict:
+    """Group 006: instance-form smoke by direct function call (the legacy runner
+    hard-codes its own output path, so a direct call keeps history intact)."""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from rag_mcp.config import get_settings
+    from rag_mcp.eval.instance_form_smoke import load_baseline_queries, run_form_smoke
+    from rag_mcp.indexing.qdrant_client import QdrantStore
+    from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+
+    artifact = run.artifact(artifact_rel)
+    if artifact.exists():
+        raise SystemExit(f"refusing to overwrite {artifact}: it already exists")
+
+    async def _main() -> dict:
+        settings = get_settings()
+        engine = create_async_engine(settings.database_url)
+        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        reports = {}
+        try:
+            for mode in ("writer", "reader"):
+                reports[mode] = await run_form_smoke(
+                    mode, session_factory=session_factory, qdrant_store=QdrantStore(),
+                    embedding_provider=LocalCPUEmbeddingProvider(),
+                    queries=load_baseline_queries(), top_k=5, tolerance=TOLERANCE)
+        finally:
+            await engine.dispose()
+        return {"report_type": "instance_form_smoke", "generated_at": _now(), "instance_forms": reports}
+
+    started = time.time()
+    combined = asyncio.run(_main())
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(json.dumps(combined, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return {"duration_seconds": round(time.time() - started, 3)}
+
+
+def _execute_reused(spec: dict, run: Run) -> dict:
+    """014 continuity gate: the record+replay evidence of this run id is reused,
+    with the measured counters read out of the artifact (never typed in)."""
+    artifact = run.artifact(spec["artifact"])
+    if not artifact.exists():
+        return _not_executed(spec, f"the reuse target {run.relative(artifact)} does not exist")
+    report = _load_json(artifact)
+    cache = report.get("cache") or {}
+    gates = report.get("gates") or {}
+    replay_calls = cache.get("replay_real_network_calls")
+    record_calls = cache.get("record_real_network_calls")
+    manifest_hash = cache.get("manifest_hash")
+    if replay_calls is None or manifest_hash is None:
+        return _not_executed(spec, f"{run.relative(artifact)} carries no measured replay counters")
+    outcome = {
+        "group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+        "model_dependent": True, "test_module": spec["test_module"], "caliber": spec["caliber"],
+        "command": f"record round + replay round of this run id (see {run.relative(artifact)})",
+        "rounds": [
+            {"round": "record", "artifact": run.relative(artifact),
+             "measured_real_network_calls": record_calls, "source": "cache.record_real_network_calls"},
+            {"round": "replay", "artifact": run.relative(artifact),
+             "measured_real_network_calls": replay_calls, "source": "cache.replay_real_network_calls"},
+        ],
+        "executed": True, "evidence_reused": True, "reused_from": run.relative(artifact),
+        "reuse_reason": (spec.get("reuse") or {}).get("why_reused"),
+        "artifact": run.relative(artifact), "historical": spec.get("historical"),
+        "not_executed_reason": None,
+        "cache_manifest_hash": manifest_hash, "replay_real_network_calls": int(replay_calls),
+        "record_real_network_calls": None if record_calls is None else int(record_calls),
+        "replay_zero_network": gates.get("replay_zero_network"),
+        "non_latency_reproducible": (report.get("reproducibility") or {}).get("non_latency_reproducible"),
+        "checked_at": _now(),
+    }
+    return outcome
+
+
+def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> dict:
+    global _ACTIVE_RUN
+    _ACTIVE_RUN = run
+    if dry_run:
+        return {**_not_executed(spec, "dry run: not executed"), "command": _command_text(spec, spec.get("rounds"))}
+    if spec.get("not_executed_reason"):
+        return _not_executed(spec, spec["not_executed_reason"])
+    if spec.get("reuse_measured_evidence"):
+        outcome = _execute_reused(spec, run)
+
+        return outcome
+
+    # ---- single round -------------------------------------------------- #
+    if spec["mode"] == "single_round":
+        if spec.get("direct") == "smoke":
+            artifact = run.artifact(spec["artifact"])
+            if artifact.exists():
+                return _not_executed(spec, f"history zero-overwrite: {run.relative(artifact)} already exists")
+            log = run.logs / f"{spec['group']}.log"
+            try:
+                info = run_smoke_group(run, spec["artifact"], timeout)
+            except SystemExit:
+                raise
+            except Exception as error:  # noqa: BLE001 - a refusal is not a pass
+                return _not_executed(spec, f"direct call failed: {type(error).__name__}: {error}")
+            log.write_text(f"direct call into rag_mcp.eval.instance_form_smoke.run_form_smoke "
+                           f"({info['duration_seconds']}s)\n", encoding="utf-8", newline="\n")
+            outcome = {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+                       "model_dependent": False, "test_module": spec["test_module"],
+                       "caliber": spec["caliber"], "command": "direct call: run_form_smoke(writer) + "
+                       "run_form_smoke(reader)", "rounds": [
+                           {"round": "single", "artifact": run.relative(artifact),
+                            "exit_code": 0, "duration_seconds": info["duration_seconds"],
+                            "log": run.relative(log)}],
+                       "executed": True, "artifact": run.relative(artifact),
+                       "historical": spec.get("historical"), "not_executed_reason": None,
+                       "cache_manifest_hash": None, "replay_real_network_calls": None,
+                       "checked_at": _now()}
+            comparison = _compare_to_historical(spec, artifact)
+            outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+            outcome["comparison"] = comparison
+            return outcome
+
+        artifact = run.artifact(spec["artifact"])
+        if artifact.exists():
+            return _not_executed(spec, f"history zero-overwrite: {run.relative(artifact)} already exists")
+        if spec.get("prepare_empty_dir"):
+            target = run.artifact(spec["prepare_empty_dir"])
+            if target.exists() and any(target.iterdir()):
+                return _not_executed(spec, f"the 011 orchestrator requires an empty output directory; "
+                                           f"{run.relative(target)} is not empty")
+            target.mkdir(parents=True, exist_ok=True)
+        command = _guard_command(_render(spec["command"], run, spec.get("artifact"), None), run)
+        log = run.logs / f"{spec['group']}.log"
+        info = _run_process(command, log, timeout, BACKEND_DIR if spec.get("pytest") else REPO_ROOT)
+        if info["timed_out"]:
+            return _not_executed(spec, f"the runner exceeded the {timeout}s budget", [info])
+        if spec.get("no_artifact_expected"):
+            if info["exit_code"] != 0:
+                return _not_executed(spec, f"the runner exited {info['exit_code']} (log: {run.relative(log)})", [info])
+            outcome_artifact = run.artifact(spec["artifact"])
+            _write_new_json(outcome_artifact, {
+                "group": spec["group"], "runner": spec["runner"], "caliber": spec["caliber"],
+                "exit_code": info["exit_code"], "command": " ".join(command),
+                "log": run.relative(log), "log_tail": _tail(log, 40),
+                "expected_in_place_output": spec.get("expected_in_place"),
+                "in_place_output_sha256": (_sha256_file(REPO_ROOT / spec["expected_in_place"])
+                                           if spec.get("expected_in_place")
+                                           and (REPO_ROOT / spec["expected_in_place"]).exists() else None),
+                "note": "this caliber has no new report artifact (its runner re-verifies in place); the outcome "
+                        "file records the measured exit code and log tail",
+                "checked_at": _now()})
+            return {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+                    "model_dependent": False, "test_module": spec["test_module"], "caliber": spec["caliber"],
+                    "command": " ".join(command),
+                    "rounds": [{"round": "single", "artifact": run.relative(outcome_artifact), **info}],
+                    "executed": True, "artifact": run.relative(outcome_artifact),
+                    "historical": spec.get("historical"), "not_executed_reason": None,
+                    "cache_manifest_hash": None, "replay_real_network_calls": None,
+                    "non_latency_reproducible": None, "checked_at": _now()}
+        if spec.get("pytest"):
+            summary = _pytest_summary(log)
+            if summary is None:
+                return _not_executed(spec, f"no pytest summary line was observed (exit {info['exit_code']}); "
+                                           f"the suite did not run to completion", [info])
+            return {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+                    "model_dependent": False, "test_module": spec["test_module"], "caliber": spec["caliber"],
+                    "command": " ".join(command), "rounds": [{"round": "single", **info}],
+                    "executed": True, "artifact": run.relative(artifact) if artifact.exists() else None,
+                    "artifact_present": artifact.exists(),
+                    "pytest_summary": summary, "outcome": "passed" if info["exit_code"] == 0 else "failed",
+                    "historical": spec.get("historical"), "not_executed_reason": None,
+                    "cache_manifest_hash": None, "replay_real_network_calls": None,
+                    "non_latency_reproducible": None, "checked_at": _now()}
+        if not artifact.exists():
+            return _not_executed(spec, f"the runner exited {info['exit_code']} and produced no artifact "
+                                       f"(log: {run.relative(log)})", [info])
+        outcome = {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+                   "model_dependent": False, "test_module": spec["test_module"], "caliber": spec["caliber"],
+                   "command": " ".join(command), "rounds": [{"round": "single", **info}],
+                   "executed": True, "artifact": run.relative(artifact), "historical": spec.get("historical"),
+                   "outcome": "passed" if info["exit_code"] == 0 else "failed",
+                   "exit_code": info["exit_code"],
+                   "execution_rule": "the round ran to completion and produced the caliber artifact; a non-zero "
+                                     "exit code is a verdict on the caliber (recorded as outcome=failed), not a "
+                                     "failure to execute",
+                   "not_executed_reason": None, "cache_manifest_hash": None,
+                   "replay_real_network_calls": None, "checked_at": _now()}
+        comparison = _compare_to_historical(spec, artifact)
+        outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+        outcome["comparison"] = comparison
+        return outcome
+
+    # ---- record then replay ------------------------------------------- #
+    cache_dir = run.artifact(spec["cache_dir"])
+    rounds: list[dict] = []
+    record = spec["rounds"][0]
+    replay = spec["rounds"][1]
+    record_artifact = run.artifact(record["artifact"])
+    replay_artifact = run.artifact(replay["artifact"])
+    for target in (record_artifact, replay_artifact):
+        if target.exists():
+            return _not_executed(spec, f"history zero-overwrite: {run.relative(target)} already exists")
+    if cache_dir.exists():
+        return _not_executed(spec, f"history zero-overwrite: the record cache {run.relative(cache_dir)} already exists")
+
+    record_log = run.logs / f"{spec['group']}.record.log"
+    record_command = _guard_command(_render(record["command"], run, record["artifact"], spec["cache_dir"]), run)
+    record_count = run.regression / f"{spec['group']}.record.netcount.json"
+    record_info = _run_process(_instrument(record_command, run, record_count), record_log, timeout, REPO_ROOT,
+                               {"NETCOUNT_OUT": str(record_count)})
+    record_info.update({"round": "record", "artifact": run.relative(record_artifact),
+                        "instrumented": True, "netcount": run.relative(record_count)})
+    rounds.append(record_info)
+    if record_info["timed_out"]:
+        return _not_executed(spec, f"the record round exceeded the {timeout}s budget", rounds)
+    if record_info["exit_code"] != 0 or not record_artifact.exists():
+        return _not_executed(spec, f"the record round exited {record_info['exit_code']} and "
+                                   f"{'produced' if record_artifact.exists() else 'did not produce'} its artifact "
+                                   f"(log: {run.relative(record_log)})", rounds)
+    manifest = _cache_manifest(cache_dir)
+    if not manifest["file_count"]:
+        return _not_executed(spec, "the record round froze no model responses (empty cache manifest), so no replay "
+                                   "round can be judged", rounds)
+
+    replay_log = run.logs / f"{spec['group']}.replay.log"
+    replay_command = _guard_command(_render(replay["command"], run, replay["artifact"], spec["cache_dir"]), run)
+    replay_count = run.regression / f"{spec['group']}.replay.netcount.json"
+    replay_info = _run_process(_instrument(replay_command, run, replay_count), replay_log, timeout, REPO_ROOT,
+                               {"NETCOUNT_OUT": str(replay_count)})
+    replay_info.update({"round": "replay", "artifact": run.relative(replay_artifact),
+                        "instrumented": True, "netcount": run.relative(replay_count)})
+    rounds.append(replay_info)
+    measured = _load_json(replay_count) if replay_count.exists() else {}
+    replay_calls = measured.get("provider_calls")
+    if replay_info["timed_out"]:
+        return _not_executed(spec, f"the replay round exceeded the {timeout}s budget", rounds)
+    if replay_calls is None:
+        return _not_executed(spec, "the replay round produced no network census (the socket audit hook did not run)",
+                             rounds)
+    if replay_info["exit_code"] != 0 or not replay_artifact.exists():
+        return _not_executed(spec, f"the replay round exited {replay_info['exit_code']} and "
+                                   f"{'produced' if replay_artifact.exists() else 'did not produce'} its artifact "
+                                   f"(log: {run.relative(replay_log)})", rounds)
+    if replay_calls != 0:
+        return _not_executed(spec, f"the replay round made {replay_calls} real provider transport(s); a replay round "
+                                   f"is the only pass basis and it is not zero, so the group is not executed as a "
+                                   f"pass (record round result is never a pass basis)", rounds)
+
+    outcome = {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+               "model_dependent": True, "test_module": spec["test_module"], "caliber": spec["caliber"],
+               "command": _command_text(spec, rounds), "rounds": rounds, "executed": True,
+               "artifact": run.relative(replay_artifact), "historical": spec.get("historical"),
+               "not_executed_reason": None, "cache_manifest_hash": manifest["manifest_hash"],
+               "cache_manifest": {"manifest_hash": manifest["manifest_hash"], "file_count": manifest["file_count"],
+                                  "bytes": manifest["bytes"], "cache_dir": run.relative(cache_dir),
+                                  "files": manifest["files"]},
+               "record_real_network_calls": int((_load_json(record_count) or {}).get("provider_calls") or 0)
+               if record_count.exists() else None,
+               "replay_real_network_calls": int(replay_calls),
+               "replay_zero_network": int(replay_calls) == 0,
+               "checked_at": _now()}
+    comparison = _compare_to_historical(spec, replay_artifact)
+    outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+    outcome["comparison"] = comparison
+    return outcome
+
+
+def readjudicate(spec: dict, run: Run) -> dict:
+    """Re-classify one already-recorded round under the current execution rule.
+
+    Nothing is re-run and no measurement is changed: the recorded round's exit
+    code, log and artifact stay exactly as they were measured. Only the
+    executed/not_executed classification is recomputed, and the previous reason is
+    preserved verbatim in ``readjudicated_from``.
+    """
+    path = run.status / f"{spec['group']}.json"
+    if not path.exists():
+        raise SystemExit(f"no recorded status for {spec['group']}: nothing to re-adjudicate")
+    old = _load_json(path)
+    if old.get("executed"):
+        raise SystemExit(f"{spec['group']} is already recorded as executed; refusing to re-adjudicate")
+    rounds = old.get("rounds") or []
+    if not rounds or rounds[0].get("timed_out"):
+        raise SystemExit(f"{spec['group']} has no completed round to re-adjudicate")
+    artifact_rel = rounds[0].get("artifact") or spec.get("artifact")
+    artifact = run.artifact(artifact_rel) if artifact_rel else None
+    if artifact is None or not artifact.exists():
+        raise SystemExit(f"{spec['group']}: the recorded round names no existing artifact")
+    outcome = dict(old)
+    outcome.update({
+        "executed": True, "artifact": run.relative(artifact), "not_executed_reason": None,
+        "outcome": "passed" if rounds[0].get("exit_code") == 0 else "failed",
+        "exit_code": rounds[0].get("exit_code"),
+        "readjudicated": True,
+        "readjudicated_from": old.get("not_executed_reason"),
+        "readjudication_rule": "the round ran to completion and produced the caliber artifact; a non-zero exit "
+                               "code is a verdict on the caliber (recorded as outcome=failed), not a failure to "
+                               "execute",
+        "checked_at": _now(),
+    })
+    comparison = _compare_to_historical(spec, artifact)
+    outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+    outcome["comparison"] = comparison
+    return outcome
+
+
+def remeasure_replay(spec: dict, run: Run, replay_artifact_rel: str, timeout: int) -> dict:
+    """Re-run ONLY the replay round of an already-recorded record_then_replay group.
+
+    Used when the replay evidence has to be produced again with a corrected
+    instrument: the frozen record round (its artifact and its cache fingerprint)
+    is reused exactly as measured, nothing is re-billed to the provider, and the
+    superseded replay artifact is named in the record rather than deleted.
+    """
+    if spec["mode"] != "record_then_replay":
+        raise SystemExit(f"{spec['group']} is not a record_then_replay group")
+    path = run.status / f"{spec['group']}.json"
+    if not path.exists():
+        raise SystemExit(f"no recorded status for {spec['group']}: run the record round first")
+    previous = _load_json(path)
+    replay_artifact = run.artifact(replay_artifact_rel)
+    if replay_artifact.exists():
+        raise SystemExit(f"history zero-overwrite: {run.relative(replay_artifact)} already exists")
+    record = next((item for item in previous.get("rounds") or [] if item.get("round") == "record"), None)
+    record_artifact_rel = (record or {}).get("artifact") or spec["rounds"][0]["artifact"]
+    record_artifact = run.artifact(record_artifact_rel)
+    if not record_artifact.exists():
+        raise SystemExit(f"the frozen record artifact {run.relative(record_artifact)} is absent")
+    cache_dir = run.artifact(spec["cache_dir"])
+    manifest = _cache_manifest(cache_dir)
+    if not manifest["file_count"]:
+        raise SystemExit(f"the frozen cache {run.relative(cache_dir)} is empty; nothing to replay")
+
+    replay_spec = spec["rounds"][1]
+    replay_log = run.logs / f"{spec['group']}.replay.v2.log"
+    command = _guard_command(_render(replay_spec["command"], run, replay_artifact_rel, spec["cache_dir"]), run)
+    census = run.regression / f"{spec['group']}.replay.v2.netcount.json"
+    info = _run_process(_instrument(command, run, census), replay_log, timeout, REPO_ROOT,
+                        {"NETCOUNT_OUT": str(census)})
+    info.update({"round": "replay", "artifact": run.relative(replay_artifact), "instrumented": True,
+                 "netcount": run.relative(census)})
+    measured = _load_json(census) if census.exists() else {}
+    provider_calls = measured.get("provider_calls")
+    rounds = [item for item in (previous.get("rounds") or []) if item.get("round") != "replay"]
+    rounds.append(info)
+    if info["timed_out"]:
+        return _not_executed(spec, f"the re-measured replay round exceeded the {timeout}s budget", rounds)
+    if provider_calls is None:
+        return _not_executed(spec, "the re-measured replay round produced no provider-call measurement", rounds)
+    if info["exit_code"] != 0 or not replay_artifact.exists():
+        return _not_executed(spec, f"the re-measured replay round exited {info['exit_code']} and "
+                                   f"{'produced' if replay_artifact.exists() else 'did not produce'} its artifact "
+                                   f"(log: {run.relative(replay_log)})", rounds)
+    if provider_calls != 0:
+        return _not_executed(spec, f"the re-measured replay round made {provider_calls} real provider request(s); "
+                                   f"a replay round is the only pass basis and it is not zero", rounds)
+    outcome = dict(previous)
+    outcome.update({
+        "group": spec["group"], "runner": spec["runner"], "mode": spec["mode"], "model_dependent": True,
+        "test_module": spec["test_module"], "caliber": spec["caliber"], "rounds": rounds, "executed": True,
+        "artifact": run.relative(replay_artifact), "historical": spec.get("historical"),
+        "not_executed_reason": None, "cache_manifest_hash": manifest["manifest_hash"],
+        "cache_manifest": {"manifest_hash": manifest["manifest_hash"], "file_count": manifest["file_count"],
+                           "bytes": manifest["bytes"], "cache_dir": run.relative(cache_dir),
+                           "files": manifest["files"]},
+        "record_real_network_calls": None,
+        "record_provider_calls_note": "the record round ran under the v1 socket-audit census, which cannot observe "
+                                      "provider transports on this host; re-measuring it would repeat live billable "
+                                      "provider calls, so it is recorded as not measured (null) rather than as 0",
+        "record_frozen_cache_entries": manifest["file_count"],
+        "replay_real_network_calls": int(provider_calls), "replay_zero_network": True,
+        "replay_remeasured": True,
+        "superseded_replay_artifact": previous.get("artifact"),
+        "superseded_replay_reason": "the first replay round was measured with the v1 socket-audit census, which "
+                                    "this host cannot observe (it saw 1200+ connects to a local proxy and 0 provider "
+                                    "connects in both rounds); the replay was re-measured with the v2 httpx transport "
+                                    "counter, reusing the frozen record round and cache unchanged",
+        "checked_at": _now(),
+    })
+    comparison = _compare_to_historical(spec, replay_artifact)
+    outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+    outcome["comparison"] = comparison
+    return outcome
+
+
+def _instrument(command: list[str], run: Run, netcount_out: Path) -> list[str]:
+    """Wrap the target runner so the audit hook is installed before it starts."""
+    rest = list(command)
+    if rest and rest[0] in (PY, "python", "python3"):
+        rest = rest[1:]
+    if len(rest) >= 2 and rest[0] == "-X" and rest[1] == "utf8":
+        rest = rest[2:]
+    return [PY, "-X", "utf8", str(run.netcount), *rest]
+
+
+_PYTEST_SUMMARY = __import__("re").compile(r"(\d+) (passed|failed|skipped|error|errors)")
+
+
+def _pytest_summary(log: Path) -> str | None:
+    try:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if _PYTEST_SUMMARY.search(line) and ("passed" in line or "failed" in line or "error" in line):
+            return line.strip()
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# status + map assembly (T058)
+# --------------------------------------------------------------------------- #
+
+
+def record_status(run: Run, outcome: dict, refresh: bool = False, previous: dict | None = None) -> Path:
+    path = run.status / f"{outcome['group']}.json"
+    if previous is not None and not previous.get("executed"):
+        outcome = dict(outcome)
+        outcome["superseded_not_executed_status"] = {
+            "reason": previous.get("not_executed_reason"),
+            "checked_at": previous.get("checked_at"),
+        }
+    text = json.dumps(outcome, ensure_ascii=False, indent=2) + "\n"
+    retry = previous is not None and not previous.get("executed")
+    if path.exists() and path.read_bytes() != text.encode("utf-8"):
+        if not (refresh or retry):
+            raise SystemExit(f"refusing to overwrite the measured status of {outcome['group']} "
+                             f"({path} already exists with different bytes)")
+        existing = _load_json(path)
+        if existing.get("executed") and not refresh:
+            raise SystemExit(f"refusing to overwrite the executed status of {outcome['group']}")
+        if existing.get("group") != outcome["group"]:
+            raise SystemExit(f"refusing to refresh {path}: it records a different group")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+    return path
+
+
+def assemble_map(run: Run) -> dict:
+    statuses = {path.stem: _load_json(path) for path in sorted(run.status.glob("*.json"))} \
+        if run.status.exists() else {}
+    entries = []
+    for spec in GROUP_SPECS:
+        outcome = statuses.get(spec["group"])
+        if outcome is None:
+            outcome = _not_executed(spec, "not executed in this run (no measured status was recorded)")
+        entry = {
+            "group": spec["group"], "runner": spec["runner"], "command": outcome.get("command"),
+            "test_module": spec["test_module"], "artifact": outcome.get("artifact"),
+            "mode": spec["mode"], "executed": bool(outcome.get("executed")),
+            "model_dependent": bool(spec.get("model_dependent")),
+            "historical": spec.get("historical"), "caliber": spec.get("caliber"),
+            "cache_manifest_hash": outcome.get("cache_manifest_hash"),
+            "replay_real_network_calls": outcome.get("replay_real_network_calls"),
+            "record_real_network_calls": outcome.get("record_real_network_calls"),
+            "non_latency_reproducible": outcome.get("non_latency_reproducible"),
+            "rounds": outcome.get("rounds") or [],
+            "not_executed_reason": outcome.get("not_executed_reason"),
+        }
+        for optional in ("comparison", "cache_manifest", "evidence_reused", "reused_from", "reuse_reason",
+                         "pytest_summary", "outcome", "artifact_present"):
+            if optional in outcome:
+                entry[optional] = outcome[optional]
+        entries.append(entry)
+    payload = {
+        "schema_version": "015.1",
+        "report_type": "015_regression_group_map",
+        "run_id": run.run_id,
+        "generated_at": _now(),
+        "tolerance": TOLERANCE,
+        "execution_rule": (
+            "executed == the group's round(s) really ran: a single round requires exit 0 plus the caliber artifact; "
+            "a pytest group requires an observed pytest summary line; a record_then_replay group requires a "
+            "non-empty recorded cache manifest, a replay artifact, and a MEASURED replay provider-call count of 0. "
+            "An unexecuted group is named in not_executed and is never recorded as passed."
+        ),
+        "history_zero_overwrite": (
+            "every artifact path in this map lives under eval/runs/<RUN_ID>/; the orchestrator refuses a target path "
+            "that already exists and refuses any runner argument that writes outside the run directory"
+        ),
+        "model_dependent_groups": [spec["group"] for spec in GROUP_SPECS if spec.get("model_dependent")],
+        "groups": entries,
+    }
+    _write_run_owned(run, run.regression / GROUPS_MAP_NAME, payload)
+    return payload
+
+
+# --------------------------------------------------------------------------- #
+# T060: the report's regression block
+# --------------------------------------------------------------------------- #
+
+
+def _regression_argv(run: Run, output: Path, map_path: Path) -> list[str]:
+    continuity = run.dir / "continuity-replay" / "memory-replay.json"
+    argv = [
+        "--output", str(output),
+        "--poisoning", str(EVAL_DIR / "memory_poisoning_eval_dataset.json"),
+        "--aoep", str(EVAL_DIR / "memory_aoep_obligation_dataset.json"),
+        "--aoep-results", str(run.dir / "evidence" / "aoep-cases.json"),
+        "--poisoning-results", str(run.dir / "evidence" / "poisoning-cases.json"),
+        "--runs-dir", str(run.dir),
+        "--regression-map", str(map_path),
+        "--measurements", str(run.dir / "hard-metrics-measurements.json"),
+    ]
+    if continuity.exists():
+        argv += ["--continuity-report", str(continuity), "--continuity-criterion-met", "--continuity-completed", "16"]
+    return argv
+
+
+def probe_raw_cli(run: Run, map_path: Path) -> dict:
+    """Reproduce, and keep as evidence, the raw CLI's contract refusal."""
+    import run_memory_baseline as baseline
+
+    scratch = run.regression / "_probe" / "raw_cli_report.json"
+    scratch.parent.mkdir(parents=True, exist_ok=True)
+    argv = _regression_argv(run, scratch, map_path)
+    captured = subprocess.run([PY, "-X", "utf8", "eval/run_memory_baseline.py", *argv], cwd=str(REPO_ROOT),
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+    return {"command": "python eval/run_memory_baseline.py " + " ".join(argv),
+            "exit_code": captured.returncode,
+            "wrote_artifact": scratch.exists(),
+            "stderr_tail": "\n".join(captured.stderr.splitlines()[-25:]),
+            "defect": "memory_baseline_support.regression_block adds a non-contract `map_path` key whenever a "
+                      "regression map is supplied (L900-901); the contract's regression block is "
+                      "additionalProperties:false, so validate_report() aborts before the report is written",
+            "checked_at": _now()}
+
+
+def emit_report(run: Run, output: Path, timeout: int) -> int:
+    import memory_baseline_support as support
+    import run_memory_baseline as baseline
+
+    map_path = run.regression / GROUPS_MAP_NAME
+    if not map_path.exists():
+        print(f"--emit-map must run first: {map_path} is absent", file=sys.stderr)
+        return 2
+    if output.exists():
+        print(f"history zero-overwrite: {output} already exists", file=sys.stderr)
+        return 2
+
+    probe = probe_raw_cli(run, map_path)
+
+    original = support.regression_block
+
+    def contract_regression_block(*, groups, map_path, not_executed=()):  # noqa: ANN001
+        # Drop ONLY the non-contract `map_path` key; groups / not_executed / all_groups_executed
+        # are passed through to the frozen helper unchanged.
+        return original(groups=groups, map_path=None, not_executed=not_executed)
+
+    support.regression_block = contract_regression_block
+    started = time.time()
+    try:
+        code = baseline.main(_regression_argv(run, output, map_path))
+    finally:
+        support.regression_block = original
+
+    validation: dict = {"run_id": run.run_id, "report_type": "015_regression_block_validation",
+                        "output": str(output), "runner_exit_code": code,
+                        "duration_seconds": round(time.time() - started, 3),
+                        "raw_cli_probe": probe}
+    if output.exists():
+        document = _load_json(output)
+        checks: list[str] = []
+        try:
+            support.validate_report(document)
+            valid, error = True, None
+        except Exception as exc:  # noqa: BLE001 - a contract failure is recorded, not hidden
+            valid, error = False, f"{type(exc).__name__}: {exc}"
+        block = document.get("regression") or {}
+        allowed = {"group", "runner", "mode", "cache_manifest_hash", "replay_real_network_calls",
+                   "non_latency_reproducible", "artifact"}
+        for item in block.get("groups") or []:
+            extra = set(item) - allowed
+            if extra:
+                checks.append(f"{item.get('group')}: non-contract keys {sorted(extra)}")
+        validation.update({
+            "valid": valid, "validation_error": error,
+            "report_sha256": _sha256_file(output),
+            "regression": block,
+            "group_items_allowed_keys": sorted(allowed),
+            "non_contract_key_checks": checks,
+            "not_executed": block.get("not_executed"),
+            "all_groups_executed": block.get("all_groups_executed"),
+            "map_path_present_in_block": "map_path" in block,
+            "shim": "support.regression_block patched in-process to pass map_path=None for this call only; "
+                    "run_memory_baseline.py and memory_baseline_support.py are untouched (out of write scope)",
+        })
+    else:
+        validation.update({"valid": False, "validation_error": "no report was written"})
+    _write_run_owned(run, run.evidence_dir / "regression_block_validation.json", validation)
+    return 0 if validation.get("valid") else 1
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="015 T058/T059/T060 full-suite regression orchestration")
+    parser.add_argument("--run-id", default=os.environ.get("RUN_ID") or DEFAULT_RUN_ID)
+    parser.add_argument("--group", action="append", default=None, help="group id (repeatable); default: all")
+    parser.add_argument("--timeout", type=int, default=3600, help="per-round wall-clock budget in seconds")
+    parser.add_argument("--list", action="store_true", help="list the registered groups and exit")
+    parser.add_argument("--dry-run", action="store_true", help="print the planned commands without running")
+    parser.add_argument("--emit-map", action="store_true", help="assemble regression_group_map.json from the status files")
+    parser.add_argument("--readjudicate", action="append", default=None,
+                        help="re-classify an already-recorded round under the current execution rule (never re-runs, "
+                             "never changes a measurement); repeatable")
+    parser.add_argument("--remeasure-replay", default=None,
+                        help="re-run ONLY the replay round of a record_then_replay group with the current "
+                             "instrument, reusing the frozen record round and cache")
+    parser.add_argument("--replay-artifact", default=None,
+                        help="artifact path for --remeasure-replay (relative to the run dir; must not exist)")
+    parser.add_argument("--emit-report", action="store_true", help="T060: emit the report's regression block")
+    parser.add_argument("--output", type=Path, help="T060 report output path (must not exist)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    run = Run(args.run_id)
+    run.ensure()
+    _prepare_datasets(run)
+    global _ACTIVE_RUN
+    _ACTIVE_RUN = run
+
+    if args.list:
+        for spec in GROUP_SPECS:
+            print(f"{spec['group']:34s} {spec['mode']:18s} model={str(bool(spec.get('model_dependent'))):5s} "
+                  f"{spec['runner']}")
+        return 0
+    if args.dry_run:
+        for spec in GROUP_SPECS:
+            outcome = execute_group(spec, run, args.timeout, dry_run=True)
+            print(f"{spec['group']}: {outcome['command']}")
+        return 0
+    if args.remeasure_replay:
+        group_id = args.remeasure_replay
+        spec = GROUPS_BY_ID.get(group_id)
+        if spec is None:
+            print(f"unknown group: {group_id}", file=sys.stderr)
+            return 2
+        default_replay = spec["rounds"][1]["artifact"].replace(".json", ".v2.json")
+        outcome = remeasure_replay(spec, run, args.replay_artifact or default_replay, args.timeout)
+        record_status(run, outcome, refresh=True)
+        print(f"{group_id}: executed={outcome['executed']} artifact={outcome.get('artifact')} "
+              f"replay_real_network_calls={outcome.get('replay_real_network_calls')}")
+        payload = assemble_map(run)
+        executed = sum(1 for entry in payload["groups"] if entry["executed"])
+        print(f"map: {run.regression / GROUPS_MAP_NAME} ({executed}/{len(payload['groups'])} executed)")
+        return 0 if outcome["executed"] else 1
+    if args.readjudicate:
+        for group_id in args.readjudicate:
+            spec = GROUPS_BY_ID.get(group_id)
+            if spec is None:
+                print(f"unknown group: {group_id}", file=sys.stderr)
+                return 2
+            outcome = readjudicate(spec, run)
+            record_status(run, outcome, refresh=True)
+            print(f"{group_id}: executed={outcome['executed']} outcome={outcome.get('outcome')} "
+                  f"artifact={outcome.get('artifact')}")
+        payload = assemble_map(run)
+        executed = sum(1 for entry in payload["groups"] if entry["executed"])
+        print(f"map: {run.regression / GROUPS_MAP_NAME} ({executed}/{len(payload['groups'])} executed)")
+        return 0
+    if args.emit_map:
+        payload = assemble_map(run)
+        executed = sum(1 for entry in payload["groups"] if entry["executed"])
+        print(f"written: {run.regression / GROUPS_MAP_NAME} "
+              f"({executed}/{len(payload['groups'])} groups executed)")
+        return 0
+    if args.emit_report:
+        output = args.output or (run.dir / "memory_baseline_report.regression.json")
+        return emit_report(run, Path(output), args.timeout)
+
+    selected = [spec for spec in GROUP_SPECS if not args.group or spec["group"] in args.group]
+    if not selected:
+        print(f"no group matched {args.group}", file=sys.stderr)
+        return 2
+    failures = 0
+    for spec in selected:
+        status_path = run.status / f"{spec['group']}.json"
+        previous = _load_json(status_path) if status_path.exists() else None
+        if previous is not None and previous.get("executed"):
+            print(f"=== {spec['group']}: already executed in this run; keeping the measured record ===",
+                  flush=True)
+            continue
+        print(f"=== {spec['group']} ({spec['mode']}) ===", flush=True)
+        try:
+            outcome = execute_group(spec, run, args.timeout)
+        except SystemExit as error:
+            print(f"refused: {error}", file=sys.stderr)
+            return 2
+        record_status(run, outcome, previous=previous)
+        flag = "executed" if outcome["executed"] else "not_executed"
+        print(f"    {flag}: {outcome.get('artifact') or outcome.get('not_executed_reason')}", flush=True)
+        failures += 0 if outcome["executed"] else 1
+    payload = assemble_map(run)
+    executed = sum(1 for entry in payload["groups"] if entry["executed"])
+    print(f"map: {run.regression / GROUPS_MAP_NAME} ({executed}/{len(payload['groups'])} executed)")
+    return 0 if failures == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
