@@ -170,7 +170,12 @@ def test_include_delivered_does_not_relax_status_scope_expiry_or_threshold():
                                    include_delivered=True)
     assert [item["memory_id"] for item in result["items"]] == [1]
     assert result["counts"]["filtered_inactive"] == 2
-    assert "below_min_score" in result["failed_paths"] or result["counts"]["candidates"] == 2
+    # Exact semantics: the pool had two visible candidates, one of which was
+    # below the conservative threshold and was simply not selected — the
+    # explicit include_delivered override means nothing was degraded.
+    assert result["failed_paths"] == []
+    assert result["counts"]["candidates"] == 2
+    assert result["counts"]["dropped_delivered"] == 0
 
 
 def test_include_delivered_is_a_single_request_override():
@@ -322,3 +327,41 @@ def test_recall_defaults_keep_the_historical_audit_values():
     signature = inspect.signature(MemoryReader.recall)
     assert signature.parameters["tool"].default == "recall_memory"
     assert signature.parameters["channel"].default == "recall"
+
+
+# --- T091: accurate degradation reasons and counts -----------------------------
+
+
+def test_dedup_to_empty_is_not_claimed_when_another_reason_exists():
+    """T091: dedup is only the *explanation* when nothing else degraded."""
+    primary = {"completion_status": "complete", "evidence": [], "request_id": "r"}
+    merged = merge_attachment_response(primary, {
+        "items": [], "counts": {"dropped_delivered": 3}, "failed_paths": ["below_min_score"],
+    })
+    assert DEDUPED_EMPTY_GAP not in merged.get("gaps", [])
+    assert "already delivered" not in merged["memory_notice"]["notice"]
+
+
+def test_state_filtered_and_unscored_candidates_are_reported_accurately():
+    """T091/FR-014: reasons match the real cause and the candidate pool is counted."""
+    filtered = attachment_candidates(
+        {1: _row(1, status="quarantined")}, matches={1: dict(MATCH)}, policy={},
+        has_context=True, session_id=None, now=NOW)
+    assert filtered["failed_paths"] == ["state_filtered"]
+    assert filtered["counts"]["filtered_inactive"] == 1
+
+    unscored = attachment_candidates(
+        {1: _row(1)}, matches={}, policy={}, has_context=True, session_id=None, now=NOW)
+    assert unscored["failed_paths"] == ["memory_unavailable"]
+    assert unscored["counts"]["candidates"] == 1, "a visible but unscored row is still a candidate"
+
+
+def test_a_whole_pool_cropped_by_the_budget_reports_budget_exhausted():
+    """T091: a budget-caused empty result is never silent."""
+    result = attachment_candidates(
+        {1: _row(1, content_text="x" * 500)}, matches={1: dict(MATCH)},
+        policy={"attach_excerpt_chars": 200, "attach_max_chars": 200},
+        has_context=True, session_id=None, now=NOW)
+    assert result["items"] == []
+    assert result["failed_paths"] == ["budget_exhausted"]
+    assert result["counts"]["truncated_by_budget"] >= 1

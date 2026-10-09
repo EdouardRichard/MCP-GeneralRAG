@@ -38,6 +38,12 @@ WORKING_SET_SUBKEYS = ["open_items", "recent_activity", "procedural", "decisions
                        "session_resolved"]
 
 
+@pytest.fixture(autouse=True)
+def _enable_the_014_deployment_switch(monkeypatch):
+    """T086: the tool surface only exposes the new form while the switch is on."""
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+
+
 # --- input contract -----------------------------------------------------------
 
 
@@ -267,3 +273,14 @@ def test_014_start_work_output_validates_both_forms():
                         "decisions": [], "truncated": False, "session_resolved": None},
     }}
     assert not list(validator.iter_errors(experimental))
+
+
+def test_the_deployment_switch_gates_the_experimental_form(monkeypatch):
+    """T086/FR-035: while the 014 switch is off the tool surface stays legacy."""
+    _install(monkeypatch)
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "false")
+    server = _server()
+    result = asyncio.run(server.call_tool("start_work", {
+        "scope_ref": "7", "include_working_set": True,
+    }))
+    assert list(result.structuredContent["working_set"]) == LEGACY_WORKING_SET_KEYS

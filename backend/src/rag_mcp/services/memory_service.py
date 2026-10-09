@@ -43,6 +43,9 @@ ATTACH_ITEMS_HARD_LIMIT = 5
 ATTACH_CHARACTERS_HARD_LIMIT = 800
 ATTACH_EXCERPT_HARD_LIMIT = 200
 ATTACH_TIMEOUT_MS_HARD_LIMIT = 800
+#: 014 contract: ``memory_context`` is 1-4000 characters, while the direct
+#: ``recall_memory`` query channel stays at 2000 (T080).
+ATTACH_CONTEXT_MAX_CHARACTERS = 4000
 
 
 def attachment_budget(policy) -> dict:
@@ -205,6 +208,7 @@ def attachment_candidates(
     now=None,
     delivered: Iterable[int] = (),
     include_delivered: bool = False,
+    anchor_verified_ids: Iterable[int] | None = None,
 ) -> dict:
     """Pure attachment selection: visibility, threshold, dedup, budget, ordering.
 
@@ -220,9 +224,13 @@ def attachment_candidates(
     entries = list(rows.values()) if isinstance(rows, Mapping) else list(rows)
     matches = matches or {}
     delivered_ids = set(delivered or ())
+    # ``None`` means "presence-only" (the pure-function contract); the attach
+    # path passes the live per-item re-verification result (T075/FR-003).
+    verified_hard = None if anchor_verified_ids is None else set(anchor_verified_ids)
 
     visible: list[tuple[int, Mapping, Mapping | None]] = []
     filtered_inactive = 0
+    unscored = 0
     for row in entries:
         if not isinstance(row, Mapping):
             continue
@@ -232,25 +240,37 @@ def attachment_candidates(
         if not attachment_visible(row, now=moment) or not attachment_hard_anchor_ok(row):
             filtered_inactive += 1
             continue
+        if (verified_hard is not None and row.get("provenance") == "hard"
+                and int(memory_id) not in verified_hard):
+            # A hard item whose anchors cannot be re-verified live never enters
+            # the attachment (FR-003); it is counted as state-filtered.
+            filtered_inactive += 1
+            continue
         match = matches.get(memory_id)
         if match is None:
             match = row.get("match")
         if not isinstance(match, Mapping) or match.get("dense_similarity") is None:
             # Without the dense component the documented threshold cannot be
-            # applied, so the candidate is not admitted (fail closed).
+            # applied, so the candidate is not admitted (fail closed) — but it
+            # is still a visible candidate and must not vanish from the counts
+            # (T091/FR-014).
+            unscored += 1
             continue
         visible.append((int(memory_id), row, match))
 
-    candidates = len(visible)
+    candidates = len(visible) + unscored
     failed_paths: list[str] = []
-    if not visible:
-        if not matches and entries:
-            failed_paths = ["memory_unavailable"]
-        eligible: list[tuple[int, Mapping, Mapping]] = []
-    else:
+    if visible:
         eligible = [entry for entry in visible if entry[2]["dense_similarity"] >= threshold]
         if not eligible:
             failed_paths = ["below_min_score"]
+    else:
+        eligible = []
+        if unscored or (not matches and entries):
+            failed_paths = ["memory_unavailable"]
+        elif filtered_inactive:
+            # T091: the pool existed but every row was state-invisible.
+            failed_paths = ["state_filtered"]
 
     eligible.sort(key=lambda entry: (-entry[2]["dense_similarity"], entry[0]))
 
@@ -278,6 +298,10 @@ def attachment_candidates(
             continue
         characters += size
         selected.append(item)
+
+    if not selected and truncated_by_budget:
+        # T091: the pool existed but the whole pool was cropped by the budget.
+        failed_paths = sorted(set(failed_paths + ["budget_exhausted"]))
 
     return {
         "items": selected,
@@ -351,7 +375,6 @@ class MemoryService:
         """
         from rag_mcp.services.memory_reader import MemoryReader
 
-        budget = attachment_budget(policy)
         flags, detection_failed = detect_context_flags(memory_context)
         empty_counts = {"returned": 0, "candidates": 0, "truncated_by_budget": 0,
                         "dropped_delivered": 0, "filtered_inactive": 0, "characters": 0}
@@ -363,6 +386,11 @@ class MemoryService:
         recall_query = memory_context if memory_context is not None else query
         has_context = memory_context is not None
         try:
+            if policy is None:
+                # T079: the tool path must consume the resolved domain policy, not
+                # silently fall back to the built-in defaults.
+                policy = await self._attachment_policy(scope_ref)
+            budget = attachment_budget(policy)
             async with asyncio.timeout(budget["timeout_ms"] / 1000):
                 recall = await MemoryReader(self.session, self.projections).recall(
                     scope_ref=scope_ref,
@@ -370,6 +398,10 @@ class MemoryService:
                     session_id=session_id,
                     limit=max(budget["top_k"], 1) * 4,
                     include_delivered=include_delivered,
+                    include_injection_flags=True,
+                    # T080: the 014 contract allows a 4000-character
+                    # memory_context; only the attachment channel may use it.
+                    max_query_characters=ATTACH_CONTEXT_MAX_CHARACTERS,
                     tool="search_knowledge",
                     channel="attached",
                 )
@@ -382,12 +414,14 @@ class MemoryService:
             )
             return result
 
+        notice_paths = list((recall.get("memory_notice") or {}).get("failed_paths") or [])
         if recall.get("completion_status") == "failed":
-            notice_paths = list((recall.get("memory_notice") or {}).get("failed_paths") or [])
             result["failed_paths"] = sorted(
                 set(result["failed_paths"] + notice_paths + ["memory_unavailable"])
             )
             return result
+        # T081: a ``partial`` recall (sub-path unavailability) must not vanish.
+        result["failed_paths"] = sorted(set(result["failed_paths"] + notice_paths))
 
         selection = attachment_candidates(
             list(recall.get("memories") or []),
@@ -396,7 +430,14 @@ class MemoryService:
             session_id=session_id,
             delivered=(),
             include_delivered=include_delivered,
+            anchor_verified_ids=await self._verify_hard_anchors(list(recall.get("memories") or [])),
         )
+        if flags:
+            # T076: the detected memory_context flags ride along with each item.
+            for item in selection["items"]:
+                merged = dict(item.get("injection_flags") or {})
+                merged.update(flags)
+                item["injection_flags"] = merged
         result["items"] = selection["items"]
         result["counts"] = {**empty_counts, **selection["counts"]}
         # Delivered dedup happens once, inside the single read channel; surface
@@ -406,6 +447,76 @@ class MemoryService:
         )
         result["failed_paths"] = sorted(set(result["failed_paths"] + selection["failed_paths"]))
         return result
+
+    async def _verify_hard_anchors(self, entries) -> set[int]:
+        """T075/FR-003: live per-item attribution re-verification for ``hard`` items.
+
+        Presence of ``evidence_refs`` is not enough: each anchor is re-read and
+        must still be a published, attributed chunk in a published source. An
+        unreadable anchor store is treated as "cannot verify", so every hard item
+        is excluded (fail closed) rather than attaching an unverifiable claim.
+        """
+        needed: dict[int, list[str]] = {}
+        for row in entries:
+            if isinstance(row, Mapping) and row.get("provenance") == "hard" \
+                    and row.get("memory_id") is not None:
+                needed[int(row["memory_id"])] = [str(ref) for ref in (row.get("evidence_refs") or [])]
+        if not needed:
+            return set()
+        identifiers = sorted({ref for refs in needed.values() for ref in refs})
+        if not identifiers:
+            return set()
+        from rag_mcp.services.consolidation_commit import read_evidence
+
+        try:
+            facts = await read_evidence(self.session, identifiers)
+        except Exception:  # noqa: BLE001 - unreadable anchors never authorize a hard item
+            return set()
+        verified: set[int] = set()
+        for memory_id, refs in needed.items():
+            for ref in refs:
+                fact = facts.get(ref) or {}
+                if (fact.get("status") == "published" and fact.get("source_status") == "published"
+                        and fact.get("attributed")):
+                    verified.add(memory_id)
+                    break
+        return verified
+
+    async def _attachment_policy(self, scope_ref):
+        """T079: the domain policy the attachment budget/threshold must obey.
+
+        Every resolved scope's ``memory_policy`` is merged conservatively —
+        smallest counts, character budgets, excerpt, timeout and delivery window,
+        highest score thresholds — so a permissive domain can never widen the
+        attachment budget for a stricter one.
+        """
+        from rag_mcp.models.domain_profile import DomainProfile
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+        from rag_mcp.services.memory_policy import MemoryPolicy
+        from rag_mcp.services.scope_resolver import MemoryScopeResolver
+
+        scope_ids = await MemoryScopeResolver(self.session).resolve_many(scope_ref)
+        policies = []
+        for scope_id in scope_ids:
+            scope = await self.session.get(KnowledgeScope, scope_id)
+            profile = await self.session.get(DomainProfile, scope.domain_key) if scope is not None else None
+            policies.append(MemoryPolicy.model_validate(
+                (profile.memory_policy if profile is not None else None) or {}))
+        if not policies:
+            return MemoryPolicy()
+        if len(policies) == 1:
+            return policies[0]
+        merged = {field: min(int(getattr(item, field)) for item in policies)
+                  for field in ("attach_top_k", "attach_max_chars", "attach_excerpt_chars",
+                                "attach_timeout_ms", "delivered_ttl_seconds")}
+        merged["attach_conservative_min_score"] = max(
+            float(item.attach_conservative_min_score) for item in policies)
+        # The conservative track may never drop below the permissive minimum.
+        merged["attach_min_score"] = min(
+            max(float(item.attach_min_score) for item in policies),
+            merged["attach_conservative_min_score"],
+        )
+        return MemoryPolicy.model_validate(merged)
 
     async def start_work(self, **parameters):
         from rag_mcp.services.memory_reader import MemoryReader

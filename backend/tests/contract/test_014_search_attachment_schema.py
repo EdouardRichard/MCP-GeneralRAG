@@ -220,3 +220,15 @@ def test_excerpt_is_cropped_to_the_contract_limit_and_marks_truncation():
     assert item["truncated"] is True
     assert item["content_length"] == 250
 
+
+def test_attachment_match_rejects_nested_evidence_locating_fields():
+    """T088/FR-003: ``match`` is closed, so a nested locating field cannot validate."""
+    from rag_mcp.services.memory_service import attachment_item
+
+    validator = reg.validator(ATTACHMENT)
+    item = attachment_item(_row(content_text="body"), match={"dense_similarity": 0.9},
+                           attach_reason="context_match", excerpt_chars=200)
+    assert not list(validator.iter_errors(item))
+    item["match"]["relevance_score"] = 0.5
+    assert list(validator.iter_errors(item)), "a nested relevance_score must be rejected"
+

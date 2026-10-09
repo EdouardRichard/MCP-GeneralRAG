@@ -24,13 +24,22 @@ def register_start_work_tool(server, session_factory, embedding_provider, qdrant
         activity and procedural working set from the already-read state, with an
         append-only decision trail. It is an explicit switch: no other argument
         (``session_id``, ``agent_id``, ``budget``, data size) selects the new form.
+
+        T086: the new form is *also* gated by the deployment switch
+        ``MEMORY_AWARE_RETRIEVAL_ENABLED`` (plan Phase 0: "门控附加层与工作集新形态").
+        While the release gate has not passed the capability stays off, so an
+        explicit request on the tool surface falls back to the legacy form.
         """
         try:
+            from rag_mcp.config import get_settings
+
+            effective_working_set = bool(include_working_set) and bool(
+                get_settings().memory_aware_retrieval_enabled)
             async with session_factory() as session:
                 result = await MemoryService(session, embedding_provider=embedding_provider, qdrant_store=qdrant_store).start_work(
                     scope_ref=scope_ref, session_id=str(session_id) if session_id else None, task_hint=task_hint,
                     agent_id=agent_id, include=include, budget=budget,
-                    include_working_set=include_working_set)
+                    include_working_set=effective_working_set)
                 return memory_result(result)
         except Exception as exception:
             return memory_error(exception)

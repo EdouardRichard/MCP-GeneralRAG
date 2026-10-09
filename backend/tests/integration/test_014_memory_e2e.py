@@ -143,7 +143,7 @@ async def test_search_with_session_context_annotates_and_never_mixes(db_session,
             assert field not in item, f"attachment must not carry {field}"
         assert item["status"] == "active"
         assert item["valid_to"] is None and item["superseded_by"] is None
-        assert item["injection_flags"] is not None
+        assert isinstance(item["injection_flags"], dict), "injection_flags must ride along"
     for item in evidence:
         assert "memory_id" not in item, "evidence must not carry memory vocabulary"
 

@@ -29,13 +29,14 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from rag_mcp.config import get_settings
+from rag_mcp.errors import attachment_degradation_reason
 from rag_mcp.indexing.qdrant_client import QdrantStore
 from rag_mcp.orchestration.entry import (
     AgenticPathUnavailable,
     run_agentic_search as _run_agentic_search,
 )
 from rag_mcp.providers.base import EmbeddingProvider, RerankerProvider
-from rag_mcp.services.memory_service import MemoryService
+from rag_mcp.services.memory_service import ATTACH_TIMEOUT_MS_HARD_LIMIT, MemoryService
 from rag_mcp.services.retrieval_service import RetrievalService, _non_empty_entries
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,36 @@ ATTACHMENT_FIELD_ORDER = ("completion_status", "evidence", "related_memories",
                           "memory_notice", "counts", "gaps", "error", "request_id")
 
 
+#: Evidence-layer locating fields that must never appear on a memory entry
+#: (Constitution IV / FR-003). Stripped again at the merge point so a future
+#: ``attach()`` regression cannot leak them into ``related_memories``.
+EVIDENCE_LOCATING_KEYS = ("source_position", "source_version", "relevance_score")
+
+
+def sanitize_attachment_items(items: Any) -> list[dict[str, Any]]:
+    """T088: the runtime guard on the ``related_memories`` merge point.
+
+    Only mappings carrying an integer ``memory_id`` are memory items, so an
+    evidence item (``evidence_id``) can never be merged into the memory field.
+    The evidence-layer locating fields are stripped from the item and from a
+    nested ``match`` object.
+    """
+    safe: list[dict[str, Any]] = []
+    for item in items or ():
+        if not isinstance(item, dict):
+            continue
+        memory_id = item.get("memory_id")
+        if isinstance(memory_id, bool) or not isinstance(memory_id, int):
+            continue
+        cleaned = {key: value for key, value in item.items() if key not in EVIDENCE_LOCATING_KEYS}
+        match = cleaned.get("match")
+        if isinstance(match, dict):
+            cleaned["match"] = {key: value for key, value in match.items()
+                                if key not in EVIDENCE_LOCATING_KEYS}
+        safe.append(cleaned)
+    return safe
+
+
 def merge_attachment_response(primary: dict[str, Any], attachment: dict[str, Any] | None) -> dict[str, Any]:
     """Rebuild the 014 branch in the frozen order, omitting absent keys.
 
@@ -133,11 +164,14 @@ def merge_attachment_response(primary: dict[str, Any], attachment: dict[str, Any
     order and length stay exactly what the primary retrieval produced.
     """
     attachment = attachment or {}
-    items = list(attachment.get("items") or [])
+    items = sanitize_attachment_items(attachment.get("items"))
     failed_paths = sorted({str(path) for path in (attachment.get("failed_paths") or [])})
     counts = attachment.get("counts") or {}
     dropped_delivered = int(counts.get("dropped_delivered") or 0)
-    deduped_empty = not items and dropped_delivered > 0
+    # T091: the dedup-to-empty empty state is claimed only when dedup is the
+    # *only* reason nothing came back; a threshold/timeout/budget failure must
+    # not be mislabelled as "already delivered".
+    deduped_empty = not items and dropped_delivered > 0 and not failed_paths
 
     gaps = primary.get("gaps")
     if deduped_empty:
@@ -274,15 +308,27 @@ async def search_knowledge_core(
             )
 
     async def _attachment() -> dict[str, Any]:
-        async with session_factory() as session:
-            service = MemoryService(session, embedding_provider=embedding_provider,
-                                    qdrant_store=qdrant_store)
-            return await service.attach(
-                scope_ref=[*project_scope, *domain_scope],
-                query=query.strip(),
-                session_id=session_id,
-                memory_context=memory_context,
-            )
+        try:
+            # T078: the frozen 800ms hard bound covers the *whole* attachment layer
+            # (session acquisition + policy resolution + recall + selection), not
+            # only the recall call. T077: any failure here still yields an
+            # identifiable degradation reason instead of a silent empty result.
+            async with asyncio.timeout(ATTACH_TIMEOUT_MS_HARD_LIMIT / 1000):
+                async with session_factory() as session:
+                    service = MemoryService(session, embedding_provider=embedding_provider,
+                                            qdrant_store=qdrant_store)
+                    return await service.attach(
+                        scope_ref=[*project_scope, *domain_scope],
+                        query=query.strip(),
+                        session_id=session_id,
+                        memory_context=memory_context,
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exception:  # noqa: BLE001 - the memory side degrades on its own
+            logger.warning("attachment layer failed: %s", exception)
+            return {"items": [], "counts": {},
+                    "failed_paths": [attachment_degradation_reason(exception)]}
 
     # Q10: the attachment is *started concurrently* with the primary retrieval —
     # its inputs only need the resolved scope and the query/context, never
@@ -311,8 +357,18 @@ async def search_knowledge_core(
 
     try:
         attachment = await attachment_task
-    except BaseException:  # noqa: BLE001 - the memory side must not change the primary result
-        attachment = None
+    except asyncio.CancelledError:
+        # T092: never swallow cancellation. Reap the attachment task and let the
+        # cancellation continue to propagate.
+        attachment_task.cancel()
+        with contextlib.suppress(BaseException):
+            await attachment_task
+        raise
+    except Exception as exception:  # noqa: BLE001 - the memory side must not change the primary
+        # T077: the final safety net still reports an identifiable reason.
+        logger.warning("attachment layer failed at the tool boundary: %s", exception)
+        attachment = {"items": [], "counts": {},
+                      "failed_paths": [attachment_degradation_reason(exception)]}
     return merge_attachment_response(primary, attachment)
 
 

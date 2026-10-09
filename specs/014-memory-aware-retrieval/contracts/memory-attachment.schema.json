@@ -143,7 +143,40 @@
         "object",
         "null"
       ],
-      "description": "原始排序分量（dense_similarity/recency_rank/kind_rank/salience/fused_score）；阈值判定的取值为本对象内的 dense_similarity（见 FR-006/T017），保留原始分量、不合成 relevance_score"
+      "additionalProperties": false,
+      "properties": {
+        "dense_similarity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "recency_rank": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind_rank": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "salience": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "fused_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "description": "原始排序分量（dense_similarity/recency_rank/kind_rank/salience/fused_score）；阈值判定的取值为本对象内的 dense_similarity（见 FR-006/T017），保留原始分量、不合成 relevance_score。additionalProperties=false：嵌套的证据定位字段（source_position/source_version/relevance_score）无法通过混写进入记忆条目（FR-003/宪法 IV）"
     }
   },
   "allOf": [

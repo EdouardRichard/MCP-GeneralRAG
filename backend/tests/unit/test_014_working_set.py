@@ -438,3 +438,52 @@ def test_the_module_imports_no_provider_or_io_dependency():
     forbidden = ("sqlalchemy", "qdrant_client", "httpx", "requests", "rag_mcp.providers",
                  "rag_mcp.services", "rag_mcp.models", "rag_mcp.indexing")
     assert not [name for name in imported if name.startswith(forbidden)], imported
+
+
+# --- T089: bucket-level lifecycle exclusion matrix ----------------------------
+
+
+@pytest.mark.parametrize("kind", ["episodic", "procedural"])
+@pytest.mark.parametrize("overrides", [
+    {"status": "quarantined"},
+    {"status": "superseded"},
+    {"status": "retired"},
+    {"retention_stage": "tombstone"},
+    {"retention_stage": "archived"},
+    {"retention_stage": "compressed"},
+    {"valid_to": "2026-10-09T00:00:00+00:00"},
+    {"expires_at": "2026-10-01T00:00:00+00:00"},
+    {"write_status": "pending"},
+    {"write_status": "failed"},
+])
+def test_a_lifecycle_excluded_row_never_enters_any_bucket(overrides, kind):
+    """T089/FR-007/FR-023/SC-004: quarantined/superseded/retired/tombstone/
+    archived/expired/write-incomplete rows are absent from all three buckets."""
+    rows = {1: _row(1, kind=kind, **overrides), 2: _row(2)}
+    result = _assemble(rows, explicit_session_id="session-a")
+    present = {item["memory_id"] for bucket in ("open_items", "recent_activity", "procedural")
+               for item in result[bucket]}
+    assert 1 not in present, f"{overrides} leaked into the working set: {present}"
+    assert 2 in present
+
+
+def test_a_hard_row_without_an_anchor_never_enters_the_working_set():
+    """T089/FR-003: a hard item without an attribution anchor is excluded."""
+    rows = {1: _row(1, provenance="hard", evidence_refs=[]), 2: _row(2)}
+    result = _assemble(rows, explicit_session_id="session-a")
+    present = {item["memory_id"] for bucket in ("open_items", "recent_activity", "procedural")
+               for item in result[bucket]}
+    assert 1 not in present
+    assert 2 in present
+
+
+def test_a_superseded_row_is_excluded_even_with_a_null_valid_to():
+    """T089: never rely on ``valid_to`` alone — the status is authoritative."""
+    rows = {1: _row(1, status="superseded", superseded_by=99, valid_to=None), 2: _row(2)}
+    result = _assemble(rows, explicit_session_id="session-a")
+    present = {item["memory_id"] for bucket in ("open_items", "recent_activity", "procedural")
+               for item in result[bucket]}
+    assert 1 not in present
+    assert 2 in present
+
+

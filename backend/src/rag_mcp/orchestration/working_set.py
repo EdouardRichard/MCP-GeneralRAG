@@ -79,6 +79,12 @@ def working_set_visible(row, *, snapshot_at) -> bool:
     null AND (no ``expires_at`` or it is still in the future **relative to
     ``snapshot_at``**) AND (no ``valid_from``/``observed_at`` or
     ``valid_from <= observed_at``).
+
+    T089 mirrors the attachment-layer predicate: a write that never completed
+    (``write_status``) and a ``hard`` row without any attribution anchor are
+    excluded as well (FR-007/FR-003). The full live anchor re-verification is an
+    IO concern owned by the attach path; this pure predicate enforces the
+    verifiable part.
     """
     if not isinstance(row, dict):
         return False
@@ -87,6 +93,10 @@ def working_set_visible(row, *, snapshot_at) -> bool:
     if row.get("retention_stage") != "active":
         return False
     if row.get("valid_to") is not None:
+        return False
+    if row.get("write_status") not in (None, "complete"):
+        return False
+    if row.get("provenance") == "hard" and not row.get("evidence_refs"):
         return False
 
     expires = row.get("expires_at")

@@ -271,6 +271,7 @@ class MemoryReader:
     async def recall(self, *, scope_ref, query=None, memory_ids=None, kind=None, session_id=None,
                      agent_id=None, time_window=None, as_of=None, include_superseded=False,
                      include_delivered=False, limit=10, include_linked=False, include_context=False,
+                     include_injection_flags=False, max_query_characters=2000,
                      tool="recall_memory", channel="recall"):
         """Read memories, audited under ``tool``/``channel``.
 
@@ -280,17 +281,27 @@ class MemoryReader:
         ``search_knowledge``/``attached`` and ``start_work`` passes
         ``start_work``/``start_work``, which is what makes the session-level
         delivered set a genuinely cross-channel set (FR-016).
+
+        014 T076/T080: ``include_injection_flags`` adds the row's write-time
+        injection flags to each returned entry (default off, so legacy recall
+        bytes are untouched) and ``max_query_characters`` lets the attachment
+        layer accept the 4000-character ``memory_context`` contract while the
+        direct ``recall_memory`` channel keeps its 2000-character limit.
         """
-        for flag in (include_linked, include_context):
+        for flag in (include_linked, include_context, include_injection_flags):
             if not isinstance(flag, bool):
                 # The error contract maps ValueError to MEMORY_PROVENANCE_INVALID.
                 raise ValueError("MEMORY_PROVENANCE_INVALID: enhancement flag")  # noqa: TRY004
+        if not isinstance(max_query_characters, int) or isinstance(max_query_characters, bool) \
+                or max_query_characters <= 0:
+            raise ValueError("MEMORY_PROVENANCE_INVALID: max_query_characters")
         started = monotonic()
         if query is not None and memory_ids is not None:
             raise ValueError("MEMORY_IDS_QUERY_CONFLICT")
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
             raise ValueError("MEMORY_PROVENANCE_INVALID: limit")
-        if query is not None and (not isinstance(query, str) or not query.strip() or len(query) > 2000):
+        if query is not None and (not isinstance(query, str) or not query.strip()
+                                  or len(query) > max_query_characters):
             raise ValueError("MEMORY_PROVENANCE_INVALID: query")
         if memory_ids is not None and (not isinstance(memory_ids, list) or any(not isinstance(mid, int) or isinstance(mid, bool) for mid in memory_ids)):
             raise ValueError("MEMORY_PROVENANCE_INVALID: memory_ids")
@@ -392,6 +403,10 @@ class MemoryReader:
                 memories, characters, trimmed = [], 0, 0
                 for mid in ordered[:limit]:
                     item = public_entry(eligible[mid], match=matches.get(mid))
+                    if include_injection_flags:
+                        # T076: the memory's own write-time inspection flags ride
+                        # along on the attachment channel only.
+                        item["injection_flags"] = dict(eligible[mid].get("injection_flags") or {})
                     length = text_characters(item)
                     if characters + length > 6000:
                         trimmed += 1
@@ -647,6 +662,34 @@ class MemoryReader:
                       and memory_visible(row, point=None, now=now)]
         return sorted(candidates, key=lambda row: (row["observed_at"], row["memory_id"]), reverse=True)
 
+    async def _verify_hard_row_ids(self, rows) -> set[int]:
+        """T089/FR-003: live per-item anchor re-verification for working-set rows.
+
+        ``hard`` rows must still point at a published, attributed chunk in a
+        published source; an unreadable anchor store fails closed.
+        """
+        needed = {mid: [str(ref) for ref in (row.get("evidence_refs") or [])]
+                  for mid, row in rows.items() if row.get("provenance") == "hard"}
+        allowed = {mid for mid in rows if mid not in needed}
+        if not needed:
+            return allowed
+        identifiers = sorted({ref for refs in needed.values() for ref in refs})
+        if not identifiers:
+            return allowed
+        from rag_mcp.services.consolidation_commit import read_evidence
+
+        try:
+            facts = await read_evidence(self.session, identifiers)
+        except Exception:  # noqa: BLE001 - unreadable anchors never authorize a hard row
+            return allowed
+        for mid, refs in needed.items():
+            if any((facts.get(ref) or {}).get("status") == "published"
+                   and (facts.get(ref) or {}).get("source_status") == "published"
+                   and (facts.get(ref) or {}).get("attributed")
+                   for ref in refs):
+                allowed.add(mid)
+        return allowed
+
     async def start_work(self, *, scope_ref, session_id=None, task_hint=None, agent_id=None, include="both",
                          budget="standard", include_working_set=False):
         if include != "both" or budget not in {"standard", "compact", "minimal"}:
@@ -745,8 +788,10 @@ class MemoryReader:
                     "recent_activity": policy.working_set_max_recent_activity,
                     "procedural": policy.working_set_max_procedural,
                 }
+                derived_rows = {mid: row for mid, row in rows.items()
+                                if mid in await self._verify_hard_row_ids(rows)}
                 derived = assemble_working_set(
-                    rows=rows,
+                    rows=derived_rows,
                     explicit_session_id=session_id,
                     snapshot_at=None,
                     remaining_characters=10 ** 9,

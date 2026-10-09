@@ -456,8 +456,9 @@ def test_attach_never_raises_on_a_degraded_path(monkeypatch):
     service = MemoryService(_FakeSession(), embedding_provider=None, qdrant_store=None)
     service.projections.qdrant = None
     result = asyncio.run(_attach(service, memory_context="ctx", session_id=None))
-    assert set(result) >= {"items", "counts", "failed_paths"}
-    assert result["failed_paths"]
+    assert set(result) == {"items", "counts", "failed_paths", "injection_flags"}
+    assert result["items"] == []
+    assert result["failed_paths"] == ["memory_unavailable"]
 
 
 # --- orchestration: main failed, concurrency, no leftover tasks ---------------
@@ -773,4 +774,217 @@ def test_notice_is_omitted_together_with_related_memories(monkeypatch):
     result = asyncio.run(_run())
     assert "memory_notice" not in result and "counts" not in result
     assert "related_memories" not in result
+
+
+# --- Phase 10 convergence (T075/T076/T077/T078/T080/T081) ---------------------
+
+
+def test_hard_items_require_live_anchor_verification():
+    """T075/FR-003: presence of ``evidence_refs`` is not enough."""
+    rows = {1: _row(memory_id=1, provenance="hard", evidence_refs=["c-1"]),
+            2: _row(memory_id=2, provenance="hard", evidence_refs=["c-2"])}
+    matches = {1: {**MATCH, "dense_similarity": 0.9}, 2: {**MATCH, "dense_similarity": 0.8}}
+    result = attachment_candidates(rows, matches=matches, policy={}, has_context=True,
+                                   session_id=None, now=NOW, anchor_verified_ids={2})
+    assert [item["memory_id"] for item in result["items"]] == [2]
+    assert result["counts"]["filtered_inactive"] == 1
+
+
+@pytest.mark.asyncio
+async def test_hard_anchor_verification_requires_a_published_attributed_chunk(monkeypatch):
+    from rag_mcp.services import consolidation_commit
+
+    async def _facts(_session, _identifiers):
+        return {"c-1": {"status": "published", "source_status": "published", "attributed": True},
+                "c-2": {"status": "published", "source_status": "retired", "attributed": True},
+                "c-3": {"status": "published", "source_status": "published", "attributed": False}}
+
+    monkeypatch.setattr(consolidation_commit, "read_evidence", _facts)
+    service = MemoryService(_FakeSession(), embedding_provider=None, qdrant_store=None)
+    verified = await service._verify_hard_anchors([
+        _row(memory_id=1, provenance="hard", evidence_refs=["c-1"]),
+        _row(memory_id=2, provenance="hard", evidence_refs=["c-2"]),
+        _row(memory_id=3, provenance="hard", evidence_refs=["c-3"]),
+        _row(memory_id=4, provenance="soft", evidence_refs=[]),
+    ])
+    assert verified == {1}
+
+
+@pytest.mark.asyncio
+async def test_hard_anchor_verification_fails_closed_when_evidence_is_unreadable(monkeypatch):
+    from rag_mcp.services import consolidation_commit
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("evidence store unavailable")
+
+    monkeypatch.setattr(consolidation_commit, "read_evidence", _boom)
+    service = MemoryService(_FakeSession(), embedding_provider=None, qdrant_store=None)
+    verified = await service._verify_hard_anchors(
+        [_row(memory_id=1, provenance="hard", evidence_refs=["c-1"])])
+    assert verified == set()
+
+
+def test_detected_context_flags_ride_along_on_every_item(monkeypatch):
+    """T076: the memory's own flags and the detected context flags both ride along."""
+    import rag_mcp.services.memory_reader as reader_module
+    import rag_mcp.services.memory_service as service_module
+
+    row = _row(memory_id=1, injection_flags={"stored": True})
+    row["content_excerpt"] = "body"
+    row["content_length"] = 4
+    row["match"] = {**MATCH, "dense_similarity": 0.9}
+
+    async def _recall(self, **kwargs):
+        assert kwargs["include_injection_flags"] is True
+        assert kwargs["max_query_characters"] == 4000
+        return {"completion_status": "complete", "memories": [row], "counts": {"dropped_delivered": 0}}
+
+    async def _policy(self, scope_ref):
+        from rag_mcp.services.memory_policy import MemoryPolicy
+
+        return MemoryPolicy()
+
+    monkeypatch.setattr(reader_module.MemoryReader, "recall", _recall)
+    monkeypatch.setattr(service_module, "detect_context_flags", lambda _context: ({"detected": True}, []))
+    monkeypatch.setattr(MemoryService, "_attachment_policy", _policy)
+    service = MemoryService(_FakeSession(), embedding_provider=None, qdrant_store=None)
+    service.projections.qdrant = None
+    result = asyncio.run(service.attach(scope_ref=["p"], query="q", memory_context="ctx"))
+    assert result["items"], result
+    assert result["items"][0]["injection_flags"] == {"stored": True, "detected": True}
+
+
+def test_partial_recall_unavailability_is_surfaced(monkeypatch):
+    """T081: a ``partial`` recall's failed paths must not be dropped."""
+    import rag_mcp.services.memory_reader as reader_module
+
+    async def _recall(self, **_kwargs):
+        return {"completion_status": "partial", "memories": [],
+                "memory_notice": {"failed_paths": ["dense_unavailable"]},
+                "counts": {"dropped_delivered": 0}}
+
+    async def _policy(self, scope_ref):
+        from rag_mcp.services.memory_policy import MemoryPolicy
+
+        return MemoryPolicy()
+
+    monkeypatch.setattr(reader_module.MemoryReader, "recall", _recall)
+    monkeypatch.setattr(MemoryService, "_attachment_policy", _policy)
+    service = MemoryService(_FakeSession(), embedding_provider=None, qdrant_store=None)
+    service.projections.qdrant = None
+    result = asyncio.run(service.attach(scope_ref=["p"], query="q", memory_context="ctx"))
+    assert "dense_unavailable" in result["failed_paths"]
+
+
+def test_direct_recall_keeps_the_2000_character_query_limit():
+    """T080: only the attachment channel may use the 4000-character context."""
+    from rag_mcp.services.memory_reader import MemoryReader
+
+    reader = MemoryReader(None, None)
+    with pytest.raises(ValueError):
+        asyncio.run(reader.recall(scope_ref=["p"], query="x" * 2001))
+
+
+def test_attachment_session_failure_still_reports_a_reason(monkeypatch):
+    """T077: a failure outside ``attach()`` must still be identifiable."""
+    import rag_mcp.mcp.search_knowledge as search_module
+
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+    ok = {"completion_status": "complete", "evidence": [], "request_id": "r"}
+    _install_core_fakes(monkeypatch, main_result=ok)
+
+    calls = {"n": 0}
+
+    @asynccontextmanager
+    async def _factory():
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise RuntimeError("pool exhausted")
+        yield _FakeSession()
+
+    kwargs = _core_kwargs()
+    kwargs["session_factory"] = _factory
+
+    async def _run():
+        return await search_module.search_knowledge_core(**kwargs, memory_context="ctx")
+
+    result = asyncio.run(_run())
+    assert result["related_memories"] == []
+    assert result["memory_notice"]["failed_paths"] == ["memory_unavailable"]
+
+
+def test_attachment_hard_timeout_bounds_the_whole_layer(monkeypatch):
+    """T078: the frozen 800ms bound also covers session acquisition/policy work."""
+    import rag_mcp.mcp.search_knowledge as search_module
+    from rag_mcp.services.memory_service import ATTACH_TIMEOUT_MS_HARD_LIMIT
+
+    assert ATTACH_TIMEOUT_MS_HARD_LIMIT == 800
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+    ok = {"completion_status": "complete", "evidence": [], "request_id": "r"}
+    _install_core_fakes(monkeypatch, main_result=ok)
+
+    class _SlowMemoryService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def attach(self, **_kwargs):
+            await asyncio.sleep(5)
+            raise AssertionError("the hard 800ms bound must fire first")
+
+    monkeypatch.setattr(search_module, "MemoryService", _SlowMemoryService)
+
+    async def _run():
+        started = asyncio.get_running_loop().time()
+        result = await search_module.search_knowledge_core(**_core_kwargs(), memory_context="ctx")
+        return result, asyncio.get_running_loop().time() - started
+
+    result, elapsed = asyncio.run(_run())
+    assert result["memory_notice"]["failed_paths"] == ["attachment_timeout"]
+    assert elapsed < 3.0
+
+
+def test_external_cancellation_reaps_the_attachment_task(monkeypatch):
+    """T092: cancelling the tool call must cancel and reap the attachment task."""
+    import rag_mcp.mcp.search_knowledge as search_module
+
+    monkeypatch.setenv("MEMORY_AWARE_RETRIEVAL_ENABLED", "true")
+    entered = asyncio.Event()
+    released = asyncio.Event()
+
+    class _BlockingMemoryService:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def attach(self, **_kwargs):
+            entered.set()
+            await released.wait()
+            return {"items": [], "counts": {}, "failed_paths": []}
+
+    class _WaitingRetrievalService:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def search(self, **_kwargs):
+            await entered.wait()
+            return {"completion_status": "complete", "evidence": [], "request_id": "r"}
+
+    monkeypatch.setattr(search_module, "RetrievalService", _WaitingRetrievalService)
+    monkeypatch.setattr(search_module, "MemoryService", _BlockingMemoryService)
+    kwargs = _core_kwargs()
+
+    async def _run():
+        task = asyncio.create_task(
+            search_module.search_knowledge_core(**kwargs, memory_context="ctx"))
+        await entered.wait()
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0.05)
+        return [pending for pending in asyncio.all_tasks()
+                if pending is not asyncio.current_task() and not pending.done()]
+
+    assert asyncio.run(_run()) == []
+
+
 

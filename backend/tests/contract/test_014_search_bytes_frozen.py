@@ -159,6 +159,27 @@ async def test_agentic_switch_on_keeps_the_untriggered_response_byte_identical(m
     assert content[0].text == golden["pretty_mirror"]
 
 
+async def test_agentic_success_with_explicit_signals_attaches_nothing(monkeypatch):
+    """T090 / approved decision 4: a *successful* agentic run returns its own dict
+    and grows no 014 fields, even when the caller supplied explicit signals."""
+    agentic_body = {"completion_status": "complete", "evidence": [{"evidence_id": "e-agentic"}],
+                    "request_id": "agentic-r"}
+
+    async def _agentic(**_kwargs):
+        return agentic_body
+
+    _install_fake_retrieval(monkeypatch, BRANCH_BODIES["complete"])
+    monkeypatch.setattr(search_module, "_run_agentic_search", _agentic)
+    monkeypatch.setenv("AGENTIC_RETRIEVAL_ENABLED", "true")
+
+    _content, structured = await _call_tool({
+        "query": "q", "project_scope": ["p"],
+        "session_id": "11111111-1111-1111-1111-111111111111", "memory_context": "ctx",
+    })
+    assert structured == agentic_body
+    assert list(structured) == ["completion_status", "evidence", "request_id"]
+
+
 def test_memory_context_empty_is_a_parameter_error_not_a_silent_no_op():
     tool = _server()._tool_manager.get_tool("search_knowledge")
     arguments = {"query": "q", "project_scope": ["p"], "memory_context": ""}
@@ -334,3 +355,21 @@ async def test_end_to_end_failed_primary_has_no_new_fields(monkeypatch):
     monkeypatch.setattr(module, "MemoryService", _FakeMemoryService)
     _, structured = await _call_tool({"query": "q", "project_scope": ["p"], "session_id": REQUEST_ID})
     assert list(structured) == ["completion_status", "evidence", "error", "request_id"]
+
+
+def test_merge_sanitizes_related_memories_and_rejects_evidence_items():
+    """T088: the runtime merge point is the last line of defence against mixing."""
+    primary = {"completion_status": "complete", "evidence": [{"evidence_id": "e-1"}], "request_id": "r"}
+    merged = search_module.merge_attachment_response(primary, {
+        "items": [
+            {"memory_id": 1, "source_position": "p",
+             "match": {"dense_similarity": 0.9, "relevance_score": 0.5}},
+            {"evidence_id": "e-2"},   # an evidence item must never be merged
+            "not-a-mapping",
+        ],
+        "counts": {}, "failed_paths": [],
+    })
+    assert [item["memory_id"] for item in merged["related_memories"]] == [1]
+    assert "source_position" not in merged["related_memories"][0]
+    assert "relevance_score" not in merged["related_memories"][0]["match"]
+    assert merged["evidence"] == [{"evidence_id": "e-1"}]
