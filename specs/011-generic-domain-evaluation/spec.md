@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-07
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "通用域评测与多域验收：建设两个验证域的语料与固定评测集——个人/团队通用知识库域（markdown/txt/html/csv 格式语料 + personal/generic 域档案）与法律合规域（合同/法规 Word/PDF 语料 + legal 域档案，条文结构检索与交叉引用受益验证），各 ≥10 条评测查询（AI 生成 + 人工审核入库，沿用固定集纪律，含中文）；产出域基线报告（generic_domain_baseline_report.json 与 legal_domain_baseline_report.json：dense/hybrid 双路径 Recall@K/MRR/nDCG + P50/P95 延迟，沿用 001/002 方法论与 run_eval/run_comparison 运行器）；多域端到端验收（MCP 双工具以 domain_scope/slug 寻址跨个人域+法律域+SE 项目域混合检索；list_knowledge_domains 发现流程；硬指标三件套全量验证：跨域串库=0/Schema 合法率 100%/定位率 100%）；既有全集回归（001/002/003/004/005/006 全部报告按各自口径重跑确认无回归）；文档债清理（docs/1.0-iteration-roadmap.md 更新至 2.0 状态、根 README 纠正"尚无业务实现代码"等过时陈述、001–006 spec.md Status 更新）；2.0 版本定稿（演进目标逐项核销）。范围依据：2.0 蓝图 §1.3/§6/§7-011/§9，1.0 蓝图 §24。硬性约束：显式知识域引用；跨域串库为零；Schema 合法率与来源可定位率 100%；评测集一经入库不得破坏既有条目。对照评测：本 Feature 即对照基线的建立者——两个域基线报告成为后续通用域优化的对照锚点。不重复 001–010 已实现能力（仅新增语料/评测集/报告/文档与验收，无新检索路径）。输入材料：001–010 代码与报告、docs/通用RAG演进蓝图.md、目标域样例语料（用户提供或构造）。"
 

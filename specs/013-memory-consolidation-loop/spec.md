@@ -6,7 +6,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "记忆巩固回路：离线 sleep-time 管线，维护空闲窗口、管理面手动 API 与记忆量阈值触发，仅 writer 管理面、域开关门控、scope 级互斥；MemoryDistiller 独立第四 Agent，四类提案与确定性降级；唯一生效路径为确定性裁决器，保护硬记忆、复验 scope、纠正链、配额及完整溯源；新增类型化链接图高级产出与依赖传播、可重建语境派生视图；知识候选与人工晋升；巩固运行审计；固定受益子集至少 6 条，沿 004 三重闸口；012 的 8 项 E2E 与既有全集无回归。"
 

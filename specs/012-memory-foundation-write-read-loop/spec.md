@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-04
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: User description: "记忆基座与写读回路（G2+ 权威层）：事件日志为唯一权威，新表 memory_events（append-only，永久不 UPDATE/DELETE；event_type ∈ assert|revise|retract|consolidate|access|grant|rollback；aggregate_id=memory_id；knowledge_scope_id NOT NULL 隔离键；payload JSONB；六轴元数据 authority/scope/mutability/provenance/recoverability/actionability；actor/session_id/request_id；occurred_at 系统时间 + valid_from/valid_to 事实时间；索引 (scope_id, aggregate_id, occurred_at)）；日志分段；六类派生投影可重建且只读；同事务物化；关系投影 DDL；三个 MCP 新工具 start_work、recall_memory、record_memory；五形态 scope_ref；分级信任校验；显著性动力学；治理、TTL、配额、遗忘阶梯、回滚、管理 REST、评测与硬性约束。"
 
