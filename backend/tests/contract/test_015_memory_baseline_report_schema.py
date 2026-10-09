@@ -618,3 +618,128 @@ def test_a_required_root_key_removed_is_rejected():
         document = report()
         del document[key]
         _assert_invalid(document)
+
+
+# --------------------------------------------------------------------------- #
+# T070/T071 additions: the two new hard-metric sub-blocks
+# --------------------------------------------------------------------------- #
+
+
+def test_projection_view_with_a_zero_denominator_needs_its_not_measurable_encoding():
+    """FR-057: examined == 0 must be not_measurable with a reason, never a pass."""
+    document = report()
+    document["hard_metrics"]["projection_integrity"]["views"]["salience"] = {
+        "passed": 0,
+        "total": 0,
+        "rate": 1,
+        "value": 1,
+        "examined": 0,
+        "drift": 0,
+        "criterion": "recomputable",
+    }
+    _assert_invalid(document)
+
+
+def test_projection_view_with_a_zero_denominator_and_a_reason_is_accepted():
+    document = report()
+    document["hard_metrics"]["projection_integrity"]["views"]["salience"] = {
+        "passed": 0,
+        "total": 0,
+        "rate": None,
+        "value": "not_measurable",
+        "reason": ZERO_DENOMINATOR_REASON,
+        "examined": 0,
+        "drift": 0,
+        "criterion": "recomputable",
+    }
+    _assert_valid(document)
+
+
+def test_projection_view_needs_its_criterion_and_non_negative_drift():
+    """``projectionIntegrityView`` requires ``drift`` (>=0) and its criterion."""
+    document = report()
+    del document["hard_metrics"]["projection_integrity"]["views"]["links"]["drift"]
+    _assert_invalid(document)
+
+    document = report()
+    document["hard_metrics"]["projection_integrity"]["views"]["links"]["drift"] = -1
+    _assert_invalid(document)
+
+    document = report()
+    del document["hard_metrics"]["projection_integrity"]["views"]["links"]["criterion"]
+    _assert_invalid(document)
+
+
+def test_projection_integrity_without_its_caliber_is_rejected():
+    document = report()
+    del document["hard_metrics"]["projection_integrity"]["caliber"]
+    _assert_invalid(document)
+
+
+def test_metadata_axis_with_a_zero_denominator_needs_its_not_measurable_encoding():
+    """FR-058: examined == 0 must be not_measurable with a reason, never complete."""
+    document = report()
+    document["hard_metrics"]["state_metadata_completeness"]["recoverability"] = {
+        "passed": 0,
+        "total": 0,
+        "rate": 1,
+        "value": 1,
+        "examined": 0,
+        "missing": 0,
+        "caliber": "one row per stored memory entry",
+    }
+    _assert_invalid(document)
+
+
+def test_metadata_axis_with_a_zero_denominator_and_a_reason_is_accepted():
+    document = report()
+    document["hard_metrics"]["state_metadata_completeness"]["recoverability"] = {
+        "passed": 0,
+        "total": 0,
+        "rate": None,
+        "value": "not_measurable",
+        "reason": ZERO_DENOMINATOR_REASON,
+        "examined": 0,
+        "missing": 0,
+        "caliber": "one row per stored memory entry",
+    }
+    _assert_valid(document)
+
+
+def test_metadata_axis_missing_its_caliber_is_rejected():
+    document = report()
+    del document["hard_metrics"]["state_metadata_completeness"]["authority"]["caliber"]
+    _assert_invalid(document)
+
+
+def test_state_metadata_completeness_without_all_passed_is_rejected():
+    document = report()
+    del document["hard_metrics"]["state_metadata_completeness"]["all_passed"]
+    _assert_invalid(document)
+
+
+def test_root_all_passed_with_an_unmeasured_projection_is_rejected():
+    """SC-026/README §9: the root ``all_passed`` binds the sub-block claims.
+
+    ``all_passed = true`` requires ``projection_integrity.all_views_measured = true``
+    and ``projection_integrity.all_passed = true``; a view whose denominator is zero
+    (hence not measurable) can therefore never coexist with a passing root claim.
+    """
+    document = report()
+    document["hard_metrics"]["all_passed"] = False
+    document["hard_metrics"]["projection_integrity"]["views"]["dense"] = {
+        "passed": 0,
+        "total": 0,
+        "rate": None,
+        "value": "not_measurable",
+        "reason": ZERO_DENOMINATOR_REASON,
+        "examined": 0,
+        "drift": 0,
+        "criterion": "recomputable",
+    }
+    document["hard_metrics"]["projection_integrity"]["all_views_measured"] = False
+    document["hard_metrics"]["projection_integrity"]["all_passed"] = False
+    _assert_valid(document)
+
+    document["hard_metrics"]["all_passed"] = True
+    _assert_invalid(document)
