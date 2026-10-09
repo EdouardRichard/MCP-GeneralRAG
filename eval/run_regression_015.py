@@ -54,16 +54,70 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVAL_DIR = REPO_ROOT / "eval"
 BACKEND_DIR = REPO_ROOT / "backend"
 PY = sys.executable
 
+# The composition calibers read DATABASE_URL/DATABASE_URL_SYNC from the process
+# environment (eval/run_memory_comparison.py does the same); load the repository
+# .env before any caliber import so a CLI invocation sees the same runtime the
+# other 015 runners do.  User-provided values always win.
+for _env_file in (REPO_ROOT / ".env", Path.cwd() / ".env"):
+    if _env_file.is_file():
+        for _line in _env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            _line = _line.strip()
+            if not _line or _line.startswith("#") or "=" not in _line:
+                continue
+            _key, _value = _line.split("=", 1)
+            _key, _value = _key.strip(), _value.strip().strip('"').strip("'")
+            if _key and _key not in os.environ:
+                os.environ[_key] = _value
+
 DEFAULT_RUN_ID = "015-20261009205637"
 TOLERANCE = 0.01          # non-latency relative tolerance (research R14)
 NETCOUNT_NAME = "_netcount_015.py"
 GROUPS_MAP_NAME = "regression_group_map.json"
+
+# 013's comparison runner allocates a persistent working tree per run id under
+# ``--base`` (``<base>/<run-id>/<nn>/root``) and refuses to reuse an existing data
+# root, so a fixed run id makes the group non-repeatable: the first attempt leaves
+# ``<base>/<run-id>/00/root`` behind and every later attempt returns
+# ``incomplete: data root already exists``. The token is per script invocation (the
+# 013 group's record and replay steps share it, which they must, because the replay
+# re-restores identities from the same tree) and gives each attempt a fresh tree.
+SCRATCH_013_SUFFIX = uuid4().hex[:8]
+SCRATCH_013_RUN_ID = f"015REGRESSION013{SCRATCH_013_SUFFIX}"   # 013 requires an alphanumeric token
+#: The replay round must be its own invocation: 013's runner refuses to reuse a run
+#: identity file, so a replay sharing the record round's run id dies at
+#: "refusing to overwrite existing run identity file ..." before it can consume the
+#: sealed cache. Its own token makes it re-restore fresh identities from the same
+#: capsule and replay against the record round's sealed cache.
+SCRATCH_013_REPLAY_RUN_ID = f"015REGRESSION013R{SCRATCH_013_SUFFIX}"
+SCRATCH_013_BASE = f"C:/t015c{SCRATCH_013_SUFFIX}"
+#: The restore brings up its own isolated Qdrant on ``--qdrant-port-base`` and refuses
+#: to reuse a store that already answers. A fixed base therefore collides with any
+#: previous attempt's still-running instance ("http://127.0.0.1:18400 already answers"),
+#: so the base is per invocation too. Six isolated arms need six consecutive ports.
+SCRATCH_013_PORT_BASE = 18500 + (int(SCRATCH_013_SUFFIX[:4], 16) % 3000)
+
+#: A previous attempt of the same run can leave behind a document that is only a
+#: failure marker (status ``incomplete`` plus a ``reason`` and no measured content).
+#: That is not a historical artifact, so it is preserved under a ``superseded-`` name
+#: and the step may retry; a real report is still protected by the zero-overwrite guard.
+_PLACEHOLDER_KEYS = {"schema_version", "report_type", "run_id", "generated_at", "status", "reason", "mode"}
+
+
+def _is_failure_placeholder(path: Path) -> bool:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(document, dict) or document.get("status") != "incomplete":
+        return False
+    return bool(set(document) <= _PLACEHOLDER_KEYS and document.get("reason"))
 
 _NETCOUNT_SOURCE = '''"""Measured real-network-call counter for one 015 regression round (T059).
 
@@ -170,6 +224,84 @@ finally:
             json.dump(_payload, _handle, ensure_ascii=False, indent=2, sort_keys=True)
             _handle.write("\\n")
 raise SystemExit(_code)
+'''
+
+
+_HARD_METRICS_RUNNER = '''"""015 regression group 014_hard_metrics: run the 014 measurement kernel in-place.
+
+Why a wrapper is needed
+-----------------------
+``eval/hard_metrics_014.py`` has no CLI and reads ``RUN_ID``/``RUN_DIR`` at import
+time.  Its ``main()`` (L433-435) unconditionally rewrites the *tracked*
+``eval/hard-metrics-014.json``, which violates the 015 history-zero-overwrite rule
+and is forbidden for this task.
+
+This wrapper therefore sets ``RUN_ID``/``RUN_DIR`` to a fresh directory under the
+015 run **before** importing the module and calls ``measure()`` (L376) directly.
+``main()`` is never imported-as-main and never called, so the tracked artifact is
+untouched; the assembled document is byte-shaped exactly like the module's own
+document but is written only to this run's new artifact path.
+"""
+import asyncio
+import importlib
+import json
+import os
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+EVAL_DIR = REPO_ROOT / "eval"
+RUN_ID = os.environ["HARD_METRICS_RUN_ID"]
+RUN_DIR = Path(os.environ["HARD_METRICS_RUN_DIR"])
+OUT = Path(os.environ["HARD_METRICS_OUT"])
+
+# The module reads these at import time (L34-35); set them first.
+os.environ["RUN_ID"] = RUN_ID
+os.environ["RUN_DIR"] = str(RUN_DIR)
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(EVAL_DIR))
+sys.path.insert(0, str(REPO_ROOT / "backend" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "backend"))
+sys.path.insert(0, str(REPO_ROOT / "backend" / "tests"))
+
+module = importlib.import_module("hard_metrics_014")
+assert Path(module.__file__).resolve() == (EVAL_DIR / "hard_metrics_014.py"), module.__file__
+assert Path(module.RUN_DIR).resolve() == RUN_DIR.resolve(), module.RUN_DIR
+
+metrics = asyncio.run(module.measure())
+
+from rag_mcp.services.memory_projection_store import VIEW_KEYS  # noqa: E402
+
+metrics["view_keys_unchanged"] = {
+    "value": sorted(VIEW_KEYS), "total": len(VIEW_KEYS),
+    "caliber": "MemoryProjectionStore VIEW_KEYS must stay exactly six",
+    "unchanged": len(VIEW_KEYS) == 6,
+}
+payload = {
+    "schema_version": "014.1",
+    "report_type": "hard-metrics",
+    "run_id": RUN_ID,
+    "generated_at": datetime.now(UTC).isoformat(),
+    "metrics": metrics,
+    "notes": [
+        "each metric names the exact caliber and denominator it used",
+        "unmeasurable metrics are reported as not_measurable with the reason, never as 0 or 100%",
+    ],
+}
+# The wrapper composes the same document shape as hard_metrics_014.main() but only
+# ever writes this run's new artifact path.
+if OUT.exists():
+    raise SystemExit("refusing to overwrite " + str(OUT))
+OUT.parent.mkdir(parents=True, exist_ok=True)
+OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8", newline="\\n")
+
+for name, value in metrics.items():
+    summary = {key: item for key, item in value.items()
+               if key in {"value", "leaks", "occurrences", "reason", "total",
+                          "attachment_items_carrying_evidence_locating_fields", "unchanged"}}
+    print(name + ": " + json.dumps(summary, ensure_ascii=False))
+print("written: " + str(OUT))
 '''
 
 
@@ -358,19 +490,23 @@ GROUP_SPECS: list[dict] = [
     },
     {
         "group": "008_regression",
-        "runner": "eval/run_eval.py (attribution not recorded in 008)",
+        "runner": "eval/run_eval.py",
         "mode": "single_round",
         "model_dependent": False,
         "test_module": NO_DEDICATED_MODULE,
         "historical": "eval/008_regression_report.json",
-        "artifact": None,
-        "caliber": "008 ingestion-channel regression re-run",
-        "not_executed_reason": (
-            "the caliber that produced eval/008_regression_report.json is not recorded anywhere in the repo "
-            "(specs/008-universal-ingestion-channel/tasks.md T045 names only `python eval/run_eval.py` with no "
-            "output path or dataset slice), so no command can be attributed to it without guessing; a guessed "
-            "caliber is not a re-run of the recorded one, so this group is not executed"
-        ),
+        "artifact": "regression/008_regression_report.json",
+        "extract": "dense",
+        "caliber": "008 ingestion-channel regression: recovered from the produced artifact itself, not from the "
+                   "task text. eval/008_regression_report.json (commit 616ba94, 008 T060/T062) is a "
+                   "dense_retrieval_baseline document whose config records dataset_path eval/eval_dataset.json, "
+                   "num_queries 56, retrieval_mode hybrid, top_k 5, and which carries a `gate` block - a block "
+                   "run_eval.py emits only under --regression-gate. eval/eval_dataset.json is byte-unchanged "
+                   "since that commit, so the caliber is exactly `run_eval.py --dataset eval/eval_dataset.json "
+                   "--mode hybrid --regression-gate --no-reproducibility-check`",
+        "command": ["{python}", "-X", "utf8", "eval/run_eval.py", "--dataset", "eval/eval_dataset.json",
+                    "--mode", "hybrid", "--regression-gate", "--no-reproducibility-check",
+                    "--output", "{artifact}"],
     },
     {
         "group": "009_graph_37",
@@ -393,14 +529,34 @@ GROUP_SPECS: list[dict] = [
         "model_dependent": True,
         "test_module": "backend/tests/unit/test_query_planner_schema.py (009 structural equivalence precedent)",
         "historical": "eval/agentic_comparison_report.json",
-        "artifact": None,
-        "caliber": "009 rerun of the 005 agentic caliber (63 combined entries)",
-        "not_executed_reason": (
-            "identical runner, dataset and caliber to 005_agentic_63 (the 009 verification reran 004+005 and its "
-            "re-run was not persisted under a 009-prefixed artifact); executing it again would duplicate the same "
-            "live model round and could not be told apart from 005_agentic_63, so it is recorded as not_executed "
-            "rather than double-counted"
-        ),
+        "artifact": "regression/009_agentic_replay.json",
+        "extract": "agentic",
+        "cache_dir": "regression/005-llm-cache",
+        "reuse_record": {
+            "artifact": "regression/005_agentic_record.json",
+            "why": "009's agentic caliber is the same runner/dataset/caliber as 005_agentic_63, and 009's own "
+                   "verification re-ran 004+005 without persisting a 009-prefixed artifact. The record round "
+                   "therefore already exists in this run id: re-running it would repeat ~151 live billable "
+                   "provider calls for the same frozen cache, so the replay round consumes that frozen cache "
+                   "instead. The record's own provider-call count stays null (the v1 census could not observe "
+                   "provider transports on this host); the measured pass basis is the replay round's counter.",
+        },
+        "caliber": "009 rerun of the 005 agentic caliber (63 combined entries), judged on the replay round only "
+                   "(real provider transports must be 0), consuming the 005 record round's frozen cache",
+        "rounds": [
+            {"round": "record", "artifact": "regression/005_agentic_record.json", "instrumented": True,
+             "command": ["{python}", "-X", "utf8", "eval/run_agentic_comparison.py",
+                         "--dataset", "eval/eval_dataset.json",
+                         "--agentic-dataset", "eval/agentic_eval_dataset.json",
+                         "--llm-cache-dir", "{cachedir}",
+                         "--output", "{artifact}", "--skip-repeatability"]},
+            {"round": "replay", "artifact": "regression/009_agentic_replay.json", "instrumented": True,
+             "command": ["{python}", "-X", "utf8", "eval/run_agentic_comparison.py",
+                         "--dataset", "eval/eval_dataset.json",
+                         "--agentic-dataset", "eval/agentic_eval_dataset.json",
+                         "--llm-cache-dir", "{cachedir}", "--keep-llm-cache",
+                         "--output", "{artifact}", "--skip-repeatability"]},
+        ],
     },
     {
         "group": "010_graph_regression",
@@ -669,14 +825,69 @@ GROUP_SPECS: list[dict] = [
         "model_dependent": True,
         "test_module": "backend/tests/unit/test_consolidation_comparison_runner.py",
         "historical": "eval/memory-gate-report-014.json",
-        "artifact": None,
-        "caliber": "013 consolidation record -> replay comparison (frozen six-query dataset, six independent restorations)",
-        "not_executed_reason": (
-            "the runner's contract CLI requires --snapshot <authority-snapshot.json> for the frozen scope, and no "
-            "valid 013 authority snapshot exists anywhere in the repo or on this host (`.superpowers/sdd/013-tasks` "
-            "is empty; C:\\t097 is empty; C:\\t102\\capsule\\capsule.json carries no policy/scope_id and is not a 013 "
-            "snapshot). Manufacturing one would be a fabricated caliber, so the group is not executed."
-        ),
+        "artifact": "regression/013-consolidation/013_consolidation_replay.json",
+        "snapshot": "regression/013-consolidation/authority-snapshot.json",
+        "snapshot_builder": ("eval/run_regression_015.py --build-013-snapshot: re-exports the sealed authority of "
+                             "C:/t102/capsule (capsule_version 013.restore.1, capsule_database "
+                             "memory_consolidation_013_capsule_t102a) with consolidation_restore_support."
+                             "authority_snapshot, reads the frozen scope's real domain_profiles.memory_policy, and "
+                             "refuses to emit anything unless the recomputed digest equals the frozen dataset "
+                             "snapshot_hash and the cutoff matches"),
+        "caliber": "013 consolidation record -> replay on the frozen six-query dataset: the record round runs on "
+                   "six independently restored copies of the sealed unconsolidated authority and seals the strict "
+                   "cache manifest; the replay round re-restores the replay identities from the same capsule and "
+                   "consumes exactly that sealed cache, so its real provider transports must be 0",
+        "subprocess_steps": [
+            {"round": "record", "artifact": "regression/013-consolidation/013_consolidation_record.json",
+             "instrumented": False,
+             # 013's comparison runner declares exit 2 as its own real "incomplete"
+             # outcome (its published conclusion IS incomplete: default_enable_eligible
+             # false, no claimable benefit). A non-zero exit is therefore an executed
+             # outcome here, not a failure to execute; the replay round remains the
+             # only pass basis and still has to measure zero real network calls.
+             "allow_nonzero_exit": True,
+             # A real record round already on disk is reused rather than re-frozen, so
+             # the replay consumes exactly that sealed cache (see resume_existing_artifact
+             # in _execute_subprocess_steps). Never overwrites it.
+             "resume_existing_artifact": True,
+             # The session environment carries NO_PROXY='localhost,127.0.0.1,::1,[::1]',
+             # whose bracketed entry makes httpx build an invalid URLPattern
+             # (``InvalidURL: Invalid port: ':1]'``) for EVERY sync client, so the
+             # capsule restore could not construct its local Qdrant client at all
+             # (measured: all three of http://[::1]:P, http://127.0.0.1:P and
+             # http://localhost:P failed as-is and all three succeed with this value).
+             # Overridden for these steps only; nothing global is changed.
+             "env": {"NO_PROXY": "localhost,127.0.0.1,::1", "no_proxy": "localhost,127.0.0.1,::1"},
+             "log": "013_consolidation_comparison.record.log",
+             "command": ["{python}", "-X", "utf8", "eval/run_consolidation_comparison.py",
+                         "--dataset", "eval/consolidation_eval_dataset.json",
+                         "--snapshot", "{snapshot}",
+                         "--mode", "record",
+                         "--cache-manifest", "{regression}/013-consolidation/strict-cache-manifest.json",
+                         "--gate-variant", "consolidated_candidate_expansion",
+                         "--output", "{artifact}",
+                         "--run-id", SCRATCH_013_RUN_ID,
+                         "--base", SCRATCH_013_BASE,
+                         "--capsule-dir", "C:/t102/capsule", "--restore",
+                         "--qdrant-port-base", str(SCRATCH_013_PORT_BASE),
+                         "--evidence-dir", "{regression}/013-consolidation/evidence"]},
+            {"round": "replay", "artifact": "regression/013-consolidation/013_consolidation_replay.json",
+             "instrumented": True, "pass_basis": True,
+             "env": {"NO_PROXY": "localhost,127.0.0.1,::1", "no_proxy": "localhost,127.0.0.1,::1"},
+             "log": "013_consolidation_comparison.replay.log",
+             "command": ["{python}", "-X", "utf8", "eval/run_consolidation_comparison.py",
+                         "--dataset", "eval/consolidation_eval_dataset.json",
+                         "--snapshot", "{snapshot}",
+                         "--mode", "replay",
+                         "--cache-manifest", "{regression}/013-consolidation/strict-cache-manifest.json",
+                         "--gate-variant", "consolidated_candidate_expansion",
+                         "--output", "{artifact}",
+                         "--run-id", SCRATCH_013_REPLAY_RUN_ID,
+                         "--base", SCRATCH_013_BASE,
+                         "--capsule-dir", "C:/t102/capsule", "--restore",
+                         "--qdrant-port-base", str(SCRATCH_013_PORT_BASE),
+                         "--evidence-dir", "{regression}/013-consolidation/evidence"]},
+        ],
     },
     {
         "group": "014_continuity_gate",
@@ -704,19 +915,18 @@ GROUP_SPECS: list[dict] = [
     },
     {
         "group": "014_hard_metrics",
-        "runner": "eval/hard_metrics_014.py",
+        "runner": "eval/hard_metrics_014.py (module-level measure(), called through the generated wrapper)",
         "mode": "single_round",
         "model_dependent": False,
         "test_module": "n/a (the module has no CLI and no test entry point)",
         "historical": "eval/hard-metrics-014.json",
-        "artifact": None,
-        "caliber": "014 hard-metrics five-piece measurement",
-        "not_executed_reason": (
-            "eval/hard_metrics_014.py has no argparse/CLI, reads RUN_ID/RUN_DIR at import time, and its main() "
-            "(L433-435) unconditionally rewrites the tracked eval/hard-metrics-014.json - the one place in this "
-            "repository that violates history-zero-overwrite. Running it would overwrite a 014 historical artifact, "
-            "so it is not executed; the 015 runner reads the same measurement kernel through explicit paths instead."
-        ),
+        "artifact": "regression/014-hard-metrics/hard-metrics.json",
+        "direct": "hard_metrics",
+        "wrapper_name": "_hard_metrics_014_runner.py",
+        "verdict_from": ["view_keys_unchanged", "unchanged"],
+        "caliber": "014 hard-metrics measurement kernel: measure() over the live 014 scopes, written to this "
+                   "run's own directory; the module's main() is never called because it rewrites the tracked "
+                   "eval/hard-metrics-014.json",
     },
 ]
 
@@ -782,6 +992,7 @@ def _render(command: list[str], run: Run, artifact_rel: str | None, cache_dir: s
         "datasets": str(run.datasets),
         "artifact": str(run.artifact(artifact_rel)) if artifact_rel else "",
         "cachedir": str(run.artifact(cache_dir)) if cache_dir else "",
+        "snapshot": str(run.artifact(_ACTIVE_SPEC.get("snapshot"))) if (_ACTIVE_SPEC or {}).get("snapshot") else "",
     }
     rendered: list[str] = []
     for token in command:
@@ -942,6 +1153,79 @@ def _compare_to_historical(spec: dict, artifact: Path) -> dict | None:
             "caliber": "non-latency metrics only, 1% relative tolerance (latency.env_sensitive is excluded)"}
 
 
+def _hard_metrics_comparison(artifact: Path, historical_rel: str = "eval/hard-metrics-014.json") -> dict | None:
+    """1% non-latency comparison of the 014 hard-metrics document.
+
+    The hard-metrics caliber is not a flat metric block: every entry is a
+    measurement object with its own ``value``/``rate`` and its own denominator, so
+    the comparison walks each ``metrics.<name>`` pair and compares the measured
+    numeric slot.  Entries whose value is textual (``not_measurable``) are
+    recorded verbatim and never turned into a number.  Denominators that are real
+    live scope/database compositions (the 014 ``scope_selection`` block) are
+    recorded as evidence but excluded from the reproducibility verdict, exactly as
+    the 015 rule excludes latency: they are inputs, not caliber metrics.
+    """
+    historical = REPO_ROOT / historical_rel
+    if not artifact.exists() or not historical.exists():
+        return None
+    try:
+        new_doc = _load_json(artifact)
+        old_doc = _load_json(historical)
+    except Exception as error:  # noqa: BLE001 - an unreadable caliber is not a measurement
+        return {"non_latency_reproducible": None,
+                "reason": f"hard-metrics document could not be read: {type(error).__name__}: {error}"}
+    excluded = {"scope_selection"}
+    checks: list[dict] = []
+    reproducible = True
+    seen = 0
+    for name in sorted(set(new_doc.get("metrics") or {}) | set(old_doc.get("metrics") or {})):
+        old_entry = (old_doc.get("metrics") or {}).get(name)
+        new_entry = (new_doc.get("metrics") or {}).get(name)
+        if name in excluded:
+            checks.append({"metric": name, "historical": old_entry, "rerun": new_entry,
+                           "excluded_reason": "live scope/database composition: an input of the caliber, "
+                                              "not a caliber metric",
+                           "relative_delta": None, "tolerance": TOLERANCE, "passed": None})
+            continue
+        seen += 1
+        old_value = _hard_metric_value(old_entry)
+        new_value = _hard_metric_value(new_entry)
+        if isinstance(old_value, bool) or isinstance(new_value, bool) or \
+                not isinstance(old_value, (int, float)) or not isinstance(new_value, (int, float)):
+            identical = old_value == new_value
+            reproducible = reproducible and identical
+            checks.append({"metric": name, "historical": old_value, "rerun": new_value,
+                           "relative_delta": None, "tolerance": TOLERANCE, "passed": identical,
+                           "value_kind": "non-numeric: compared for equality only"})
+            continue
+        if old_value == 0 and new_value == 0:
+            delta, within = 0.0, True
+        elif old_value == 0 or new_value == 0:
+            delta = abs(old_value - new_value)
+            within = delta <= TOLERANCE
+        else:
+            delta = abs(old_value - new_value) / max(abs(old_value), abs(new_value))
+            within = delta <= TOLERANCE
+        reproducible = reproducible and within
+        checks.append({"metric": name, "historical": round(old_value, 6), "rerun": round(new_value, 6),
+                       "relative_delta": round(delta, 6), "tolerance": TOLERANCE, "passed": within})
+    return {"non_latency_reproducible": bool(reproducible and seen) if seen else None,
+            "tolerance": TOLERANCE, "historical_report": historical_rel, "checks": checks,
+            "excluded_from_verdict": sorted(excluded),
+            "caliber": "hard-metrics measurement entries: numeric value/rate slots only, 1% relative "
+                       "tolerance; the live scope_selection denominators are recorded, not verdicts"}
+
+
+def _hard_metric_value(entry):
+    """The measured slot of one hard-metrics entry (``value`` then ``rate``)."""
+    if not isinstance(entry, dict):
+        return entry
+    for key in ("value", "rate", "leaks", "occurrences", "unchanged"):
+        if key in entry:
+            return entry[key]
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # group execution
 # --------------------------------------------------------------------------- #
@@ -971,6 +1255,7 @@ def _command_text(spec: dict, rounds: list[dict] | None = None) -> str:
 
 
 _ACTIVE_RUN: Run | None = None
+_ACTIVE_SPEC: dict | None = None
 
 
 def run_smoke_group(run: Run, artifact_rel: str, timeout: int) -> dict:
@@ -1011,6 +1296,195 @@ def run_smoke_group(run: Run, artifact_rel: str, timeout: int) -> dict:
     return {"duration_seconds": round(time.time() - started, 3)}
 
 
+def _execute_hard_metrics(spec: dict, run: Run, timeout: int) -> dict:
+    """Group 014_hard_metrics: call the 014 measurement kernel through the wrapper.
+
+    ``eval/hard_metrics_014.main()`` is never called: its L433-435 rewrites the
+    tracked ``eval/hard-metrics-014.json``.  The wrapper configures RUN_ID/RUN_DIR
+    to this run's own directory before importing the module and calls ``measure()``
+    directly, so the tracked artifact is untouched (verified by git afterwards).
+    """
+    artifact = run.artifact(spec["artifact"])
+    if artifact.exists():
+        return _not_executed(spec, f"history zero-overwrite: {run.relative(artifact)} already exists")
+    wrapper = run.regression / spec["wrapper_name"]
+    wrapper.write_text(_HARD_METRICS_RUNNER, encoding="utf-8", newline="\n")
+    log = run.logs / f"{spec['group']}.log"
+    census = run.regression / f"{spec['group']}.netcount.json"
+    info = _run_process([PY, "-X", "utf8", str(wrapper)], log, timeout, REPO_ROOT,
+                        {"HARD_METRICS_RUN_ID": f"{run.run_id}-014-hard-metrics",
+                         "HARD_METRICS_RUN_DIR": str(artifact.parent),
+                         "HARD_METRICS_OUT": str(artifact),
+                         "NETCOUNT_OUT": str(census)})
+    if info["timed_out"]:
+        return _not_executed(spec, f"the measurement kernel exceeded the {timeout}s budget", [info])
+    if not artifact.exists():
+        return _not_executed(spec, f"the measurement kernel exited {info['exit_code']} and wrote no document "
+                                   f"(log: {run.relative(log)})", [info])
+    measured = _load_json(census) if census.exists() else {}
+    verdict = spec.get("verdict_from")
+    outcome_verdict = None
+    if verdict:
+        document = _load_json(artifact)
+        entry = (document.get("metrics") or {}).get(verdict[0]) or {}
+        outcome_verdict = entry.get(verdict[1])
+    outcome = {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+               "model_dependent": False, "test_module": spec["test_module"], "caliber": spec["caliber"],
+               "command": " ".join([PY, "-X", "utf8", run.relative(wrapper)]),
+               "rounds": [{"round": "single", **info, "artifact": run.relative(artifact),
+                           "instrumented": True, "netcount": run.relative(census),
+                           "measured_real_network_calls": measured.get("provider_calls")}],
+               "executed": True, "artifact": run.relative(artifact), "historical": spec.get("historical"),
+               "outcome": ("passed" if outcome_verdict in (1.0, 1, True) else "failed")
+               if outcome_verdict is not None else ("passed" if info["exit_code"] == 0 else "failed"),
+               "exit_code": info["exit_code"],
+               "verdict_metric": verdict, "verdict_value": outcome_verdict,
+               "measured_real_network_calls": measured.get("provider_calls"),
+               "main_not_called": True,
+               "tracked_artifact_untouched": "eval/hard-metrics-014.json",
+               "execution_rule": "the 014 measurement kernel (measure()) ran to completion and produced its "
+                                 "document under this run's directory; the module's main() was never called "
+                                 "because it rewrites the tracked eval/hard-metrics-014.json",
+               "not_executed_reason": None, "cache_manifest_hash": None,
+               "replay_real_network_calls": None, "checked_at": _now()}
+    comparison = _hard_metrics_comparison(artifact, spec.get("historical") or "eval/hard-metrics-014.json")
+    outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
+    outcome["comparison"] = comparison
+    return outcome
+
+
+def _execute_subprocess_steps(spec: dict, run: Run, timeout: int) -> dict:
+    """Run a caliber that needs two invocations (013 record + replay) strictly serially.
+
+    Only the steps the spec marks ``instrumented`` are wrapped in the v2 httpx
+    transport counter; a live model round is deliberately NOT instrumented as a
+    pass basis (its counter is recorded as evidence, and the group's measured
+    replay count is the only zero that decides execution).  Steps run one after
+    the other, never concurrently, because the shared PostgreSQL writer lease can
+    block indefinitely.
+    """
+    rounds: list[dict] = []
+    measured_replay: int | None = None
+    replay_artifact: Path | None = None
+    for index, step in enumerate(spec["subprocess_steps"]):
+        artifact_rel = step.get("artifact")
+        artifact = run.artifact(artifact_rel) if artifact_rel else None
+        if artifact is not None and artifact.exists():
+            if _is_failure_placeholder(artifact):
+                number = len(list(artifact.parent.glob(f"{artifact.stem}.superseded-*{artifact.suffix}"))) + 1
+                artifact.rename(artifact.with_name(f"{artifact.stem}.superseded-{number}{artifact.suffix}"))
+            elif step.get("resume_existing_artifact"):
+                # Explicit opt-in only. For a record+replay caliber, a REAL record
+                # round already on disk must not be re-frozen: the replay has to
+                # consume exactly that sealed cache. The step is recorded as reused
+                # and the next step still has to pass its own measurement.
+                #
+                # The reused artifact's OWN status decides the code: a non-"passed"
+                # status is carried as a non-zero exit so a failing caliber is never
+                # laundered into outcome=passed just because no process was spawned here.
+                artifact_status = None
+                try:
+                    artifact_status = json.loads(artifact.read_text(encoding="utf-8")).get("status")
+                except (OSError, ValueError):
+                    artifact_status = None
+                rounds.append({"round": step.get("round"), "reused": True,
+                               "exit_code": 0 if artifact_status == "passed" else 2,
+                               "artifact_status": artifact_status,
+                               "timed_out": False, "artifact": run.relative(artifact),
+                               "log": None, "instrumented": False,
+                               "note": "an existing real record artifact was reused; it was NOT overwritten and "
+                                       "its own status, not a spawned process, carries the verdict"})
+                continue
+            else:
+                return _not_executed(spec, f"history zero-overwrite: {run.relative(artifact)} already exists", rounds)
+        if step.get("prepare_empty_dir"):
+            target = run.artifact(step["prepare_empty_dir"])
+            if target.exists() and any(target.iterdir()):
+                return _not_executed(spec, f"{run.relative(target)} is not empty", rounds)
+            target.mkdir(parents=True, exist_ok=True)
+        command = _guard_command(_render(step["command"], run, artifact_rel, spec.get("cache_dir")), run)
+        log = run.logs / (step.get("log") or f"{spec['group']}.{step['round']}.log")
+        environment = dict(step.get("env") or {})
+        census = None
+        if step.get("instrumented"):
+            census = run.regression / f"{spec['group']}.{step['round']}.netcount.json"
+            environment["NETCOUNT_OUT"] = str(census)
+            command = _instrument(command, run, census)
+        info = _run_process(command, log, timeout, REPO_ROOT, environment or None)
+        info.update({"round": step["round"], "instrumented": bool(step.get("instrumented")),
+                     "log": run.relative(log)})
+        if artifact is not None:
+            info["artifact"] = run.relative(artifact)
+        if census is not None:
+            info["netcount"] = run.relative(census)
+            measured = _load_json(census) if census.exists() else {}
+            info["measured_real_network_calls"] = measured.get("provider_calls")
+        rounds.append(info)
+        if info["timed_out"]:
+            return _not_executed(spec, f"the {step['round']} step exceeded the {timeout}s budget", rounds)
+        if step.get("expect_artifact", True) and artifact is not None and not artifact.exists():
+            return _not_executed(spec, f"the {step['round']} step exited {info['exit_code']} and produced no "
+                                       f"artifact (log: {run.relative(log)})", rounds)
+        if not step.get("allow_nonzero_exit", False) and info["exit_code"] != 0:
+            return _not_executed(spec, f"the {step['round']} step exited {info['exit_code']} "
+                                       f"(log: {run.relative(log)})", rounds)
+        if step.get("pass_basis"):
+            if not census or not census.exists():
+                return _not_executed(spec, f"the {step['round']} step produced no network census", rounds)
+            value = (_load_json(census) or {}).get("provider_calls")
+            if value is None:
+                return _not_executed(spec, f"the {step['round']} step recorded no provider-call measurement",
+                                     rounds)
+            measured_replay = int(value)
+            replay_artifact = artifact
+            if measured_replay != 0:
+                return _not_executed(spec, f"the replay step made {measured_replay} real provider transport(s); "
+                                           f"the replay round is the only pass basis and it is not zero", rounds)
+    if measured_replay is None or replay_artifact is None:
+        return _not_executed(spec, "no instrumented pass-basis round was produced", rounds)
+    outcome = {"group": spec["group"], "runner": spec["runner"], "mode": spec["mode"],
+               "model_dependent": bool(spec.get("model_dependent")), "test_module": spec["test_module"],
+               "caliber": spec.get("caliber"), "command": _command_text(spec, rounds), "rounds": rounds,
+               "executed": True, "artifact": run.relative(replay_artifact),
+               "historical": spec.get("historical"), "not_executed_reason": None,
+               "cache_manifest_hash": None, "replay_real_network_calls": measured_replay,
+               "replay_zero_network": measured_replay == 0,
+               "measured_by": "v2 httpx-transport provider counter (regression/_netcount_015.py)",
+               "checked_at": _now()}
+    manifest_rel = spec.get("cache_manifest")
+    if manifest_rel:
+        manifest_path = run.artifact(manifest_rel)
+        if manifest_path.exists():
+            outcome["cache_manifest_hash"] = _sha256_file(manifest_path)
+            outcome["cache_manifest"] = run.relative(manifest_path)
+    try:
+        replay_report = _load_json(replay_artifact) if replay_artifact.exists() else {}
+    except Exception as error:  # noqa: BLE001 - an unreadable report is not a measurement
+        replay_report = {"unreadable": f"{type(error).__name__}: {error}"}
+    spec_snapshot = spec.get("snapshot")
+    if spec_snapshot:
+        snapshot_path = run.artifact(spec_snapshot)
+        if snapshot_path.exists():
+            outcome["snapshot"] = run.relative(snapshot_path)
+            outcome["snapshot_sha256"] = _sha256_file(snapshot_path)
+    for key, path in (("record_report", (spec["subprocess_steps"][0] or {}).get("artifact")),
+                      ("replay_report", (spec.get("subprocess_steps") or [{}, {}])[1].get("artifact"))):
+        if path:
+            resolved = run.artifact(path)
+            outcome[key] = run.relative(resolved)
+            try:
+                outcome[f"{key}_sha256"] = _sha256_file(resolved) if resolved.exists() else None
+            except OSError:
+                outcome[f"{key}_sha256"] = None
+    if isinstance(replay_report, dict) and replay_report:
+        outcome["report_status"] = replay_report.get("status")
+        outcome["runner_measured_replay_transport_calls"] = (replay_report.get("replayed") or {}).get(
+            "transport_calls")
+        outcome["runner_measured_record_transport_calls"] = (replay_report.get("recorded") or {}).get(
+            "transport_calls")
+    return outcome
+
+
 def _execute_reused(spec: dict, run: Run) -> dict:
     """014 continuity gate: the record+replay evidence of this run id is reused,
     with the measured counters read out of the artifact (never typed in)."""
@@ -1049,8 +1523,9 @@ def _execute_reused(spec: dict, run: Run) -> dict:
 
 
 def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> dict:
-    global _ACTIVE_RUN
+    global _ACTIVE_RUN, _ACTIVE_SPEC
     _ACTIVE_RUN = run
+    _ACTIVE_SPEC = spec
     if dry_run:
         return {**_not_executed(spec, "dry run: not executed"), "command": _command_text(spec, spec.get("rounds"))}
     if spec.get("not_executed_reason"):
@@ -1060,8 +1535,14 @@ def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> 
 
         return outcome
 
+    # ---- sub-process steps (calibers that need more than one invocation) -- #
+    if spec.get("subprocess_steps"):
+        return _execute_subprocess_steps(spec, run, timeout)
+
     # ---- single round -------------------------------------------------- #
     if spec["mode"] == "single_round":
+        if spec.get("direct") == "hard_metrics":
+            return _execute_hard_metrics(spec, run, timeout)
         if spec.get("direct") == "smoke":
             artifact = run.artifact(spec["artifact"])
             if artifact.exists():
@@ -1168,30 +1649,58 @@ def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> 
     replay = spec["rounds"][1]
     record_artifact = run.artifact(record["artifact"])
     replay_artifact = run.artifact(replay["artifact"])
-    for target in (record_artifact, replay_artifact):
-        if target.exists():
-            return _not_executed(spec, f"history zero-overwrite: {run.relative(target)} already exists")
-    if cache_dir.exists():
-        return _not_executed(spec, f"history zero-overwrite: the record cache {run.relative(cache_dir)} already exists")
+    # `reuse_record` names a record round of THIS run id whose frozen cache the
+    # replay round consumes.  The record is never re-run and never re-billed: the
+    # measured manifest of that frozen cache is re-computed from its real bytes,
+    # and the record artifact is registered as reused (with its source named).
+    reuse_record = spec.get("reuse_record")
+    if reuse_record:
+        source = run.artifact(reuse_record["artifact"])
+        if not source.exists():
+            return _not_executed(spec, f"the reused record artifact {run.relative(source)} does not exist")
+        record_artifact = source
+        source_round = next((item for item in _load_json(source).get("rounds") or []
+                             if item.get("round") == "record"), {})
+        record_info = {"round": "record", "artifact": run.relative(source), "reused": True,
+                       "reused_from": run.relative(source),
+                       "reuse_reason": reuse_record.get("why"),
+                       "measured_real_network_calls": reuse_record.get("record_real_network_calls"),
+                       "log": source_round.get("log"), "exit_code": source_round.get("exit_code"),
+                       "netcount": source_round.get("netcount")}
+        rounds.append(record_info)
+        if not cache_dir.exists():
+            return _not_executed(spec, f"the reused record pairs with a missing cache {run.relative(cache_dir)}",
+                                 rounds)
+        manifest = _cache_manifest(cache_dir)
+        if not manifest["file_count"]:
+            return _not_executed(spec, "the reused record round froze no model responses (empty cache manifest)",
+                                 rounds)
+    else:
+        for target in (record_artifact, replay_artifact):
+            if target.exists():
+                return _not_executed(spec, f"history zero-overwrite: {run.relative(target)} already exists")
+        if cache_dir.exists():
+            return _not_executed(spec, f"history zero-overwrite: the record cache {run.relative(cache_dir)} "
+                                       f"already exists")
 
-    record_log = run.logs / f"{spec['group']}.record.log"
-    record_command = _guard_command(_render(record["command"], run, record["artifact"], spec["cache_dir"]), run)
-    record_count = run.regression / f"{spec['group']}.record.netcount.json"
-    record_info = _run_process(_instrument(record_command, run, record_count), record_log, timeout, REPO_ROOT,
-                               {"NETCOUNT_OUT": str(record_count)})
-    record_info.update({"round": "record", "artifact": run.relative(record_artifact),
-                        "instrumented": True, "netcount": run.relative(record_count)})
-    rounds.append(record_info)
-    if record_info["timed_out"]:
-        return _not_executed(spec, f"the record round exceeded the {timeout}s budget", rounds)
-    if record_info["exit_code"] != 0 or not record_artifact.exists():
-        return _not_executed(spec, f"the record round exited {record_info['exit_code']} and "
-                                   f"{'produced' if record_artifact.exists() else 'did not produce'} its artifact "
-                                   f"(log: {run.relative(record_log)})", rounds)
-    manifest = _cache_manifest(cache_dir)
-    if not manifest["file_count"]:
-        return _not_executed(spec, "the record round froze no model responses (empty cache manifest), so no replay "
-                                   "round can be judged", rounds)
+        record_log = run.logs / f"{spec['group']}.record.log"
+        record_command = _guard_command(_render(record["command"], run, record["artifact"], spec["cache_dir"]), run)
+        record_count = run.regression / f"{spec['group']}.record.netcount.json"
+        record_info = _run_process(_instrument(record_command, run, record_count), record_log, timeout, REPO_ROOT,
+                                   {"NETCOUNT_OUT": str(record_count)})
+        record_info.update({"round": "record", "artifact": run.relative(record_artifact),
+                            "instrumented": True, "netcount": run.relative(record_count)})
+        rounds.append(record_info)
+        if record_info["timed_out"]:
+            return _not_executed(spec, f"the record round exceeded the {timeout}s budget", rounds)
+        if record_info["exit_code"] != 0 or not record_artifact.exists():
+            return _not_executed(spec, f"the record round exited {record_info['exit_code']} and "
+                                       f"{'produced' if record_artifact.exists() else 'did not produce'} its "
+                                       f"artifact (log: {run.relative(record_log)})", rounds)
+        manifest = _cache_manifest(cache_dir)
+        if not manifest["file_count"]:
+            return _not_executed(spec, "the record round froze no model responses (empty cache manifest), so no "
+                                       "replay round can be judged", rounds)
 
     replay_log = run.logs / f"{spec['group']}.replay.log"
     replay_command = _guard_command(_render(replay["command"], run, replay["artifact"], spec["cache_dir"]), run)
@@ -1203,6 +1712,7 @@ def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> 
     rounds.append(replay_info)
     measured = _load_json(replay_count) if replay_count.exists() else {}
     replay_calls = measured.get("provider_calls")
+    replay_info["measured_real_network_calls"] = replay_calls
     if replay_info["timed_out"]:
         return _not_executed(spec, f"the replay round exceeded the {timeout}s budget", rounds)
     if replay_calls is None:
@@ -1225,11 +1735,17 @@ def execute_group(spec: dict, run: Run, timeout: int, dry_run: bool = False) -> 
                "cache_manifest": {"manifest_hash": manifest["manifest_hash"], "file_count": manifest["file_count"],
                                   "bytes": manifest["bytes"], "cache_dir": run.relative(cache_dir),
                                   "files": manifest["files"]},
-               "record_real_network_calls": int((_load_json(record_count) or {}).get("provider_calls") or 0)
-               if record_count.exists() else None,
+               "record_real_network_calls": (reuse_record.get("record_real_network_calls")
+                                             if reuse_record else
+                                             (int((_load_json(record_count) or {}).get("provider_calls") or 0)
+                                              if record_count.exists() else None)),
                "replay_real_network_calls": int(replay_calls),
                "replay_zero_network": int(replay_calls) == 0,
                "checked_at": _now()}
+    if reuse_record:
+        outcome["record_reused"] = True
+        outcome["record_reused_from"] = run.relative(run.artifact(reuse_record["artifact"]))
+        outcome["record_reuse_reason"] = reuse_record.get("why")
     comparison = _compare_to_historical(spec, replay_artifact)
     outcome["non_latency_reproducible"] = (comparison or {}).get("non_latency_reproducible")
     outcome["comparison"] = comparison
@@ -1589,6 +2105,113 @@ def emit_report(run: Run, output: Path, timeout: int) -> int:
 # --------------------------------------------------------------------------- #
 
 
+_SNAPSHOT_RUNNER = '''"""015 regression group 013_consolidation_comparison: emit the authority snapshot.
+
+The 013 contract CLI requires ``--snapshot <authority-snapshot.json>`` whose
+``authority.authority_digest`` equals the frozen dataset's ``snapshot_hash``.  No
+such file is tracked in the repository, but the sealed capsule of that exact
+frozen scope still exists on this host, so the snapshot is *rebuilt from the
+sealed material* rather than invented:
+
+* ``scope_id`` / ``authority_digest`` / ``authority_cutoff`` come from the
+  capsule's own sealed authority record;
+* the authority object itself is re-exported from the capsule's live isolated
+  database (``memory_consolidation_013_capsule_t102a``) with
+  ``consolidation_restore_support.authority_snapshot`` -- the same function the
+  sealer used -- so the digest is *recomputed*, not copied;
+* ``policy`` is read from the frozen scope's real ``domain_profiles.memory_policy``
+  row in that database (the published target policy the sealer wrote);
+* ``frozen_clock`` / ``frozen`` come from the frozen dataset, which IS the sealed
+  record of the caliber.
+
+Every cross-check is hard: a mismatch aborts instead of emitting a snapshot.
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT / "eval"))
+sys.path.insert(0, str(REPO_ROOT / "backend" / "src"))
+
+from consolidation_eval_support import load_dataset  # noqa: E402
+from consolidation_restore_support import authority_snapshot  # noqa: E402
+
+CAPSULE_DIR = Path(os.environ["SNAPSHOT_CAPSULE_DIR"])
+DATASET = Path(os.environ["SNAPSHOT_DATASET"])
+OUT = Path(os.environ["SNAPSHOT_OUT"])
+
+capsule = json.loads((CAPSULE_DIR / "capsule.json").read_text(encoding="utf-8"))
+dataset = load_dataset(DATASET)
+
+if capsule.get("capsule_version") != "013.restore.1":
+    raise SystemExit("refusing: capsule_version is not the 013 restore capsule")
+scopes = [int(scope) for scope in capsule["scopes"]]
+if str(scopes[0]) != str(dataset["scope_id"]):
+    raise SystemExit("refusing: the capsule scope does not match the frozen dataset scope")
+if capsule["authority"]["authority_digest"] != dataset["snapshot_hash"]:
+    raise SystemExit("refusing: the sealed authority digest does not match the frozen snapshot_hash")
+if int(capsule["authority_cutoff"]) != int(dataset["authority_cutoff"]):
+    raise SystemExit("refusing: the sealed authority cutoff does not match the frozen dataset")
+
+authority = authority_snapshot(capsule["capsule_database"], scopes=scopes)
+if authority["authority_digest"] != dataset["snapshot_hash"]:
+    raise SystemExit("refusing: the re-exported authority digest does not match the frozen snapshot_hash")
+if int(authority["authority_cutoff"]) != int(dataset["authority_cutoff"]):
+    raise SystemExit("refusing: the re-exported authority cutoff does not match the frozen dataset")
+
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
+
+url = make_url(os.environ["DATABASE_URL_SYNC"]).set(database=capsule["capsule_database"])
+engine = create_engine(url.render_as_string(hide_password=False))
+try:
+    with engine.connect() as connection:
+        domain_key = connection.scalar(
+            text("select domain_key from knowledge_scopes where scope_id = :scope"), {"scope": scopes[0]})
+        policy = connection.scalar(
+            text("select memory_policy from domain_profiles where domain_key = :key"), {"key": domain_key})
+        published = connection.scalar(
+            text("select count(*) from memory_events where knowledge_scope_id = :scope "
+                 "and event_type = :kind"), {"scope": scopes[0], "kind": "grant"})
+finally:
+    engine.dispose()
+if not isinstance(policy, dict):
+    raise SystemExit("refusing: the frozen scope carries no dict memory_policy")
+
+snapshot = {
+    "scope_id": str(scopes[0]),
+    "authority": authority,
+    "policy": policy,
+    "frozen_clock": dataset["frozen_clock"],
+    "frozen": dataset["frozen"],
+    "snapshot_provenance": {
+        "capsule_dir": str(CAPSULE_DIR),
+        "capsule_version": capsule["capsule_version"],
+        "capsule_database": capsule["capsule_database"],
+        "capsule_sealed_at": capsule.get("sealed_at"),
+        "capsule_token": capsule.get("capsule_token"),
+        "domain_key": domain_key,
+        "policy_source": "domain_profiles.memory_policy of the frozen scope in the capsule database",
+        "policy_published_events": int(published or 0),
+        "policy_event_kind": "grant",
+        "verification": ("authority_digest re-exported from the capsule database equals the capsule's sealed "
+                         "digest and the frozen dataset snapshot_hash"),
+    },
+}
+if OUT.exists():
+    raise SystemExit("refusing to overwrite " + str(OUT))
+OUT.parent.mkdir(parents=True, exist_ok=True)
+OUT.write_text(json.dumps(snapshot, indent=2, sort_keys=True, default=str) + "\\n", encoding="utf-8", newline="\\n")
+print(json.dumps({"status": "snapshot", "output": str(OUT), "scope_id": snapshot["scope_id"],
+                  "authority_digest": authority["authority_digest"],
+                  "authority_cutoff": authority["authority_cutoff"],
+                  "policy_keys": sorted(policy), "domain_key": domain_key,
+                  "policy_published_events": int(published or 0)}, indent=2))
+'''
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="015 T058/T059/T060 full-suite regression orchestration")
     parser.add_argument("--run-id", default=os.environ.get("RUN_ID") or DEFAULT_RUN_ID)
@@ -1607,6 +2230,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="artifact path for --remeasure-replay (relative to the run dir; must not exist)")
     parser.add_argument("--emit-report", action="store_true", help="T060: emit the report's regression block")
     parser.add_argument("--output", type=Path, help="T060 report output path (must not exist)")
+    parser.add_argument("--build-013-snapshot", action="store_true",
+                        help="013: rebuild the authority snapshot from the sealed capsule and the frozen dataset")
+    parser.add_argument("--snapshot-out", type=Path,
+                        help="output path for --build-013-snapshot (must not exist)")
+    parser.add_argument("--capsule-dir", type=Path, default=Path("C:/t102/capsule"),
+                        help="sealed 013 capsule used by --build-013-snapshot (read-only)")
+    parser.add_argument("--snapshot-dataset", type=Path, default=EVAL_DIR / "consolidation_eval_dataset.json",
+                        help="frozen 013 dataset the snapshot must match")
     return parser
 
 
@@ -1666,6 +2297,36 @@ def main(argv: list[str] | None = None) -> int:
     if args.emit_report:
         output = args.output or (run.dir / "memory_baseline_report.regression.json")
         return emit_report(run, Path(output), args.timeout)
+
+    if args.build_013_snapshot:
+        output = args.snapshot_out or (run.regression / "013-consolidation" / "authority-snapshot.json")
+        output = Path(output)
+        if not output.is_absolute():
+            output = REPO_ROOT / output
+        try:
+            output.resolve().relative_to(run.dir.resolve())
+        except ValueError as error:
+            print(f"refusing: {output} is outside the run directory {run.dir}", file=sys.stderr)
+            return 2
+        if output.exists():
+            print(f"refusing to overwrite {output}", file=sys.stderr)
+            return 2
+        wrapper = run.regression / "_build_013_snapshot.py"
+        wrapper.write_text(_SNAPSHOT_RUNNER, encoding="utf-8", newline="\n")
+        environment = dict(os.environ)
+        if not environment.get("DATABASE_URL_SYNC"):
+            print("refusing: DATABASE_URL_SYNC is not configured (the capsule database cannot be read)",
+                  file=sys.stderr)
+            return 2
+        environment.update({"SNAPSHOT_CAPSULE_DIR": str(Path(args.capsule_dir)),
+                            "SNAPSHOT_DATASET": str(Path(args.snapshot_dataset)),
+                            "SNAPSHOT_OUT": str(output)})
+        log = run.logs / "013_consolidation_comparison.snapshot.log"
+        completed = subprocess.run([PY, "-X", "utf8", str(wrapper)], cwd=str(REPO_ROOT), env=environment,
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+        log.write_text((completed.stdout or "") + (completed.stderr or ""), encoding="utf-8", newline="\n")
+        print(completed.stdout.strip() or completed.stderr.strip(), flush=True)
+        return 0 if (completed.returncode == 0 and output.exists()) else 1
 
     selected = [spec for spec in GROUP_SPECS if not args.group or spec["group"] in args.group]
     if not selected:
