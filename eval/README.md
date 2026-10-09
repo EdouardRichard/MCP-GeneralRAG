@@ -355,5 +355,24 @@ recall per arm so the first timed query measures retrieval instead of a cold sta
 两个薄入口运行器（`run_memory_baseline.py`、`run_regression_015.py`）与一个只读统计
 端点。本节登记 015 的数据集、报告与运行器用法及重跑口径，供后续运行者按同一口径复核。
 
-（本节内容随 T002、T037 逐项补齐。）
+（本节内容随 T037 逐项补齐。）
+
+#### 015 运行标识与产物路径约定（T002，冻结）
+
+- **运行标识**：`RUN_ID=015-<YYYYMMDDHHMMSS>`（本 Feature 冻结取值
+  `015-20261009205637`）。凡 015 运行器产出的重跑、AOEP 逐例结果、分组回归与
+  JUnit 一律写入**唯一写入路径** `eval/runs/<RUN_ID>/`（该目录已被 `.gitignore`
+  忽略，与 001–014 的 `eval/runs/` 约定一致：产物留盘可复核，不入版本控制）。
+- **追踪路径**：`eval/memory_baseline_report.json` **仅首次播种**——该路径不存在时
+  写出首份报告，此后任何运行都只写 `eval/runs/<RUN_ID>/memory_baseline_report.json`，
+  绝不再触碰追踪路径。
+- **历史产物零覆盖（015 全局纪律）**：目标路径已存在且内容与本次产出逐字节不同即
+  **拒绝写入并以退出码 ≠ 0 结束**；逐字节相同视为幂等成功（不算覆盖）。
+- **必须避免复制的既有缺陷**：`eval/hard_metrics_014.py` **无 `argparse`**，配置只来自
+  `RUN_ID`/`RUN_DIR` 环境变量；它对 `eval/runs/<RUN_DIR>/hard-metrics.json` 有"存在即
+  拒绝"守卫（约 L410–414），但 L433–435 仍**无条件改写**追踪产物
+  `eval/hard-metrics-014.json` —— 这是本仓库唯一违反"历史产物零覆盖"的位置。015 的
+  `run_memory_baseline.py` / `run_regression_015.py` 统一采用"存在即拒绝"，并由
+  `hard_metrics_014.py` 的复用方以显式参数传入产物路径（不改动该文件本身）。
+- **零分母纪律**：零分母记 `{value: null, state: "not_measurable", reason: "a zero denominator is not a measured zero"}`（比率型记 `rateBlock{rate: null, value: "not_measurable"}`），MUST NOT 记 0、MUST NOT 记为达标；未执行 MUST NOT 记为通过。
 
