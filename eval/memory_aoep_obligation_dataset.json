@@ -1,0 +1,304 @@
+{
+  "dataset_version": "015.eval.1",
+  "frozen": {
+    "budget": "015.budget.1: AOEP cases consume no model or consolidation budget - rollback, retire, purge and access are deterministic authority-log operations; the builtin generic domain memory_policy defaults apply (per_scope_memory_quota=5000, decay_rate=.05, consolidation disabled)",
+    "clock": "2026-10-09T13:25:00+00:00",
+    "implementation": "c423c8dd8210b5a99a870f1f19b62970fcadec0e",
+    "model": "BAAI/bge-m3 (dense memory projection only; no LLM participates in any AOEP machine criterion)",
+    "policy": "015.memory_policy.1: builtin generic DomainProfile defaults; no consolidation_enabled, no promotion, no lifecycle grant",
+    "prompt": "none - no prompt, distiller or model call is part of any AOEP case",
+    "recall": "015.aoep.recall.1: consumption surfaces are recall(scope_ref=[...]) plus the live manifest/inspect() report; per-projection denominators are read from the live reducer state of the current manifest",
+    "schema": "urn:rag-mcp:015:aoep-obligation-dataset:1",
+    "snapshot": "015.eval.1 cases array (sha256 of the canonical cases array; pinned in snapshot_hash, recomputable with tests.memory_eval_datasets.frozen_subset_hash)",
+    "vocabulary": "015.aoep.vocabulary.1: projections relation/dense/links/summary/file (+ field projection salience, excluded from deletion propagation); error codes MISSING_KNOWLEDGE_SCOPE/AMBIGUOUS_DOMAIN_REF/MEMORY_ROLLBACK_FORBIDDEN/MEMORY_WRITE_UNAVAILABLE/MEMORY_EVIDENCE_ANCHOR_REQUIRED; authority event types assert/revise/access/retract/rollback"
+  },
+  "snapshot_hash": "a5ad2d6c7ac6c1af376484ede46adea70eb82837796c28174095101229e66ba4",
+  "scope_id": "c015-eval-aoep-isolated",
+  "isolation": {
+    "mode": "per_run_dedicated",
+    "identity": "per_run_dedicated",
+    "forbidden_scope_ids": [
+      "366084747748704256"
+    ],
+    "disposal": "record_and_dispose",
+    "record_isolation_id": true
+  },
+  "invariants": {
+    "traceable_rollback": {
+      "min_cases": 2,
+      "machine_criterion": "R6.1",
+      "statement": "回滚可溯：回滚事件存在且 request_id 与治理响应一致、事件链闭合（回放 id 序列与权威日志逐项相等、无缺失、无重复——event_id 为 snowflake，MUST NOT 实现为数值连续性）、水位可读、全状态与逐投影指纹一致、影响面计数一致、可再次回滚到相邻检查点、access 事件保留"
+    },
+    "deletion_propagation": {
+      "min_cases": 2,
+      "machine_criterion": "R6.2",
+      "statement": "删除传播：retire 与 purge 两形态后对关系/向量/链接/摘要/文件五类投影各自独立断言『该条可消费命中数 = 0』且各自分母非零；权威日志保留 retract 事件与来源链（content_text/content_hash 仍在）；salience 为字段投影，不参与本断言"
+    },
+    "authority_monotonicity": {
+      "min_cases": 2,
+      "machine_criterion": "R6.5",
+      "statement": "权威单调：越权写入（声明超出写入者权威 / 非写实例 / 只读实例）与经 MCP 面改写绑定表的尝试全部被拒（403 或结构化错误）；拒绝前后权威日志 id 序列逐项相等、authority 轴取值不变、绑定表行集不变，且每次拒绝均可在响应错误码或权威日志中观测到"
+    },
+    "provenance_preservation": {
+      "min_cases": 2,
+      "machine_criterion": "R6.6",
+      "statement": "来源保全：retire/purge/rollback 状态转移后 provenance 元数据与来源链保留，content_hash 可复算且重算值与记录值逐项相等（不得仅『字段存在』），权威日志保留墓碑/retract 事件与来源链且历史未被物理回删，受影响投影经 projection_fingerprint 复算一致"
+    },
+    "scope_non_expansion": {
+      "min_cases": 2,
+      "machine_criterion": "R6.4",
+      "statement": "范围不扩张：歧义引用与缺失/空（空串与只含空白）scope 引用一律被拒并给出候选域（AMBIGUOUS_DOMAIN_REF / MISSING_KNOWLEDGE_SCOPE），『回落最近域/全库』成功次数 = 0，拒绝留审计；缺失≠歧义，两类各自构造用例、各自给出非零样本量、分别记分"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "aoep_traceable_rollback_event_point",
+      "invariant": "traceable_rollback",
+      "target_kind": "event_point",
+      "requires_re_rollback": true,
+      "projections_asserted": [
+        "relation",
+        "dense",
+        "links",
+        "summary",
+        "file"
+      ],
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.1 with an event-point target and the re-rollback requirement. Machine program: the authority log holds an event with event_type=rollback whose request_id equals the governance response request_id; the event chain is closed as replay(scope) ids == authority ids item by item, no missing and no duplicate (explicitly NOT numeric continuity - event_id is a sparse snowflake); the rollback event payload event_point is consistent with memory_projection_meta.source_event_id before and after; before/after_fingerprint equal the independently recomputed projection_fingerprint(reduce_events(replay)); every per-view fingerprint equals the MemoryProjectionMeta.fingerprint written at projection_fingerprint(state[view]); inspect() reports matches_replay for all six views; impact.memory_ids equals the entries diff; a second rollback to an adjacent checkpoint is self-consistent; access events are retained.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.1 + R6 澄清段; quickstart.md VS-04; services/memory_governance.py:119-125,180-182; services/rollback_service.py:2-20; services/memory_projection_store.py:232,285-367; runtime/projection_rebuild.py:143-146",
+        "rollback_target": "event_point",
+        "negative_control": false
+      }
+    },
+    {
+      "case_id": "aoep_traceable_rollback_time_point_re_rollback",
+      "invariant": "traceable_rollback",
+      "target_kind": "time_point",
+      "requires_re_rollback": true,
+      "projections_asserted": [
+        "relation",
+        "dense",
+        "links",
+        "summary",
+        "file"
+      ],
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.1 with a time-point target: the target is the ISO occurred_at of the first assert, and RollbackService folds it to the last event with occurred_at <= time_point; every other sub-condition of R6.1 is measured identically to the event-point case, plus the re-rollback to an adjacent checkpoint.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.1; quickstart.md VS-04; services/rollback_service.py:10-16",
+        "rollback_target": "time_point",
+        "negative_control": false
+      }
+    },
+    {
+      "case_id": "aoep_traceable_rollback_audit_only_counterexample",
+      "invariant": "traceable_rollback",
+      "target_kind": "action",
+      "projections_asserted": [
+        "relation"
+      ],
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "Negative control for the R6.1 checker (quickstart.md VS-04 反例): a real MemoryManagementAudit row written by an actual management rebuild supplies a queryable request_id while the authority log holds no event carrying that request_id and no rollback event at all. The R6.1 checker MUST judge that audit-only reference failed; this case is passed only when the checker returns failed, i.e. the checker cannot be satisfied by an audit record alone.",
+        "grounded_source": "specs/015-memory-evaluation-governance/quickstart.md VS-04 反例; services/memory_service.py:858-864 (audit row is written by rebuild only, with no authority event); research.md R6 rationale",
+        "rollback_target": null,
+        "negative_control": true
+      }
+    },
+    {
+      "case_id": "aoep_deletion_propagation_retire",
+      "invariant": "deletion_propagation",
+      "target_kind": "action",
+      "projections_asserted": [
+        "relation",
+        "dense",
+        "links",
+        "summary",
+        "file"
+      ],
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.2 via retire (event_type=retract, no purge marker). The entry is recorded with evidence_refs so relation/dense/links/summary/file each have a non-zero denominator measured from the live manifest state; after the tombstone each of the five projections is asserted independently to have a consumer-visible hit count of 0 for that identity, the authority log still holds the retract event and the original content_text/content_hash, and salience is excluded as a field projection.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.2 + 分母纪律; quickstart.md VS-05; services/memory_reducer.py:266-268,374-393; services/memory_governance.py:110-113",
+        "deletion": "retire",
+        "salience_excluded": true
+      }
+    },
+    {
+      "case_id": "aoep_deletion_propagation_purge",
+      "invariant": "deletion_propagation",
+      "target_kind": "command",
+      "projections_asserted": [
+        "relation",
+        "dense",
+        "links",
+        "summary",
+        "file"
+      ],
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.2 via purge (event_type=retract with payload.purge=true). Identical five-projection scoring and non-zero denominator construction as the retire case; the purge marker must be observable in the tombstone event.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.2; quickstart.md VS-05; services/memory_governance.py:112-113; services/memory_reducer.py:266-268",
+        "deletion": "purge",
+        "salience_excluded": true
+      }
+    },
+    {
+      "case_id": "aoep_authority_monotonicity_rejects_escalation",
+      "invariant": "authority_monotonicity",
+      "target_kind": "command",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.5 case construction from R6.3: a raw event append (apply_event), an untrusted management command (actor=mcp), an untrusted binding grant, the MCP surface tools rollback/grant/scope_bindings, an MCP record_memory call with forbidden extra arguments (extra=forbid) and an MCP record_memory call that declares hard/management authority without anchors must all be rejected. Measured invariants: the authority log id sequence before == after item by item, the authority axis value per entry is unchanged, the scope_bindings row set is unchanged, and every rejection is observable as a 403/structured error code.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.3 + R6.5; quickstart.md VS-06; services/memory_service.py:541-543; services/memory_governance.py:83-84,138-160; mcp/serialization.py:35-39; tests/integration/test_012_binding_escalation.py",
+        "attempts": [
+          "raw_event_append",
+          "untrusted_management_command",
+          "untrusted_binding_grant",
+          "mcp_tool_rollback",
+          "mcp_tool_grant",
+          "mcp_tool_scope_bindings",
+          "mcp_extra_argument",
+          "mcp_declared_hard_authority"
+        ]
+      }
+    },
+    {
+      "case_id": "aoep_authority_monotonicity_rejects_readonly_instance",
+      "invariant": "authority_monotonicity",
+      "target_kind": "action",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.5 + T026: a non-management rollback is actually ATTEMPTED along three separate routes - (i) the MCP surface (the MCP tool set exposes only record_memory/recall_memory/start_work, so a rollback tool call is refused), (ii) a non-writer instance (service-level rollback with an untrusted actor and an MCP record_memory call while no writer lease is held), and (iii) a read-only instance (REST POST /api/memories/rollback with no writer lease, and with instance_mode=reader). All three must be rejected, the authority log id sequence before == after item by item, and the attempt sample size (attempted) and success count (succeeded) must be reported; attempted == 0 MUST be recorded not_measurable, never as met.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.5; tasks.md T026; quickstart.md VS-06; api/memory.py:34-42,356-358; mcp/__init__.py:123-130; tests/integration/test_012_memory_rest.py:214-224",
+        "rollback_attempt_methods": [
+          "mcp_surface",
+          "non_writer_instance",
+          "read_only_instance"
+        ]
+      }
+    },
+    {
+      "case_id": "aoep_provenance_preservation_retire_purge_rollback",
+      "invariant": "provenance_preservation",
+      "target_kind": "action",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.6 across all three state transitions (rollback tombstone, retire, purge) inside one isolated scope: content_text, content_hash, provenance, confidence, inference_meta, evidence_refs, provenance_validation, kind, source_event_id and all six governance axes are preserved verbatim for every affected identity, and content_hash is RECOMPUTED item by item over every assert/revise event payload (sha256(content_text) == content_hash) instead of only checking field presence.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.6; quickstart.md VS-07; services/memory_reducer.py:240-268,282-312; services/memory_service.py:702-706",
+        "transitions": [
+          "rollback",
+          "retire",
+          "purge"
+        ]
+      }
+    },
+    {
+      "case_id": "aoep_provenance_preservation_source_chain_recomputable",
+      "invariant": "provenance_preservation",
+      "target_kind": "command",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.6 authority-log side: after retire + purge + rollback the log still holds the original assert event, the revise event with its supersedes_memory_id source chain and both retract tombstones (with the purge marker), the physical event count only grows (history is never deleted), and the affected projections recompute consistently - projection_fingerprint(reduce_events(replay(scope))) equals the manifest fingerprint and inspect() reports matches_replay for all six views.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.6; quickstart.md VS-07; services/memory_reducer.py:400-404; services/memory_projection_store.py:232,285-367",
+        "transitions": [
+          "retire",
+          "purge",
+          "rollback"
+        ]
+      }
+    },
+    {
+      "case_id": "aoep_scope_non_expansion_ambiguous_scope",
+      "invariant": "scope_non_expansion",
+      "target_kind": "action",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.4 ambiguous family: two active project scopes share one name, so the type:name reference resolves to a candidate list. Every surface (MemoryScopeResolver.resolve, MCP record_memory, MCP recall_memory, REST GET /api/memories) must reject with AMBIGUOUS_DOMAIN_REF and a non-empty candidates list; the successful 'nearest domain / whole library' fallback count must be 0; a non-zero sample size is reported for this case separately from the missing/empty family.",
+        "grounded_source": "specs/015-memory-evaluation-governance/research.md R6.4; quickstart.md VS-06; services/scope_resolver.py:14-32; services/scope_binding_service.py:10-14",
+        "reference_form": "ambiguous_domain_ref",
+        "expected_code": "AMBIGUOUS_DOMAIN_REF",
+        "requires_candidate_domains": true
+      }
+    },
+    {
+      "case_id": "aoep_scope_non_expansion_missing_scope_void",
+      "invariant": "scope_non_expansion",
+      "target_kind": "command",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.4/FR-061 missing family (the argument is absent, not ambiguous): the service-level write (record without scope_id), the read path (resolve_many([]) and resolve_many(None)), the MCP surfaces (record_memory/recall_memory without scope_ref) and REST GET /api/memories without scope_ref must all be rejected with MISSING_KNOWLEDGE_SCOPE (REST request-level: 422) and the rejection must carry candidate domains; the fallback success count must be 0. Scored separately from the empty-string and whitespace-only cases.",
+        "grounded_source": "specs/015-memory-evaluation-governance/spec.md FR-061; research.md R6.4; quickstart.md VS-14; services/scope_resolver.py:15-16,34-37; mcp/record_memory.py:18; api/memory.py:276-278",
+        "reference_form": "missing_scope_ref",
+        "expected_code": "MISSING_KNOWLEDGE_SCOPE",
+        "requires_candidate_domains": true
+      }
+    },
+    {
+      "case_id": "aoep_scope_non_expansion_missing_scope_empty_string",
+      "invariant": "scope_non_expansion",
+      "target_kind": "action",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.4/FR-061 empty family: scope_ref is the empty string on the write path (record scope_id=''), the read path (resolve_many([''])), the MCP surfaces (record_memory/recall_memory with '') and REST GET /api/memories?scope_ref=. All must be rejected with MISSING_KNOWLEDGE_SCOPE (request-level validation counts as a rejection) and the structured rejection must carry candidate domains; the fallback success count must be 0.",
+        "grounded_source": "specs/015-memory-evaluation-governance/spec.md FR-061; research.md R6.4; quickstart.md VS-14; services/scope_resolver.py:15-16; api/memory.py:276-278",
+        "reference_form": "empty_string",
+        "expected_code": "MISSING_KNOWLEDGE_SCOPE",
+        "requires_candidate_domains": true
+      }
+    },
+    {
+      "case_id": "aoep_scope_non_expansion_missing_scope_whitespace",
+      "invariant": "scope_non_expansion",
+      "target_kind": "action",
+      "expected": {
+        "outcome": "passed"
+      },
+      "_meta": {
+        "review_status": "reviewed",
+        "review_notes": "R6.4/FR-061 whitespace-only family: scope_ref consists only of blanks. It passes request-level min_length validation, so it reaches the real resolver on every surface (MCP record_memory, MCP recall_memory, REST GET /api/memories) and must be rejected with the structured MISSING_KNOWLEDGE_SCOPE code plus candidate domains; the fallback success count must be 0.",
+        "grounded_source": "specs/015-memory-evaluation-governance/spec.md FR-061; research.md R6.4; quickstart.md VS-14; services/scope_resolver.py:15-16,28-31; api/memory.py:276-282",
+        "reference_form": "whitespace_only",
+        "expected_code": "MISSING_KNOWLEDGE_SCOPE",
+        "requires_candidate_domains": true
+      }
+    }
+  ]
+}
