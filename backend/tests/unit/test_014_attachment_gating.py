@@ -146,14 +146,18 @@ def test_gate_never_coerces_a_falsy_but_present_signal():
 
 
 def test_threshold_dual_track_uses_policy_defaults():
-    assert attachment_min_score({}, has_context=True) == 0.0
-    assert attachment_min_score({}, has_context=False) == 0.5
+    # T106 ruling: permissive only when BOTH explicit signals are present.
+    assert attachment_min_score({}, has_context=True, has_session=True) == 0.0
+    assert attachment_min_score({}, has_context=True, has_session=False) == 0.5
+    assert attachment_min_score({}, has_context=False, has_session=True) == 0.5
+    assert attachment_min_score({}, has_context=False, has_session=False) == 0.5
 
 
 def test_threshold_dual_track_honours_the_domain_policy():
     policy = {"attach_min_score": 0.2, "attach_conservative_min_score": 0.6}
-    assert attachment_min_score(policy, has_context=True) == 0.2
-    assert attachment_min_score(policy, has_context=False) == 0.6
+    assert attachment_min_score(policy, has_context=True, has_session=True) == 0.2
+    assert attachment_min_score(policy, has_context=True, has_session=False) == 0.6
+    assert attachment_min_score(policy, has_context=False, has_session=True) == 0.6
 
 
 def test_threshold_rejects_a_conservative_value_below_the_permissive_one():
@@ -161,7 +165,7 @@ def test_threshold_rejects_a_conservative_value_below_the_permissive_one():
 
     with pytest.raises(pydantic.ValidationError):
         attachment_min_score({"attach_min_score": 0.5, "attach_conservative_min_score": 0.4},
-                             has_context=False)
+                             has_context=True, has_session=False)
 
 
 # --- visibility / state re-verification ---------------------------------------
@@ -237,13 +241,20 @@ def test_below_threshold_candidates_are_dropped_and_counted():
     assert result["counts"]["returned"] == 0
 
 
-def test_with_context_uses_the_permissive_threshold():
+def test_only_both_signals_use_the_permissive_threshold():
+    """T106 ruling (spec Edge Cases / FR-006 / FR-015 / Q5): a lone signal is conservative."""
     rows = {1: _row(memory_id=1)}
     matches = {1: {**MATCH, "dense_similarity": 0.3}}
     assert attachment_candidates(rows, matches=matches, policy={}, has_context=True,
-                                 session_id=None, now=NOW)["items"], "0.3 >= attach_min_score 0.0"
+                                 session_id=None, now=NOW)["items"] == [], \
+        "context-only takes the conservative track (0.3 < 0.5)"
     assert attachment_candidates(rows, matches=matches, policy={}, has_context=False,
-                                 session_id="s", now=NOW)["items"] == [], "0.3 < 0.5 conservative"
+                                 session_id="s", now=NOW)["items"] == [], \
+        "session-only takes the conservative track (0.3 < 0.5)"
+    both = attachment_candidates(rows, matches=matches, policy={}, has_context=True,
+                                 session_id="s", now=NOW)["items"]
+    assert [item["memory_id"] for item in both] == [1], \
+        "both signals take the permissive track (0.3 >= attach_min_score 0.0)"
 
 
 def test_character_budget_is_respected_by_cropping_tail_items():

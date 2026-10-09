@@ -36,6 +36,8 @@ completion_status, evidence, related_memories, memory_notice, counts, gaps, erro
 
 **Rationale**：`recall()` 在 `match` 中暴露 `dense_similarity`（`services/memory_reader.py:339`），而 `MemoryPolicy.attach_min_score` 的值域是 `[0,1]`（`services/memory_policy.py:60`），与余弦相似度同量纲、可直接比较；`fused_score` 是 `Σ wᵢ/(k+rankᵢ)`（k=60）量级约 0–0.05，用 `[0,1]` 阈值不可解释、也不可跨域配置。**不修改 `attach_min_score` 的既有默认 0.0**：013 的 gate binding 对完整 `MemoryPolicy` 取 `policy_hash`，改动默认值会使既有登记证明失效；则"宁缺勿滥"由新增的保守档承担，两者都显式可校验。附加层只过滤、不重排：`evidence` 与自身排序均不变（宪法 VI，且 `attach` 通过 `limit`/后置过滤实现，不改 `recall` 的融合权重）。
 
+**T106 裁定（2026-10-09，规格所有者授权）**：本节 Decision 关于阈档的表述**被取代**。规格原文在四处一致要求"只传其一即保守"：Edge Cases（`spec.md` L142："只传 `memory_context` 而不传 `session_id` …阈值取'宁缺勿滥'的保守档；反之只传 `session_id` 而无上下文时同样按保守档处理"）、FR-006（未请求上下文 MUST 保守）、FR-015 末句（仅上下文无会话 MUST 保守）、Clarifications Q5（同）。因此**普通档 `attach_min_score` 只在 `memory_context` 与 `session_id` 同时显式提供时生效**；只提供其一（含仅提供 `memory_context`）一律使用 `attach_conservative_min_score`。已同步 `services/memory_service.attachment_min_score`/`attachment_candidates`、`data-model.md` §3、`contracts/mcp-search-input.schema.json`、`plan.md` Phase 0 表与 T013 测试（`test_only_both_signals_use_the_permissive_threshold`）。该裁定不改变任何默认键值，故 013 `policy_hash` 不受影响。
+
 **Alternatives considered**：阈值用 `fused_score`（量纲错配，需重定义 policy 值域并破坏既有键语义）；未提供 context 时走无分的时间线模式（无法表达阈值，"宁缺勿滥"落空）；提高 `attach_min_score` 默认值（扰动 013 `policy_hash`）；未提供 context 时干脆不附加（丢掉 US1 场景 2 的"仅 session_id"触发路径）。
 
 证据：`services/memory_reader.py:238-340`、`services/memory_policy.py:49-66`、`specs/013-memory-consolidation-loop/contracts/gate-proof.md:21`。

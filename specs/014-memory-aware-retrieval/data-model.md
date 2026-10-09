@@ -29,7 +29,7 @@
 
 | 键 | 类型 | 默认 | 约束 | 语义 |
 |---|---|---:|---|---|
-| `attach_conservative_min_score` | float | 0.50 | `[attach_min_score, 1]`，有限 | 未提供 `memory_context` 时的 `dense_similarity` 下限（"宁缺勿滥"档） |
+| `attach_conservative_min_score` | float | 0.50 | `[attach_min_score, 1]`，有限 | 未**同时**提供 `memory_context` 与 `session_id` 时的 `dense_similarity` 下限（"宁缺勿滥"档；T106 裁定：普通档只在两个显式信号同时存在时生效） |
 | `attach_top_k` | int | 3 | `[1, 5]` | 附加条数 |
 | `attach_max_chars` | int | 800 | `[200, 800]` | 附加内容总长 |
 | `attach_excerpt_chars` | int | 200 | `[1, 200]` | 单条摘录长度 |

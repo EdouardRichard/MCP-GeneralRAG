@@ -138,10 +138,17 @@ def attachment_hard_anchor_ok(row) -> bool:
     return bool(row.get("evidence_refs"))
 
 
-def attachment_min_score(policy, *, has_context: bool) -> float:
-    """The threshold actually applied to ``match.dense_similarity``."""
+def attachment_min_score(policy, *, has_context: bool, has_session: bool) -> float:
+    """The threshold actually applied to ``match.dense_similarity``.
+
+    T106 ruling (spec Edge Cases / FR-006 / FR-015 / Q5): the permissive
+    ``attach_min_score`` track applies only when **both** explicit signals are
+    present.  A context-only or session-only request uses the conservative
+    "宁缺勿滥" track (``attach_conservative_min_score``).
+    """
     budget = attachment_budget(policy)
-    return budget["min_score_with_context"] if has_context else budget["min_score_conservative"]
+    permissive = bool(has_context and has_session)
+    return budget["min_score_with_context"] if permissive else budget["min_score_conservative"]
 
 
 def _entry_text(row) -> tuple[str, int]:
@@ -215,11 +222,16 @@ def attachment_candidates(
     No IO, no clock and no model: ``now`` is explicit, ordering is by
     ``(-dense_similarity, memory_id)`` and the budget comes from the validated
     domain policy clamped by the frozen contract limits.
+
+    Threshold track (T106 ruling): the permissive ``attach_min_score`` applies
+    only when ``has_context`` **and** a ``session_id`` are both present; either
+    signal alone selects the conservative track.
     """
     from rag_mcp.orchestration.packing import text_characters
 
     budget = attachment_budget(policy)
-    threshold = budget["min_score_with_context"] if has_context else budget["min_score_conservative"]
+    threshold = attachment_min_score(policy, has_context=has_context,
+                                     has_session=session_id is not None)
     moment = now or datetime.now(UTC)
     entries = list(rows.values()) if isinstance(rows, Mapping) else list(rows)
     matches = matches or {}

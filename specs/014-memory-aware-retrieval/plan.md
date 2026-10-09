@@ -136,7 +136,7 @@ research.md 覆盖 13 项决策：复用边界与增量面（§1）、分字段�
 | 键 | 默认 | 合法范围/约束 |
 |---|---:|---|
 | `attach_min_score`（既有，本期消费） | 0.0 | `[0,1]`；不改变默认值以免扰动 013 的 `policy_hash` |
-| `attach_conservative_min_score`（新） | 0.50 | `[attach_min_score,1]`；未提供 `memory_context` 时的 `dense_similarity` 下限 |
+| `attach_conservative_min_score`（新） | 0.50 | `[attach_min_score,1]`；未**同时**提供 `memory_context` 与 `session_id` 时的 `dense_similarity` 下限（T106 裁定） |
 | `attach_top_k`（新） | 3 | 整数 1–5；硬上限 5 |
 | `attach_max_chars`（新） | 800 | 整数 200–800；硬上限 800 |
 | `attach_excerpt_chars`（新） | 200 | 整数 1–200；硬上限 200 |

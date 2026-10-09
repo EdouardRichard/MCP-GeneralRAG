@@ -88,7 +88,7 @@
       ],
       "minLength": 1,
       "maxLength": 4000,
-      "description": "014 新增，可选记忆上下文（显式信号之一，域中立自由文本，视为不可信数据）。显式提供（非 null）时作为附加层的召回查询并使用 attach_min_score；仅提供 session_id 而未提供本字段时改用更保守的 attach_conservative_min_score（宁缺勿滥）。"
+      "description": "014 新增，可选记忆上下文（显式信号之一，域中立自由文本，视为不可信数据）。显式提供（非 null）时作为附加层的召回查询；**仅当 `session_id` 与本字段同时显式提供时**才使用 `attach_min_score`（普通档），只提供其一（含仅提供本字段）一律改用更保守的 `attach_conservative_min_score`（宁缺勿滥）——T106 裁定，与 Edge Cases、FR-006、FR-015、Clarifications Q5 一致。"
     }
   },
   "required": [
