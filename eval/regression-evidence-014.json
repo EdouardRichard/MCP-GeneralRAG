@@ -1,0 +1,105 @@
+{
+  "schema_version": "014.1",
+  "report_type": "014_regression_evidence",
+  "generated_at": "2026-10-09T07:50:43.058038+00:00",
+  "command": "python .tmp_regression_evidence.py (pytest suites listed below)",
+  "suites": [
+    {
+      "name": "012_e2e",
+      "target": "tests/integration/test_012_memory_e2e.py",
+      "exit_code": 0,
+      "summary": "11 passed, 10 warnings in 58.54s",
+      "counts": {
+        "passed": 11
+      },
+      "no_regression": true
+    },
+    {
+      "name": "012_old_client_compat",
+      "target": "tests/contract/test_012_old_tool_compat.py",
+      "exit_code": 0,
+      "summary": "2 passed in 30.18s",
+      "counts": {
+        "passed": 2
+      },
+      "no_regression": true
+    },
+    {
+      "name": "012_reader_boundaries",
+      "target": "tests/integration/test_012_reader_boundaries.py",
+      "exit_code": 0,
+      "summary": "9 passed, 5 warnings in 38.35s",
+      "counts": {
+        "passed": 9
+      },
+      "no_regression": true
+    },
+    {
+      "name": "013_e2e",
+      "target": "tests/integration/test_013_consolidation_e2e.py",
+      "exit_code": 1,
+      "summary": "5 failed, 2 passed in 21.06s",
+      "counts": {
+        "failed": 5,
+        "passed": 2
+      },
+      "no_regression": false
+    },
+    {
+      "name": "014_e2e",
+      "target": "tests/integration/test_014_memory_e2e.py",
+      "exit_code": 0,
+      "summary": "8 passed, 7 warnings in 38.73s",
+      "counts": {
+        "passed": 8
+      },
+      "no_regression": true
+    },
+    {
+      "name": "014_contract",
+      "target": "tests/contract",
+      "exit_code": 1,
+      "summary": "4 failed, 474 passed in 77.81s (0:01:17)",
+      "counts": {
+        "failed": 4,
+        "passed": 474
+      },
+      "no_regression": false
+    },
+    {
+      "name": "014_consumption_projection",
+      "target": "tests/integration/test_014_consumption_projection.py",
+      "exit_code": 0,
+      "summary": "9 passed in 5.57s",
+      "counts": {
+        "passed": 9
+      },
+      "no_regression": true
+    },
+    {
+      "name": "014_no_bypass",
+      "target": "tests/integration/test_014_no_bypass.py",
+      "exit_code": 0,
+      "summary": "14 passed in 0.41s",
+      "counts": {
+        "passed": 14
+      },
+      "no_regression": true
+    }
+  ],
+  "existing_artefacts": {
+    "eval/011_regression_summary.json": {
+      "sha256": "ceb0d447b53bb57e006f6591d4ab5d809cce15a1fb9edd13d89998fa8fa2f21f",
+      "bytes": 10771
+    },
+    "eval/regression_report.json": {
+      "sha256": "e11cd4353f04ff4d36197cb90638449481ebf849a782bcbbdd9b84288ec954e8",
+      "bytes": 156480
+    },
+    "eval/hard-metrics-014.json": {
+      "sha256": "f60b9ff15f20b9c477ce139e6c62b6c11bb5eea12f672e82747e5a86f3b82beb",
+      "bytes": 5319
+    }
+  },
+  "note": "013 E2E needs CONSOLIDATION_ISOLATED_DATABASE and is recorded honestly as not executed when that environment is absent; every other suite is measured here."
+}

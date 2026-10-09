@@ -2,20 +2,20 @@
   "schema_version": "014.1",
   "report_type": "014_memory_continuity_gate_report",
   "run_id": "t014a",
-  "archived_at": "2026-10-09T06:51:33.688762+00:00",
+  "archived_at": "2026-10-09T07:56:05.128456+00:00",
   "archive": {
     "record": {
       "path": "eval\\runs\\t014a\\memory-record.json",
-      "sha256": "d76f3fa7dd426016a0d115d5c239f9423539abc3e3c1b23018fe1d4b0ce1a89f",
-      "status": "failed"
+      "sha256": "56637a246f9291b70b9fc9c1c14000be4763ff2ea3304c88d1d54cf93a5361d0",
+      "status": "incomplete"
     },
     "replay": {
       "path": "eval\\runs\\t014a\\memory-replay.json",
-      "sha256": "fce08e8ab29eb7fb82e980c192c120ab1deb0ae74344869bedf906a3dc8da645",
-      "status": "failed"
+      "sha256": "fd6332de236467342c464da9a28fb44f7b87e4557de184e9f9817758f52ff4be",
+      "status": "incomplete"
     }
   },
-  "commit": "6653740ef56a83c3c70b9846766b33c9cd090e67",
+  "commit": "9de6ead7c3ebe4afeec9e885631d16081b71063a",
   "dataset_version": "014.eval.1",
   "snapshot_hash": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
   "k": 5,
@@ -221,8 +221,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
         ],
         "error": null,
         "forbidden": [],
@@ -242,8 +242,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
         ],
         "error": null,
         "forbidden": [],
@@ -289,8 +289,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
         ],
         "error": null,
         "forbidden": [],
@@ -310,8 +310,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
         ],
         "error": null,
         "forbidden": [],
@@ -595,8 +595,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
         ],
         "error": null,
         "forbidden": [],
@@ -616,8 +616,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
         ],
         "error": null,
         "forbidden": [],
@@ -776,8 +776,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
         ],
         "error": null,
         "forbidden": [],
@@ -797,8 +797,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
         ],
         "error": null,
         "forbidden": [],
@@ -1042,20 +1042,20 @@
     "status": "passed"
   },
   "hard_metrics": {
-    "cross_domain_leaks": null,
-    "evidence_source_locatable_rate": 0.0,
+    "cross_domain_leaks": 0,
+    "evidence_source_locatable_rate": 1.0,
     "mcp_schema_validity_rate": 1.0,
     "memory_context_detection_first_rate": null,
     "memory_context_detection_out_of_order": null,
-    "memory_entries_with_evidence_locators": null,
-    "memory_provenance_complete_rate": null,
-    "quarantined_memory_inputs": null
+    "memory_entries_with_evidence_locators": 0,
+    "memory_provenance_complete_rate": 1.0,
+    "quarantined_memory_inputs": 0
   },
   "cache": {
     "corrupt": 0,
     "evidence_complete": true,
     "expected_keys": 32,
-    "manifest_hash": "189a4debc71426d290974137afa4b25697a5687f6419649945dcc9739b323672",
+    "manifest_hash": "d480d2a85bafd9ba3a0eaec00b354abbbe43d9d84457480278968d289a58b7f9",
     "matched": 32,
     "missing": 0,
     "path": "eval\\runs\\t014a\\cache-manifest.json.cache",
@@ -1063,6 +1063,7 @@
     "record_real_network_calls": 32,
     "recorded_failure": 0,
     "recorded_success": 32,
+    "replay_real_network_calls": 0,
     "replayed_failure": 0,
     "replayed_success": 32,
     "response_match_rate": 1.0,
@@ -1088,53 +1089,47 @@
     "regression": {
       "checks": {
         "approved_window_change_recorded": true,
-        "evidence_complete": false,
-        "legacy_contract_evidence_present": false,
+        "evidence_complete": true,
+        "legacy_contract_evidence_present": true,
         "non_latency_drift_within_tolerance": true,
-        "regression_met": false,
-        "replay_zero_network": false,
+        "regression_met": true,
+        "replay_zero_network": true,
         "reproducibility_passed": true
       },
       "evidence": [
         "eval\\memory_continuity_eval_dataset.json",
-        "eval\\runs\\t014a\\cache-manifest.json"
+        "eval\\runs\\t014a\\cache-manifest.json",
+        "eval\\regression-evidence-014.json",
+        "eval\\011_regression_summary.json"
       ],
-      "reasons": [
-        "REPLAY_ZERO_NETWORK_FAILED",
-        "LEGACY_CONTRACT_EVIDENCE_PRESENT_FAILED"
-      ],
-      "status": "incomplete"
+      "reasons": [],
+      "status": "passed"
     },
     "safety": {
       "checks": {
         "all_required_observed": false,
-        "cross_domain_leaks": false,
-        "evidence_source_locatable_rate": false,
+        "cross_domain_leaks": true,
+        "evidence_source_locatable_rate": true,
         "mcp_schema_validity_rate": true,
         "memory_context_detection_first_rate": false,
         "memory_context_detection_out_of_order": false,
-        "memory_entries_with_evidence_locators": false,
-        "memory_provenance_complete_rate": false,
-        "quarantined_memory_inputs": false,
-        "violations": 1,
-        "zero_tolerance_clean": false
+        "memory_entries_with_evidence_locators": true,
+        "memory_provenance_complete_rate": true,
+        "quarantined_memory_inputs": true,
+        "violations": 0,
+        "zero_tolerance_clean": true
       },
       "evidence": [
-        "observed:evidence_source_locatable_rate,mcp_schema_validity_rate"
+        "observed:cross_domain_leaks,evidence_source_locatable_rate,mcp_schema_validity_rate,memory_entries_with_evidence_locators,memory_provenance_complete_rate,quarantined_memory_inputs"
       ],
       "reasons": [
-        "SAFETY_OBSERVATION_INCOMPLETE:cross_domain_leaks",
-        "SAFETY_OBSERVATION_INCOMPLETE:quarantined_memory_inputs",
         "SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_out_of_order",
-        "SAFETY_OBSERVATION_INCOMPLETE:memory_entries_with_evidence_locators",
-        "EVIDENCE_SOURCE_LOCATABLE_RATE_VIOLATION",
-        "SAFETY_OBSERVATION_INCOMPLETE:memory_provenance_complete_rate",
         "SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_first_rate"
       ],
-      "status": "failed"
+      "status": "incomplete"
     }
   },
-  "status": "failed",
+  "status": "incomplete",
   "default_enable_eligible": false,
   "default_configuration": {
     "memory_aware_retrieval_enabled": false,
@@ -1144,8 +1139,10 @@
   },
   "evidence_paths": [
     "eval\\memory_continuity_eval_dataset.json",
-    "eval\\runs\\t014a\\cache-manifest.json"
+    "eval\\runs\\t014a\\cache-manifest.json",
+    "eval\\regression-evidence-014.json",
+    "eval\\011_regression_summary.json"
   ],
   "failed_paths": [],
-  "conclusion": "quality=passed; safety=failed; regression=incomplete; relative_gain=0.0000; default_enable_eligible=False; switches unchanged; the report is evidence only"
+  "conclusion": "quality=passed; safety=incomplete; regression=passed; relative_gain=0.0000; default_enable_eligible=False; switches unchanged; the report is evidence only"
 }

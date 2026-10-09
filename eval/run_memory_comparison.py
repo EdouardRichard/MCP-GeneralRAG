@@ -48,7 +48,6 @@ import os
 import platform
 import subprocess
 import sys
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -394,6 +393,33 @@ async def rebuild_identity_evidence_index(identity, *, scope_id: int) -> dict:
         return written
 
 
+async def identity_memory_session(identity, scope_id: int) -> str | None:
+    """The most recent real session recorded for the frozen scope, if any.
+
+    The memory arm must carry a session the snapshot actually knows.  A synthetic
+    UUID filters every restored memory out (all frozen entries carry a NULL
+    session), which would silently measure an empty attachment layer instead of
+    the memory capability.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from rag_mcp.config import get_settings
+
+    with identity_environment(identity, memory_enabled=False):
+        engine = create_async_engine(get_settings().database_url)
+        try:
+            factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with factory() as session:
+                found = await session.scalar(text(
+                    "select session_id from memory_entries where knowledge_scope_id = :scope "
+                    "and session_id is not null order by observed_at desc nulls last limit 1"),
+                    {'scope': scope_id})
+                return str(found) if found else None
+        finally:
+            await engine.dispose()
+
+
 async def assert_identity_scope(identity, scope_ref: str) -> None:
     """Prove the restored identity actually serves the frozen scope."""
     from sqlalchemy import text
@@ -534,22 +560,13 @@ def observe_response(query: dict, response: dict, *, arm: str, round_name: str) 
                           raw=response if isinstance(response, dict) else {})
 
 
-def arm_session_id(arm: str, snapshot_hash: str) -> str:
-    """A stable, arm-distinct session UUID for the memory arm.
-
-    The tool validates ``session_id`` as a UUID, and the record and replay rounds
-    must use the same session for the same arm.
-    """
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f'014-continuity:{arm}:{snapshot_hash}'))
-
-
 async def run_arm(identity, *, dataset: dict, cache: ToolCallCache, round_name: str,
                   scope_ref: str) -> dict:
     """Drive one arm of one round through the sealed cache boundary."""
     rows = {}
-    #: A stable, arm-distinct UUID: the tool validates ``session_id`` as a UUID,
-    #: and record/replay must use the same session for the same arm.
-    session_id = arm_session_id(identity.arm, dataset['snapshot_hash'])
+    #: The arm's session must exist in the frozen snapshot; when the scope's
+    #: entries carry no session, the explicit signal is ``memory_context`` alone.
+    session_id = await identity_memory_session(identity, int(dataset['scope_id']))
     parameters = arm_parameters(identity.arm, session_id=session_id,
                                 memory_context=('resume the interrupted task in this scope'
                                                 if identity.arm == 'with_memory' else None))
@@ -586,20 +603,58 @@ async def run_arm(identity, *, dataset: dict, cache: ToolCallCache, round_name: 
     return rows
 
 
-def observe_hard_metrics(observations: dict) -> dict:
+#: The real 001 evidence face locates a claim by ``evidence_id`` + version +
+#: position; ``source_id`` never appears on the MCP evidence item.  The standalone
+#: 014 hard-metrics caliber (``eval/hard_metrics_014.py``) measures the same
+#: concept with the same fields, so requiring ``source_id`` produced a false zero.
+EVIDENCE_IDENTIFIER_KEYS = ('evidence_id', 'source_id')
+
+
+def evidence_locatable(entry) -> bool:
+    """True when one evidence item carries an identifier, a version and a position."""
+    if not isinstance(entry, dict):
+        return False
+    identifier = any(str(entry.get(key) or '').strip() for key in EVIDENCE_IDENTIFIER_KEYS)
+    return bool(identifier and entry.get('source_version') is not None
+                and entry.get('source_position'))
+
+
+def _foreign_scope(entry, *, scope_slug: str | None, requested_scope_id: int | None) -> bool:
+    """True when one item belongs to a scope other than the requested one."""
+    if not isinstance(entry, dict):
+        return False
+    if scope_slug is not None:
+        return entry.get('scope_slug') not in (None, scope_slug)
+    if requested_scope_id is None:
+        return False
+    value = entry.get('knowledge_scope_id')
+    if value is None:
+        return False
+    try:
+        return int(value) != requested_scope_id
+    except (TypeError, ValueError):
+        return True
+
+
+def observe_hard_metrics(observations: dict, *, requested_scope_id: int | None = None) -> dict:
     """Rule-based hard-metric observations from the real tool responses.
 
     Only what a response really shows is observed (contract §6).  A counter this
     run cannot witness -- for example the detection *order*, which needs the
     attach-layer trace, or a per-entry provenance field absent from every
     response -- stays ``None``: unobserved, never a fabricated zero.
+
+    ``cross_domain_leaks`` is witnessable whenever the arm responses carry their
+    items' scope: search responses expose ``knowledge_scope_id`` on every
+    evidence/memory item, so the requested frozen scope is what leaks are
+    compared against.
     """
     metrics = {**dict.fromkeys(ZERO_SAFETY_KEYS, None), **dict.fromkeys(FULL_INTEGRITY_KEYS, None)}
     responses = [observation.raw for observation in observations.values() if observation.raw]
     if not responses:
         return metrics
     schema_ok = 0
-    evidence_total = evidence_locatable = 0
+    evidence_total = evidence_locatable_count = 0
     memory_total = memory_provenance = memory_evidence_locators = quarantined = 0
     cross_scope = 0
     scope_seen = False
@@ -609,24 +664,26 @@ def observe_hard_metrics(observations: dict) -> dict:
         schema_ok += int('completion_status' in response)
         if 'completion_status' not in response:
             continue
-        for entry in response.get('evidence') or ():
-            evidence_total += 1
-            evidence_locatable += int(all(entry.get(key) is not None for key in
-                                          ('source_id', 'source_version', 'source_position')))
         scope = response.get('scope') or {}
         scope_slug = scope.get('slug') if isinstance(scope, dict) else None
+        if requested_scope_id is not None:
+            scope_seen = True
+        for entry in response.get('evidence') or ():
+            evidence_total += 1
+            evidence_locatable_count += int(evidence_locatable(entry))
+            cross_scope += int(_foreign_scope(entry, scope_slug=scope_slug,
+                                              requested_scope_id=requested_scope_id))
         for entry in response.get('related_memories') or ():
             memory_total += 1
             memory_provenance += int(bool(entry.get('provenance')))
             memory_evidence_locators += int(entry.get('source_position') is not None
                                             or entry.get('source_version') is not None)
             quarantined += int(entry.get('status') not in (None, 'active'))
-            if scope_slug is not None:
-                scope_seen = True
-                cross_scope += int(entry.get('scope_slug') not in (None, scope_slug))
+            cross_scope += int(_foreign_scope(entry, scope_slug=scope_slug,
+                                              requested_scope_id=requested_scope_id))
     metrics['mcp_schema_validity_rate'] = schema_ok / len(responses)
     if evidence_total:
-        metrics['evidence_source_locatable_rate'] = evidence_locatable / evidence_total
+        metrics['evidence_source_locatable_rate'] = evidence_locatable_count / evidence_total
     if memory_total:
         metrics['memory_provenance_complete_rate'] = memory_provenance / memory_total
         metrics['memory_entries_with_evidence_locators'] = memory_evidence_locators
@@ -990,7 +1047,7 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - needs 
                               snapshot_hash=dataset['snapshot_hash'],
                               model_version=dataset['frozen']['model'],
                               responses=recorded_responses(observations),
-                              hard_metrics=observe_hard_metrics(observations))
+                              hard_metrics=observe_hard_metrics(observations, requested_scope_id=int(dataset['scope_id'])))
     else:
         manifest = ToolCallCache.load_manifest(args.cache_manifest)
     replay_cache = ToolCallCache(cache_dir, mode='replay')
@@ -1021,10 +1078,13 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - needs 
     report = build_report(
         dataset=dataset, observations=observations, faces=faces,
         reproducibility_evidence=reproducibility_evidence,
-        hard_metrics=observe_hard_metrics(observations),
+        hard_metrics=observe_hard_metrics(observations, requested_scope_id=int(dataset['scope_id'])),
         cache={**audit, 'path': str(cache_dir), 'manifest_hash': _sha256_file(args.cache_manifest),
                'response_match_rate': comparison['response_match_rate'],
-               'record_real_network_calls': manifest.get('expected_keys', 0)},
+               'record_real_network_calls': manifest.get('expected_keys', 0),
+               # The regression gate reads this key; it is the replay round's real
+               # transport count, which must be zero for a reproduced run.
+               'replay_real_network_calls': replay_cache.real_calls},
         regression_evidence={'legacy_contract': [str(path) for path in args.regression],
                              'delivered_ttl_seconds': args.delivered_ttl_seconds},
         evidence_paths=[str(args.dataset), str(args.cache_manifest)] + [str(path) for path in args.regression],

@@ -767,18 +767,60 @@ def test_forbidden_claims_are_not_hit_by_a_shared_heading(dataset):
     assert observation.hits, "the required heading must still resolve from evidence"
 
 
-def test_memory_arm_session_id_is_a_stable_valid_uuid(dataset):
-    """T058: the tool validates session_id as a UUID and record/replay share it."""
-    import uuid as uuid_module
+def test_memory_arm_payload_survives_without_a_snapshot_session():
+    """T104: a scope whose entries carry no session still attaches via memory_context.
 
-    from run_memory_comparison import arm_session_id
+    A synthetic UUID would filter every restored memory out (all frozen entries
+    have a NULL session), silently measuring an empty attachment layer.
+    """
+    from run_memory_comparison import tool_payload
 
-    snapshot = dataset["snapshot_hash"]
-    record = arm_session_id("with_memory", snapshot)
-    replay = arm_session_id("with_memory", snapshot)
-    assert uuid_module.UUID(record)
-    assert record == replay, "the same arm must use the same session in both rounds"
-    assert arm_session_id("without_memory", snapshot) != record
+    payload = tool_payload("search_knowledge", {"question": "q"},
+                           parameters={"session_id": None, "memory_context": "resume the task"},
+                           policy={"memory_attachment_enabled": True, "working_set_enabled": True},
+                           scope_ref="c013-eval-meeting-notes")
+    assert payload["memory_context"] == "resume the task"
+    assert payload["domain_scope"] == ["c013-eval-meeting-notes"]
+    assert "session_id" not in payload
+
+
+def test_evidence_locatability_uses_the_real_evidence_face_fields():
+    """T102: the locating triple on the MCP face is evidence_id/version/position."""
+    from types import SimpleNamespace
+
+    from run_memory_comparison import evidence_locatable, observe_hard_metrics
+
+    assert evidence_locatable({"evidence_id": "1", "source_version": 1, "source_position": "p"})
+    assert evidence_locatable({"source_id": "1", "source_version": 1, "source_position": "p"})
+    assert not evidence_locatable({"evidence_id": "1", "source_position": "p"})
+    assert not evidence_locatable({"evidence_id": "1", "source_version": 1})
+    assert not evidence_locatable(None)
+    response = {
+        "completion_status": "complete",
+        "evidence": [{"evidence_id": "1", "source_version": 1, "source_position": "p"},
+                     {"evidence_id": "2", "source_version": 1, "source_position": ""}],
+    }
+    metrics = observe_hard_metrics({"k": SimpleNamespace(raw=response)})
+    assert metrics["mcp_schema_validity_rate"] == 1.0
+    assert metrics["evidence_source_locatable_rate"] == 0.5
+
+
+def test_cross_domain_leaks_are_measured_from_item_scopes():
+    """T102: search items expose knowledge_scope_id, so leaks are witnessable."""
+    from types import SimpleNamespace
+
+    from run_memory_comparison import observe_hard_metrics
+
+    response = {"completion_status": "complete",
+                "evidence": [{"evidence_id": "1", "source_version": 1, "source_position": "p",
+                              "knowledge_scope_id": 7}],
+                "related_memories": [{"memory_id": 1, "provenance": "soft",
+                                      "knowledge_scope_id": 8, "status": "active"}]}
+    metrics = observe_hard_metrics({"k": SimpleNamespace(raw=response)}, requested_scope_id=7)
+    assert metrics["cross_domain_leaks"] == 1
+    clean = observe_hard_metrics(
+        {"k": SimpleNamespace(raw={**response, "related_memories": []})}, requested_scope_id=7)
+    assert clean["cross_domain_leaks"] == 0
 
 
 def test_gate_report_archiver_archives_and_refuses_overwrite(tmp_path):
