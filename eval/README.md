@@ -355,7 +355,75 @@ recall per arm so the first timed query measures retrieval instead of a cold sta
 两个薄入口运行器（`run_memory_baseline.py`、`run_regression_015.py`）与一个只读统计
 端点。本节登记 015 的数据集、报告与运行器用法及重跑口径，供后续运行者按同一口径复核。
 
-（本节内容随 T037 逐项补齐。）
+#### 015 基准报告：数据集、报告、运行器与重跑口径（T027–T037 / T070–T071）
+
+**登记的数据集与产物**
+
+| 产物 | 路径 | 口径 |
+|---|---|---|
+| 投毒防护子集 | `eval/memory_poisoning_eval_dataset.json`（`dataset_version 015.eval.1`） | 11 例；10 例 `role=primary`（其中 1 例为检测器故障注入，语料库自身把它列入 `detector_unavailable_cases`，**分子分母均不计入**），2 例 `role=control`；硬水位 = 可判 primary 例全数被标记且隔离 |
+| AOEP 义务用例 | `eval/memory_aoep_obligation_dataset.json`（`015.eval.1`） | 13 例，五条不变量各 ≥2（`traceable_rollback`/`deletion_propagation`/`authority_monotonicity`/`provenance_preservation`/`scope_non_expansion`） |
+| 连续性数据集 | `eval/memory_continuity_eval_dataset.json`（**014** 冻结集，`014.eval.1`） | 16 查询；水位沿 014 冻结判据（`completed_with_memory ≥ 12` 且四类各 ≥1） |
+| 受益数据集 | `eval/consolidation_eval_dataset.json`（**013**） | 记录口径；巩固默认关闭时基线不可比，相对收益记 `not_measurable` |
+| 逐例结果（本 Feature 实跑） | `eval/runs/015-20261009205637/evidence/poisoning-cases.json`、`.../aoep-cases.json` | 运行器只读这两个文件，不手抄任何计数 |
+| 基准报告（追踪路径） | `eval/memory_baseline_report.json` | **仅首次播种**；此后由运行器写 `eval/runs/<RUN_ID>/memory_baseline_report.json` |
+| 基准报告（运行路径） | `eval/runs/015-20261009205637/memory_baseline_report.json` | 契约 `specs/015-memory-evaluation-governance/contracts/memory-baseline-report.schema.json`（与共享 `$defs` 合并后校验） |
+| 原始实测载荷 | `eval/runs/015-20261009205637/hard-metrics-measurements.json` | 逐工具校验错误、四路径分母、五处隔离计数、六投影/六轴逐条样本、延迟样本 |
+| 重跑可复现证据 | `eval/runs/015-20261009205637/evidence/baseline_reproducibility.json` | 两次运行的逐指标 `relative_delta`（延迟除外） |
+
+**运行器用法与重跑口径**
+
+```powershell
+python eval/run_memory_baseline.py `
+    --output eval/runs/015-20261009205637/memory_baseline_report.json `
+    --poisoning eval/memory_poisoning_eval_dataset.json `
+    --aoep eval/memory_aoep_obligation_dataset.json `
+    --aoep-results D:\Project_new\docsToCode\eval\runs\015-20261009205637\evidence\aoep-cases.json `
+    --poisoning-results D:\Project_new\docsToCode\eval\runs\015-20261009205637\evidence\poisoning-cases.json `
+    --runs-dir eval/runs/015-20261009205637 `
+    --continuity-report eval/runs/015-20261009205637/continuity-replay/memory-replay.json `
+    --continuity-criterion-met --continuity-completed 16
+```
+
+- `--output` 必填且**唯一写入路径**；`--poisoning`/`--aoep`/`--aoep-results`/`--poisoning-results` 必填；
+  `--runs-dir` 供装配 `regression` 块（读 T058 的 `regression_group_map.json`，映射缺失或未执行的组
+  记入 `not_executed`，**绝不记为通过**）；`--continuity-report` + `--continuity-criterion-met` +
+  `--continuity-completed` 提供连续性水位的真实来源（014 replay 报告）。
+- **运行标识规则**：`RUN_ID=015-<YYYYMMDDHHMMSS>`；本 Feature 冻结 `015-20261009205637`。运行器读取
+  `RUN_ID` 环境变量，默认即该冻结值，且所有 015 产物只写 `eval/runs/<RUN_ID>/`。
+- **零覆盖纪律**：目标路径已存在且字节不同 → 拒绝写入并 `exit 2`；字节相同 → 幂等成功（`exit 0`）。
+  `eval/memory_baseline_report.json` 仅在不存在时播种（`--seed-tracked-report`）。运行器**不**复制
+  `eval/hard_metrics_014.py:435` 的无条件重写行为，`hard_metrics_014` 的 `main()` 从不被调用；该模块
+  无 CLI，故由本运行器在导入前显式设置 `RUN_ID`/`RUN_DIR`。
+- **零分母纪律**：比率块 `total == 0` → `{rate: null, value: "not_measurable", reason}`；`leakPath`/
+  `countBlock`/`projectionIntegrityView`/`metadataAxis` 的 `examined == 0` → `state`/`value =
+  "not_measurable"` + `reason`。四个比率块的 `passed` 是**整数通过条数**（014 口径），"全过"写
+  `passed ≥ 1` 且 `rate == value == 1`，绝不写布尔。
+- **安全类零容差**：跨域串库/隔离泄漏/硬锚定/provenance 不用 1% 非延迟容差代替；任何一项未达标即整体
+  不通过。1% 容差**只**用于同快照同版本的重跑比对，且延迟不参与（`latency.env_sensitive = true`）。
+- **可复现性怎么复核**：`--compare <参考报告>` 让本次与参考报告逐项比对非延迟指标，超过 1% 相对容差
+  即 `exit 3` 且不落盘。实测：同一份 `hard-metrics-measurements.json` 的两次装配在 **182/182** 项上
+  相对偏差 0.0；两次**独立活体实测**则在 7 项原始计数上不同（写者租约被并行流持有导致
+  `record_memory` 的通过条数与拒绝错误码不同、每次运行新建探针域导致 `examined` 不同），
+  **所有 rate/verdict 一致**，逐项差异见 `baseline_reproducibility.json`。
+- **本报告不是提升声明**：`status=incomplete`、`hard_metrics.all_passed=false`（`tool_schema_validity`
+  实测落在活体数据上 5/6：`list_knowledge_domains` 的活体响应含 3 处违反 007 契约的 `domain_key`/`slug`，
+  逐条记录在原始实测载荷里），`gates.{quality,safety,regression}` 均未通过（回归组尚未执行，T058–T060 负责）。
+
+**三处"不得声称"边界（逐字记录）**
+
+- 测试通过 ≠ 指标实测：一次通过的测试不构成一次实测的指标；未执行的项一律记 `not_measurable` 或
+  `not_executed`，绝不记为通过。
+- 零分母 ≠ 0：零分母记 `not_measurable` + 原因，绝不记 0，也绝不记为达标。
+- SSE 未接线不得当作 UI 未达标或正确性论据：SSE 未接线既不是 UI 未达标的证据，也不是正确性的论据。
+
+**报告属性复核（T036 实测）**
+
+- 首次运行在追踪路径不存在时播种；第二次运行写运行路径，追踪路径 sha256 不变；
+  对已存在的不同字节路径再写 → `exit 2`。
+- 巩固关闭时 `not_measurable[]` 必含 `benefit.relative_gain`；不可测量项记为 0 的次数 = 0；
+  每项不可测量均带非空原因。
+- 报告以"基线锚点/当前水位"表述（`notes[0]`），无对照提升证据不宣称改进；模型评审仅诊断、不参与过闸。
 
 #### 015 运行标识与产物路径约定（T002，冻结）
 
