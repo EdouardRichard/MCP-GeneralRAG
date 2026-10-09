@@ -2,20 +2,20 @@
   "schema_version": "014.1",
   "report_type": "014_memory_continuity_gate_report",
   "run_id": "t014a",
-  "archived_at": "2026-10-09T07:56:05.128456+00:00",
+  "archived_at": "2026-10-09T08:07:36.181127+00:00",
   "archive": {
     "record": {
       "path": "eval\\runs\\t014a\\memory-record.json",
-      "sha256": "56637a246f9291b70b9fc9c1c14000be4763ff2ea3304c88d1d54cf93a5361d0",
+      "sha256": "78d87dc27b761e42cc12db910a2eea2458d46d2b6b2c44013811b502be4eebb6",
       "status": "incomplete"
     },
     "replay": {
       "path": "eval\\runs\\t014a\\memory-replay.json",
-      "sha256": "fd6332de236467342c464da9a28fb44f7b87e4557de184e9f9817758f52ff4be",
+      "sha256": "16c5b13b7ac76f0379f4ad5832599525d9b05de9da82811fd58e613cb24d1701",
       "status": "incomplete"
     }
   },
-  "commit": "9de6ead7c3ebe4afeec9e885631d16081b71063a",
+  "commit": "da8a06f5ceab59fc37e9be412361838bf707937f",
   "dataset_version": "014.eval.1",
   "snapshot_hash": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
   "k": 5,
@@ -221,8 +221,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
         ],
         "error": null,
         "forbidden": [],
@@ -242,8 +242,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
         ],
         "error": null,
         "forbidden": [],
@@ -289,8 +289,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
         ],
         "error": null,
         "forbidden": [],
@@ -310,8 +310,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
         ],
         "error": null,
         "forbidden": [],
@@ -595,8 +595,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
         ],
         "error": null,
         "forbidden": [],
@@ -616,8 +616,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
-          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade"
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
         ],
         "error": null,
         "forbidden": [],
@@ -776,8 +776,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
         ],
         "error": null,
         "forbidden": [],
@@ -797,8 +797,8 @@
         ],
         "cost_usd": null,
         "delivered": [
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
-          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
         ],
         "error": null,
         "forbidden": [],
@@ -1055,7 +1055,7 @@
     "corrupt": 0,
     "evidence_complete": true,
     "expected_keys": 32,
-    "manifest_hash": "d480d2a85bafd9ba3a0eaec00b354abbbe43d9d84457480278968d289a58b7f9",
+    "manifest_hash": "319ca484ca444f68fa180c9bb466412674104eae6ce143af1a9a0e4729fb4b99",
     "matched": 32,
     "missing": 0,
     "path": "eval\\runs\\t014a\\cache-manifest.json.cache",

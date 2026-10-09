@@ -426,7 +426,7 @@ converge 为 append-only，不回溯修改既有任务，故在此以评审记�
 - [X] T103 HIGH 产出可核验 regression 证据并接入闸门：新增 `eval/run_014_regression_evidence.py`，实测并写入 `eval/regression-evidence-014.json`（012 E2E 11 passed、旧客户端兼容 2、012 边界 9、013 E2E 2 passed/5 隔离门失败、014 E2E 8、014 contract 474 passed/4 隔离门失败、014 投影 9、无旁路 14；并引用 011/回归基线产物），随 `--regression` 传入 per FR-038/SC-015/T069 (missing)
 - [X] T104 HIGH 让记忆臂携带快照真实会话：合成 UUID 会过滤掉全部冻结记忆（实测 0 related_memories）→ 改为从恢复身份解析真实会话（本快照 `memory_entries.session_id` 全为 NULL，故仅用显式 `memory_context` 触发）；修正后 16 条记忆臂查询共交付 **32** 条 `related_memories` per FR-001/FR-015/FR-020 (contradicts)
 - [X] T105 MEDIUM 以修正口径重跑 record/replay 并重归档：drop 四个隔离身份后从封印 capsule **纯净重恢复**，record 32 次真实调用 + replay 0 次，`response_match_rate=1.0`、漂移 `0.0`；重写 `memory-gate-report.json` 与被跟踪副本 per FR-035/SC-010 (partial)
-- [ ] T106 MEDIUM 待规格所有者裁定的阈档分歧：Q5 与 FR-015 末句要求"仅显式 `memory_context`（无会话标识）"取**保守档**，而代码与 research §3 取 permissive（`has_context` → `attach_min_score`，默认 0.0），T013 测试已把 permissive 固化为正确行为；须裁定后统一代码/契约/测试 per FR-006/FR-015/Q5 (contradicts)
+- [X] T106 MEDIUM 阈档分歧裁定并落实（2026-10-09，规格所有者授权）：规格四处一致（Edge Cases L142 / FR-006 / FR-015 末句 / Q5）要求"只传其一即保守"；裁定**普通档 `attach_min_score` 仅在 `memory_context` 与 `session_id` 同时显式提供时生效**，只传其一（含仅上下文）一律取 `attach_conservative_min_score`。已改 `services/memory_service.attachment_min_score`（新增 `has_session` 判档）与 `attachment_candidates`（由 `session_id is not None` 派生），同步 `data-model.md` §3、`contracts/mcp-search-input.schema.json`、`plan.md` Phase 0 表与 `research.md` §3 取代说明；T013 测试改为 `test_only_both_signals_use_the_permissive_threshold` 并覆盖四种信号组合；既有默认键值未动，013 `policy_hash` 不受影响 per FR-006/FR-015/Q5 (contradicts)
 
 ### 第六轮（T102–T105）实测留证（2026-10-09，run-id `t014a` 重跑）
 
@@ -436,3 +436,12 @@ converge 为 append-only，不回溯修改既有任务，故在此以评审记�
 - **闸门（修正后）**：quality **passed**（预冻显式判据 16/16 ≥ 12；`RELATIVE_GAIN_BELOW_THRESHOLD`：`relative_gain=0.0`）；regression **passed**（reproducibility passed、`replay_real_network_calls=0`、漂移 0.0、`legacy_contract_evidence_present=true`）；safety **incomplete**，原因精确为 `SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_first_rate` 与 `SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_out_of_order`；总体 **`status=incomplete`、`default_enable_eligible=false`、开关不变**。
 - **测试**：`tests/contract/test_014_continuity_report.py` **34 passed**（含 evidence 可定位口径、跨域见证、会话缺失负载、归档器拒绝覆盖等守卫）。
 - **口径边界（已知且记录在案）**：比较器只观测臂响应；检测时序不在响应面内，故由 T069 的独立硬指标报告（`eval/hard-metrics-014.json`，`context_detection_first` 值 1.0，时序证据指向 `test_detection_runs_before_any_recall`）承担。若要求比较闸门自身见证这两项，需扩展 runner 增加显式检测时序探针（见 T106 之后的新任务，未在本轮实施）。
+
+### 第七轮（T106 裁定）实测留证（2026-10-09，run-id `t014a` 第三次重跑）
+
+- **规格依据**：`spec.md` 四处一致——Edge Cases（L142）"只传 `memory_context` 而不传 `session_id` …取保守档；反之只传 `session_id` 而无上下文时同样按保守档处理"、FR-006（未请求上下文 MUST 保守）、FR-015 末句（仅上下文无会话 MUST 保守）、Clarifications Q5；`research.md` §3 原 Decision 是被取代的一方，已加"T106 裁定"取代段落。
+- **代码变更**：`attachment_min_score(policy, *, has_context, has_session)` 以 `has_context and has_session` 判普通档；`attachment_candidates` 由既定参数 `session_id is not None` 派生 `has_session`（无需调用方新增参数，避免漏传）。默认键值与 013 `policy_hash` 不变。
+- **测试**：T013 阈档测试改为四种信号组合断言（两个同时 → `attach_min_score`；仅上下文 / 仅会话 / 都无 → 保守档）；014 相关套件 **388 passed, 1 skipped**，014 E2E **8 passed**。
+- **重跑结果（保守档生效）**：记忆臂 16 条查询各交付 **1** 条 `related_memories`（共 16，较 permissive 的 32 条收紧，符合"宁缺勿滥"）；`memory_provenance_complete_rate=1.0`、`memory_entries_with_evidence_locators=0`、`quarantined_memory_inputs=0`、`evidence_source_locatable_rate=1.0`、`cross_domain_leaks=0`。
+- **闸门（与第六轮同形）**：quality **passed**（预冻显式判据；`relative_gain=0.0` → `RELATIVE_GAIN_BELOW_THRESHOLD`）、regression **passed**（`response_match_rate=1.0`、漂移 0.0、replay 真实调用 0）、safety **incomplete**（仅 `memory_context_detection_first_rate` 与 `memory_context_detection_out_of_order` 未观测）⇒ **`status=incomplete`、`default_enable_eligible=false`、开关不变**。
+- **观察**：两个显式信号未同时出现的冻结快照只能走保守档，故本轮对照衡量的是保守档行为；如要在评测中覆盖普通档，需要快照中存在与会话绑定的记忆（或在评测环境中构造带 `session_id` 的等价作用域），这属于评测集扩展而非代码缺陷。
