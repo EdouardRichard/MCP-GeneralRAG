@@ -385,3 +385,24 @@ async def rebuild_audit(request_id: str = Query(min_length=1, max_length=128),
             "scope_id": audit.knowledge_scope_id, "reason": audit.reason,
             "source_event_id": audit.source_event_id, "since_event_id": audit.since_event_id,
             "result": audit.result, "created_at": audit.created_at.isoformat()}
+
+
+@router.get("/stats", dependencies=[Depends(require_writer)])
+async def memory_statistics(scope_ref: str = Query(min_length=1),
+                            session: AsyncSession = Depends(get_session)):
+    """T039/FR-044..FR-046: counts, distributions and quantiles for one domain.
+
+    An independent endpoint -- ``GET /runtime/metrics`` (006) is untouched.  The
+    response is zero-body by construction: the aggregation selects only counts,
+    closed-vocabulary labels and ``memory_salience.salience``, so no free-text key
+    has a code path into the payload and ``TRACE_BODY_ENABLED`` cannot change it.
+    A read-only instance or an invalid writer lease is refused with 503
+    ``MEMORY_WRITE_UNAVAILABLE`` by the shared ``require_writer`` dependency.
+    """
+    from rag_mcp.services.memory_statistics import domain_statistics
+
+    try:
+        scope_id = await MemoryScopeResolver(session).resolve(scope_ref)
+    except ValueError as exception:
+        raise _http_error(exception) from None
+    return await domain_statistics(session, scope_id)
