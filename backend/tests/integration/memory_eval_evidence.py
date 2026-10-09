@@ -160,14 +160,19 @@ class MemoryEvalEvidenceBundle:
         invocation sharing the directory would abort at session finish (found by
         the T016 owner, 2026-10-09). The 015 rule is therefore:
 
+        * an empty document is never written at all -- not even to seed the
+          canonical path, because an empty dump would otherwise occupy that path
+          and shadow the real export of whichever suite did record cases (found by
+          the T016 owner on the first combined run);
         * identical bytes -> idempotent success;
-        * an empty dump never clobbers collected evidence;
         * a differing document is written to a timestamped sibling
           (``<stem>.<utc>.json``) instead, so the first file is preserved and the
           later run is recorded rather than lost or raised away.
 
         Nothing is ever overwritten, and no run can block another.
         """
+        if case_count == 0:
+            return None
         raw = json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
@@ -176,9 +181,6 @@ class MemoryEvalEvidenceBundle:
             return sha256(raw).hexdigest()
         if path.read_bytes() == raw:
             return sha256(raw).hexdigest()
-        if case_count == 0:
-            # A run that observed no case of this kind must not shadow real evidence.
-            return None
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
         sibling = path.with_name(f"{path.stem}.{stamp}{path.suffix}")
         with sibling.open("xb") as stream:
