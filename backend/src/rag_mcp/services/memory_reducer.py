@@ -8,7 +8,27 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-_REDUCER_SEAL = object()
+def _make_reducer_seal():
+    """T093: keep the attestation token in a closure, not an importable attribute.
+
+    The earlier ``_REDUCER_SEAL = object()`` module attribute made the "sealed"
+    claim trivially forgeable (`ReducerState(payload, memory_reducer._REDUCER_SEAL)`).
+    The token is now reachable only through the two private callables below.
+    """
+    token = object()
+
+    def _construct(serialized: str) -> "ReducerState":
+        return ReducerState(serialized, token)
+
+    def _verify(state) -> "ReducerState":
+        if not isinstance(state, ReducerState) or state._seal is not token:
+            raise TypeError("projection writes require sealed reducer output")
+        return state
+
+    return _construct, _verify
+
+
+_construct_reducer_state, _require_reducer_state = _make_reducer_seal()
 PROJECTION_NAMES = ("entries", "dense", "links", "summary", "files", "salience")
 GOVERNANCE_AXES = ("authority", "scope_meta", "mutability", "provenance_meta", "recoverability", "actionability")
 
@@ -52,9 +72,7 @@ class ReducerState(Mapping):
 
 
 def require_reducer_state(state):
-    if not isinstance(state, ReducerState) or state._seal is not _REDUCER_SEAL:
-        raise TypeError("projection writes require sealed reducer output")
-    return state
+    return _require_reducer_state(state)
 
 
 def _scoped_target(entries, memory_id, scope):
@@ -375,7 +393,8 @@ def reduce_events(events, *, initial_state=None):
         links.update(deepcopy(row.get('approved_links', {})))
     state = {"entries": entries, "dense": dense, "links": links, "summary": summary,
              "files": files, "salience": salience, "bindings": bindings, 'consolidation_state': consolidation_state}
-    return ReducerState(json.dumps(state, sort_keys=True, separators=(",", ":"), default=str), _REDUCER_SEAL)
+    return _construct_reducer_state(
+        json.dumps(state, sort_keys=True, separators=(",", ":"), default=str))
 
 
 def projection_fingerprint(state):

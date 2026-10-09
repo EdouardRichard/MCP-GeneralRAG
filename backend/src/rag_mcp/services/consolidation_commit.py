@@ -27,6 +27,16 @@ from rag_mcp.services.memory_validators import canonical_distilled
 from rag_mcp.utils.snowflake import generate_id
 
 
+def _nudge_consumption(scope_id: int) -> None:
+    """014 T085: a committed consolidation must reach the consumption layer."""
+    try:
+        from rag_mcp.runtime.memory_projection import mark_memory_projection_dirty
+
+        mark_memory_projection_dirty(scope_id)
+    except Exception:  # noqa: BLE001 - a refresh hint must never break the write
+        return
+
+
 async def locked_approval(runtime, token, batch, context):
     policy, _profile = await runtime._validate_policy(token.scope_id, context)
     await runtime.session.execute(select(MemoryEntry).where(MemoryEntry.knowledge_scope_id == token.scope_id)
@@ -330,6 +340,10 @@ async def commit_approved(service, decisions, token, *, runtime, batch, context)
             reason = str(error) if isinstance(error, ProjectionFailure) else 'CONSOLIDATION_RELATIONAL_FAILURE'
             return CommitOutcome('rolled_back', tuple(memories), tuple(events), reason_codes=(reason,),
                                  failed_result_keys=(requested.group_key,))
+    # 014 T085: the consolidation commit changed memory state; the read-only file
+    # projection must be refreshed without waiting for a later record()/window.
+    if events:
+        _nudge_consumption(token.scope_id)
     if pending:
         return CommitOutcome('pending', tuple(memories), tuple(events), tuple(pending), tuple(reasons))
     return CommitOutcome('completed' if events else 'rejected', tuple(memories), tuple(events), reason_codes=tuple(reasons))
@@ -360,7 +374,11 @@ async def recover_consolidation(service, token, *, runtime):
             published = await _publish(service, runtime, token, fence)
             if not published:
                 return CommitOutcome('pending', pending_result_keys=keys)
-            return CommitOutcome('completed', tuple(e['aggregate_id'] for e in retained if e['payload']['operation'] == 'create'),
-                                 tuple(e['event_id'] for e in retained))
+            completed = CommitOutcome('completed',
+                                      tuple(e['aggregate_id'] for e in retained if e['payload']['operation'] == 'create'),
+                                      tuple(e['event_id'] for e in retained))
+        # 014 T085: post-commit propagation to the consumption layer.
+        _nudge_consumption(token.scope_id)
+        return completed
     except ConsolidationRuntimeError as error:
         return CommitOutcome('pending', reason_codes=(str(error),))

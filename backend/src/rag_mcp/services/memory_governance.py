@@ -22,6 +22,21 @@ class PromotionUnavailable(ValueError):
     """The promotion request cannot be answered from persisted state."""
 
 
+def _nudge_consumption(scope_id: int) -> None:
+    """014 T085: every committed authority write propagates to the consumption layer.
+
+    Deletion/retraction/correction/quarantine/archive/rollback all append an
+    event here; without this nudge the read-only file projection only caught up
+    on a later ``record()`` or the (default-off) maintenance window.
+    """
+    try:
+        from rag_mcp.runtime.memory_projection import mark_memory_projection_dirty
+
+        mark_memory_projection_dirty(scope_id)
+    except Exception:  # noqa: BLE001 - a refresh hint must never break the write
+        return
+
+
 class PromotionNotFound(LookupError):
     """The target memory or task does not exist in the requested scope."""
 
@@ -184,6 +199,7 @@ class MemoryGovernance:
                 if not all(item["matches_replay"] for item in integrity.values()):
                     raise ProjectionFailure("integrity")
             await self.session.commit()
+            _nudge_consumption(scope_id)
         except ProjectionFailure as failure:
             if failure.path == "relation":
                 await self.session.rollback()
@@ -192,6 +208,7 @@ class MemoryGovernance:
             after = reduce_events(await MemoryEventStore(self.session).replay(scope_id))
             await self.service.projections.retain_failure(after, scope_id, event_id, failure.path)
             await self.session.commit()
+            _nudge_consumption(scope_id)
             raise ValueError("MEMORY_WRITE_UNAVAILABLE") from None
         except Exception:
             await self.session.rollback()
@@ -308,6 +325,7 @@ class MemoryGovernance:
                 if not all(item["matches_replay"] for item in integrity.values()):
                     raise ProjectionFailure("integrity")
             await self.session.commit()
+            _nudge_consumption(scope_id)
         except ProjectionFailure:
             await self.session.rollback()
             raise PromotionUnavailable("MEMORY_PROMOTION_UNAVAILABLE") from None
@@ -385,6 +403,7 @@ class MemoryGovernance:
                 if not all(item["matches_replay"] for item in integrity.values()):
                     raise ProjectionFailure("integrity")
             await self.session.commit()
+            _nudge_consumption(scope_id)
         except Exception:
             await self.session.rollback()
             raise

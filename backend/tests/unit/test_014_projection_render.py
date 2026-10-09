@@ -11,6 +11,7 @@ Contract: ``specs/014-memory-aware-retrieval/contracts/memory-consumption-projec
 
 from __future__ import annotations
 
+import asyncio
 import os
 import stat
 from pathlib import Path
@@ -242,6 +243,37 @@ def test_render_tree_requires_a_sealed_reducer_state(state):
         projection.render_tree({"entries": {}}, slug=SLUG)
 
 
+def test_the_reducer_attestation_cannot_be_forged_by_the_old_module_attribute():
+    """T093: the seal is closure-scoped, not an importable sentinel."""
+    from rag_mcp.services import memory_reducer as reducer
+
+    assert not hasattr(reducer, "_REDUCER_SEAL"), "no importable seal may exist"
+    with pytest.raises(TypeError):
+        reducer.require_reducer_state(reducer.ReducerState("{}", object()))
+    assert reducer.require_reducer_state(reducer.reduce_events([])) is not None
+
+
+# T097: mixed-granularity INDEX (FR-027 / Clarifications Q6).
+
+def _month_event(event_id: int, scope_id: int, month: int) -> dict:
+    event = _event(event_id, scope_id, "episodic", f"note-{event_id}")
+    event["occurred_at"] = f"2026-{month:02d}-01T00:00:00+00:00"
+    return event
+
+
+def test_index_adds_time_buckets_only_above_the_threshold():
+    events = [_month_event(index, 42, 1 if index <= 150 else 2) for index in range(1, 202)]
+    files = dict((relative, text) for _, relative, text in projection.render_tree(reduce_events(events), slug=SLUG))
+    index = files["INDEX.md"]
+    assert "### 2026-02" in index and "### 2026-01" in index
+    assert index.index("### 2026-02") < index.index("### 2026-01"), "newest bucket first"
+    assert projection.INDEX_TIME_BUCKET_THRESHOLD == 200
+
+    small = dict((relative, text) for _, relative, text
+                 in projection.render_tree(reduce_events([_month_event(1, 42, 1)]), slug=SLUG))
+    assert "###" not in small["INDEX.md"], "below the threshold the group stays flat"
+
+
 # --------------------------------------------------------------------------
 # §4 normative guard — path confinement (no public write API, AST in T041)
 # --------------------------------------------------------------------------
@@ -437,6 +469,161 @@ async def test_apply_tree_reports_drift_and_repairs_the_scope_subtree(tmp_path, 
 def st_has_no_write_bit(path: Path) -> bool:
     """True when a host write to this file is refused (POSIX 0o444 / S_IREAD)."""
     return not (path.stat().st_mode & stat.S_IWUSR)
+
+
+# --------------------------------------------------------------------------
+# T073/T082/T096 — convergence assertions: content-only drift, confinement of
+# the real publication path, and honest guard_state
+# --------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_content_only_tamper_is_detected_as_drift(tmp_path, state, monkeypatch):
+    """T073: a same-path byte edit with the read-only bit restored is drift.
+
+    The old implementation compared only the manifest *keys*, so this tamper
+    looked clean, stayed on disk, and the expected fingerprint was registered as
+    last-good.
+    """
+    root = (tmp_path / "consumption").resolve()
+    monkeypatch.setattr(projection, "_enabled", lambda: True)
+    consumer = projection.MemoryProjectionConsumer(root=root, source=_FakeSource(state, 3))
+    await consumer.apply_tree(42, session=None)
+
+    target = root / SLUG / "episodic" / "1.md"
+    projection._clear_readonly(target)
+    target.write_text("host tampered with this", encoding="utf-8", newline="\n")
+    projection.lock_file(target)  # restore the depth bit: key set and mode now "look" clean
+
+    report = await consumer.apply_tree(42, session=None)
+
+    assert report.repaired is True
+    assert report.reason_code == "drift_detected"
+    assert "episodic/1.md" in report.content_mismatch_paths
+    assert target.read_text(encoding="utf-8").split("---\n", 2)[2] == CONTENT_ZH + "\n"
+
+
+def test_write_tree_refuses_the_consumption_root_itself(tmp_path, state):
+    """T082: the root is never a scope target (it would rmtree every scope)."""
+    root = (tmp_path / "consumption").resolve()
+    root.mkdir(parents=True)
+    other = root / "another-scope"
+    other.mkdir()
+    (other / "keep.md").write_text("keep", encoding="utf-8")
+    guard = projection.ConsumptionGuard(root)
+    with pytest.raises(projection.ProjectionPathError):
+        guard.write_tree(root, projection.render_tree(state, slug=SLUG))
+    assert (other / "keep.md").read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.asyncio
+async def test_refresh_refuses_a_symlinked_scope_directory(tmp_path, state, monkeypatch):
+    """T082: the normative guard decides the publish target, so a symlinked
+    ``root/<slug>`` can never be traversed (chmod/rmtree/read outside the root)."""
+    root = (tmp_path / "consumption").resolve()
+    root.mkdir(parents=True)
+    outside = (tmp_path / "outside").resolve()
+    outside.mkdir()
+    (outside / "sentinel.txt").write_text("untouched", encoding="utf-8")
+    try:
+        (root / SLUG).symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is not permitted in this environment")
+
+    monkeypatch.setattr(projection, "_enabled", lambda: True)
+    consumer = projection.MemoryProjectionConsumer(root=root, source=_FakeSource(state, 3))
+    with pytest.raises(projection.ProjectionPathError):
+        await consumer.apply_tree(42, session=None)
+
+    assert (outside / "sentinel.txt").read_text(encoding="utf-8") == "untouched"
+    assert not (outside / "episodic").exists()
+
+
+@pytest.mark.asyncio
+async def test_guard_state_is_writable_when_the_bits_cannot_be_verified(tmp_path, state, monkeypatch):
+    """T096: ``guard_state`` is claimed only after a real post-publish check."""
+    root = (tmp_path / "consumption").resolve()
+    monkeypatch.setattr(projection, "_enabled", lambda: True)
+    monkeypatch.setattr(projection, "lock_file", lambda path: None)  # OS refuses / no-op
+    consumer = projection.MemoryProjectionConsumer(root=root, source=_FakeSource(state, 3))
+
+    await consumer.apply_tree(42, session=None)
+    report = await consumer.apply_tree(42, session=None)
+    assert report.guard_state == "writable"
+    assert report.mode_mismatch
+
+
+# --------------------------------------------------------------------------
+# T083 — dirty retention, failure retry and in-flight coalescing
+# --------------------------------------------------------------------------
+
+class _FailingSource:
+    async def state(self, scope_id):
+        raise RuntimeError("boom")
+
+
+class _SlowFirstSource:
+    """Delays the first derivation so a write can land mid-refresh."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.calls = 0
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def state(self, scope_id):
+        self.calls += 1
+        if self.calls == 1:
+            self.started.set()
+            await self.release.wait()
+        return await self.inner.state(scope_id)
+
+
+@pytest.mark.asyncio
+async def test_failed_refresh_keeps_the_dirty_marker_for_retry(tmp_path, monkeypatch):
+    """T083: contract §5 — a failed refresh stays dirty and re-errors on the row."""
+    root = (tmp_path / "consumption").resolve()
+    monkeypatch.setattr(projection, "_enabled", lambda: True)
+    projection.set_consumer(projection.MemoryProjectionConsumer(root=root, source=_FailingSource()))
+    try:
+        projection.mark_memory_projection_dirty(42)
+        task = projection.worker_task(42)
+        assert task is not None
+        await asyncio.wait_for(asyncio.shield(task), 30)
+        assert 42 in projection._DIRTY_SCOPES, "a failure must keep the dirty marker"
+        assert projection.worker_task(42) is None, "the settled handle is reclaimed"
+    finally:
+        projection.set_consumer(None)
+        projection._DIRTY_SCOPES.clear()
+        projection._WORKER_TASKS.clear()
+
+
+@pytest.mark.asyncio
+async def test_write_during_refresh_coalesces_exactly_one_more_pass(tmp_path, state, monkeypatch):
+    """T083/A5: a write that lands mid-refresh must not be silently lost."""
+    root = (tmp_path / "consumption").resolve()
+    monkeypatch.setattr(projection, "_enabled", lambda: True)
+    source = _SlowFirstSource(_FakeSource(state, 3))
+    projection.set_consumer(projection.MemoryProjectionConsumer(root=root, source=source))
+    try:
+        projection.mark_memory_projection_dirty(42)
+        first = projection.worker_task(42)
+        assert first is not None
+        await asyncio.wait_for(source.started.wait(), 30)
+        projection.mark_memory_projection_dirty(42)  # in-flight re-mark
+        assert projection.worker_task(42) is first, "single-flight while the worker runs"
+        source.release.set()
+        await asyncio.wait_for(asyncio.shield(first), 30)
+        second = projection.worker_task(42)
+        if second is not None:
+            await asyncio.wait_for(asyncio.shield(second), 30)
+        assert source.calls >= 2, "the coalesced pass must re-derive the state"
+        assert 42 not in projection._DIRTY_SCOPES
+    finally:
+        projection.set_consumer(None)
+        projection._DIRTY_SCOPES.clear()
+        projection._WORKER_TASKS.clear()
+
+
 
 
 def test_platform_reality_note():

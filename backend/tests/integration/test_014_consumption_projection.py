@@ -383,3 +383,101 @@ async def _dispose_scope(scope_id: int) -> None:
         await session.execute(text("DELETE FROM memory_consumption_projection WHERE knowledge_scope_id = :scope"),
                               {"scope": scope_id})
         await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# T084/T093 — full-layer reconciliation discovery and slug-collision safety
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_reconcile_renders_a_scope_that_never_registered(db_session, engine, tmp_path, monkeypatch):
+    """T084: discovery must not be limited to existing registry rows."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from rag_mcp.models.memory_consumption import MemoryConsumptionProjection
+
+    scope_id, slug = await _scope(db_session)
+    floor = await _id_floor(db_session)
+    await _append(db_session, **_event(scope_id, floor + 1, "episodic", "never registered", event_id=floor + 1))
+
+    consumer = await _consumer(engine, tmp_path, monkeypatch)
+    projection.set_consumer(consumer)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        assert await db_session.get(MemoryConsumptionProjection, scope_id) is None
+        report = await asyncio.wait_for(projection.reconcile(scope_id, session_factory=factory), 60)
+        assert [item["scope_id"] for item in report["processed"]] == [scope_id]
+        assert (consumer.root / slug / "episodic" / f"{floor + 1}.md").is_file()
+        assert report["reports"] and report["reports"][0]["scope_id"] == scope_id
+    finally:
+        await _dispose_scope(scope_id)
+
+
+@pytest.mark.asyncio
+async def test_reconcile_candidate_discovery_covers_events_and_dirty(db_session, engine, tmp_path, monkeypatch):
+    """T084: the full sweep is the authority log plus the dirty set."""
+    scope_id, _slug = await _scope(db_session)
+    floor = await _id_floor(db_session)
+    await _append(db_session, **_event(scope_id, floor + 1, "episodic", "discovery", event_id=floor + 1))
+    projection._DIRTY_SCOPES.add(999_999_999)
+    try:
+        candidates = await projection._reconcile_candidate_scope_ids(db_session, scope_id=None, registered=[])
+        assert scope_id in candidates
+        assert 999_999_999 in candidates
+    finally:
+        projection._DIRTY_SCOPES.discard(999_999_999)
+        await _dispose_scope(scope_id)
+
+
+@pytest.mark.asyncio
+async def test_case_colliding_scope_slugs_fail_closed(db_session, engine, tmp_path, monkeypatch):
+    """T093: ASCII-lowercasing must not silently alias two scopes onto one dir."""
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+
+    key = f"c014-collide-{generate_id() % 10**10:010d}"
+    colliding = key.upper()
+    for domain_key in (key, colliding):
+        db_session.add(DomainProfile(domain_key=domain_key, name=domain_key, supported_formats=["markdown"],
+                                     graph_relations={}, default_capabilities={}, is_builtin=False,
+                                     memory_policy={}))
+        await db_session.flush()
+
+    consumer = await _consumer(engine, tmp_path, monkeypatch)
+    first = KnowledgeScope(scope_id=generate_id(), scope_type="public", slug=key, name=key,
+                           domain_key=key, status="active")
+    db_session.add(first)
+    await db_session.commit()
+    await consumer.apply_tree(first.scope_id, session=db_session)
+    assert (consumer.root / key).is_dir()
+
+    second = KnowledgeScope(scope_id=generate_id(), scope_type="public", slug=colliding, name=colliding,
+                            domain_key=colliding, status="active")
+    db_session.add(second)
+    await db_session.commit()
+    with pytest.raises(ValueError):
+        await consumer.apply_tree(second.scope_id, session=db_session)
+
+
+# ---------------------------------------------------------------------------
+# T085 — every authority-write path nudges the consumption layer
+# ---------------------------------------------------------------------------
+
+def test_authority_write_paths_nudge_the_consumption_layer(monkeypatch):
+    """T085/FR-032/SC-013: governance and consolidation commits must propagate."""
+    import ast
+
+    import rag_mcp.runtime.memory_projection as projection_module
+    from rag_mcp.services import consolidation_commit, memory_governance
+
+    nudged: list[int] = []
+    monkeypatch.setattr(projection_module, "mark_memory_projection_dirty",
+                        lambda scope_id: nudged.append(scope_id))
+    memory_governance._nudge_consumption(11)
+    consolidation_commit._nudge_consumption(22)
+    assert nudged == [11, 22]
+
+    for module in (memory_governance, consolidation_commit):
+        tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and getattr(node.func, "id", "") == "_nudge_consumption"]
+        assert len(calls) >= 2, f"{module.__name__} must nudge every committed write"

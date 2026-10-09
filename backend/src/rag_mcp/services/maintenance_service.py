@@ -534,6 +534,8 @@ async def run_memory_consumption_reconciliation(session_factory=None, *, scopes=
         return report
     report["scopes"] = result["scopes"]
     report["processed"] = result["processed"]
+    # T094: surface the verifiable per-scope reports instead of discarding them.
+    report["reports"] = result.get("reports", [])
     report["repaired"] = [item["scope_id"] for item in result["processed"] if item.get("repaired")]
     return report
 

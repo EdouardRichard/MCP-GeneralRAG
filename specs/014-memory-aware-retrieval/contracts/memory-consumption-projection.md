@@ -52,9 +52,9 @@ untrusted: true
 
 **字节规则（跨平台）**：`encoding="utf-8"`（无 BOM）、`newline="\n"`、恰好一个结尾换行、键序固定、列表显式排序；**生成时刻、mtime、inode、进程 id 一律不入文件与指纹**（否则字节不稳定）。不得沿用 `Path.write_text(..., encoding="utf-8")` 的默认 `newline=None`（Windows 会写 CRLF）。
 
-**DIGEST.md**：域记忆摘要，键序固定（`scope_slug`、`source_event_id`、`counts{by_kind}`、`sections`）。摘要内容只来自已验证的 reducer 状态；**巩固未运行或巩固能力关闭时为明确空态**（可重建、可读，不伪造摘要内容），不得把"巩固已运行"当作刷新前置条件。文件头 MUST 含不可信声明行（与记忆文件 `untrusted: true` 同义）。
+**DIGEST.md**：域记忆摘要，键序固定（`scope_slug`、`source_event_id`、`counts{total, by_kind, consolidated}`、`sections`）。摘要内容只来自已验证的 reducer 状态；**巩固未运行或巩固能力关闭时为明确空态**（可重建、可读，不伪造摘要内容），不得把"巩固已运行"当作刷新前置条件。文件头 MUST 含不可信声明行（与记忆文件 `untrusted: true` 同义）。
 
-**INDEX.md**：目录导航。按 `kind` 分组（固定顺序 episodic → semantic → procedural），组内按 `memory_id` 升序，每行给出相对路径与标题（标题缺失时省略标题列）。不含时间戳。文件头 MUST 含不可信声明行。
+**INDEX.md**：目录导航，**混合粒度**（FR-027 / Clarifications Q6）。顶层按 `kind` 分组（固定顺序 episodic → semantic → procedural），组内按 `memory_id` 升序，每行给出相对路径与标题（标题缺失时省略标题列）；当某一分型的条目数超过阈值（`INDEX_TIME_BUCKET_THRESHOLD = 200`）时，该分型内再按 `observed_at` 派生的 `YYYY-MM` 时间桶分节（新的在前，无法解析者归入 `undated`），分节与行序均确定性可重建。文件头 MUST 含不可信声明行。
 
 ## 4. 只读守卫（非对称方案）
 

@@ -190,12 +190,17 @@ async def _lease_renewal_loop(lease_id: int, renew_interval_s: int, expiry_windo
             logger.exception("lease renewal failed")
 
 
-async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> None:
+async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None,
+                            consumption_interval_s: int | None = None) -> None:
     """Periodically purge expired runtime records and run consolidation maintenance.
 
     Covers the 001 retrieval_runs audit table, the 005 Agent orchestration
     runtime tables (T066) and — from 013 T084 — the automatic idle/volume
     consolidation admission, which always runs the existing housekeeping first.
+
+    014 T095: the consumption-layer reconciliation honours
+    ``MEMORY_CONSUMPTION_REFRESH_INTERVAL_S`` instead of silently reusing the TTL
+    cleanup cadence (the setting used to be dead configuration).
     """
     from rag_mcp.db import get_session_factory
     from rag_mcp.services.maintenance_service import (
@@ -206,11 +211,22 @@ async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> 
         run_memory_maintenance,
     )
 
+    if consumption_interval_s is None:
+        from rag_mcp.config import get_settings
+
+        consumption_interval_s = get_settings().memory_consumption_refresh_interval_s
+
+    last_consumption = 0.0
     while True:
         await asyncio.sleep(interval_s)
         factory = get_session_factory()
+        now = asyncio.get_running_loop().time()
+        due_consumption = (consumption_interval_s is None
+                           or now - last_consumption >= consumption_interval_s)
+        if due_consumption:
+            last_consumption = now
 
-        async def legacy_housekeeping(factory=factory):
+        async def legacy_housekeeping(factory=factory, due_consumption=due_consumption):
             async with factory() as session:
                 await purge_expired_retrieval_runs(session)
                 await purge_expired_agentic_runs(session)
@@ -219,10 +235,11 @@ async def _ttl_cleanup_loop(interval_s: int, *, supervisor=None, owner=None) -> 
             # 014 T050: the window also does the full-layer consumption-layer
             # check (drift -> per-scope rebuild) and reclaims settled refresh
             # workers. Both are no-ops while the 014 switch is false.
-            from rag_mcp.runtime.memory_projection import recycle_settled_workers
+            if due_consumption:
+                from rag_mcp.runtime.memory_projection import recycle_settled_workers
 
-            recycle_settled_workers()
-            await run_memory_consumption_reconciliation(factory)
+                recycle_settled_workers()
+                await run_memory_consumption_reconciliation(factory)
 
         try:
             if supervisor is None or owner is None:

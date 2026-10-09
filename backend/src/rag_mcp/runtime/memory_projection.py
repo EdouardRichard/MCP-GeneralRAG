@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -41,6 +42,8 @@ from pathlib import Path
 
 from rag_mcp.runtime.activity import get_runtime_activity
 from rag_mcp.services.memory_reducer import ReducerState, require_reducer_state
+
+logger = logging.getLogger(__name__)
 
 KINDS = ("episodic", "semantic", "procedural")
 PROVENANCES = ("hard", "soft", "distilled")
@@ -72,6 +75,10 @@ MEMORY_FILE_MARKER_KEYS = ("status", "provenance")
 #: 013 consolidation is disabled by default, so the DIGEST reports a frozen,
 #: rebuildable empty state instead of pretending a summary exists (FR-027).
 CONSOLIDATION_STATE_KEYS = ("consolidation_state",)
+
+#: T097 / FR-027 / Clarifications Q6: a kind group larger than this is split into
+#: ``YYYY-MM`` time buckets in INDEX.md (mixed granularity).
+INDEX_TIME_BUCKET_THRESHOLD = 200
 
 
 class ProjectionPathError(ValueError):
@@ -108,6 +115,9 @@ class ProjectionReport:
     unexpected_paths: list[str] = field(default_factory=list)
     missing_paths: list[str] = field(default_factory=list)
     mode_mismatch: list[str] = field(default_factory=list)
+    #: Same-path byte edits (T073): a key set comparison alone misses them, so
+    #: the manifest values are compared and mismatches are reported here.
+    content_mismatch_paths: list[str] = field(default_factory=list)
     reason_code: str | None = None
     repaired: bool = False
 
@@ -123,6 +133,7 @@ class ProjectionReport:
             "unexpected_paths": list(self.unexpected_paths),
             "missing_paths": list(self.missing_paths),
             "mode_mismatch": list(self.mode_mismatch),
+            "content_mismatch_paths": list(self.content_mismatch_paths),
             "reason_code": self.reason_code,
             "repaired": self.repaired,
         }
@@ -207,7 +218,9 @@ class ConsumptionGuard:
     def write_tree(self, scope_dir, items) -> list[Path]:
         """Materialise a whole scope tree; returns the written memory files."""
         scope_dir = Path(scope_dir).resolve()
-        if not scope_dir.is_relative_to(self.root):
+        # T082: the same normative rules as resolve_scope_dir — the root itself is
+        # never a valid scope target (it would let a caller rmtree every scope).
+        if scope_dir == self.root or not scope_dir.is_relative_to(self.root):
             raise ProjectionPathError("consumption target escaped the consumption root")
         if scope_dir.exists():
             _clear_readonly_tree(scope_dir)
@@ -374,7 +387,13 @@ def render_digest(state, *, slug: str, source_event_id: int) -> str:
 
 
 def render_index(state, *, slug: str) -> str:
-    """``INDEX.md``: fixed kind groups, ascending ``memory_id`` inside a group."""
+    """``INDEX.md``: fixed kind groups, ascending ``memory_id`` inside a group.
+
+    T097 / FR-027 / Clarifications Q6: mixed granularity. A kind whose entry
+    count exceeds :data:`INDEX_TIME_BUCKET_THRESHOLD` is additionally split into
+    deterministic ``YYYY-MM`` time buckets (newest first), derived from
+    ``observed_at``.
+    """
     slug = normalise_scope_slug(slug)
     entries = visible_entries(state)
     lines = [src_untrusted_banner("# INDEX.md — 目录导航（消费层，派生视图）"), f"scope_slug: {slug}"]
@@ -383,16 +402,35 @@ def render_index(state, *, slug: str) -> str:
         lines.append(f"## {kind}")
         if not rows:
             lines.append("- (none)")
-        header = "| path | memory_id | title |" if any(row.get("title") for row in rows) else "| path | memory_id |"
-        lines.append(header)
-        lines.append("| --- | --- | --- |" if "title" in header else "| --- | --- |")
-        for row in rows:
-            relative = file_relative_path(row["memory_id"], row.get("kind"))
-            if "title" in header:
-                lines.append(f"| {relative} | {row['memory_id']} | {_inline(row.get('title') or '')} |")
-            else:
-                lines.append(f"| {relative} | {row['memory_id']} |")
+            continue
+        groups: list[tuple[str | None, list]] = [(None, rows)]
+        if len(rows) > INDEX_TIME_BUCKET_THRESHOLD:
+            buckets: dict[str, list] = {}
+            for row in rows:
+                buckets.setdefault(_index_time_bucket(row), []).append(row)
+            groups = sorted(buckets.items(), key=lambda item: item[0], reverse=True)
+        for bucket, bucket_rows in groups:
+            if bucket is not None:
+                lines.append(f"### {bucket}")
+            header = "| path | memory_id | title |" if any(row.get("title") for row in bucket_rows) \
+                else "| path | memory_id |"
+            lines.append(header)
+            lines.append("| --- | --- | --- |" if "title" in header else "| --- | --- |")
+            for row in bucket_rows:
+                relative = file_relative_path(row["memory_id"], row.get("kind"))
+                if "title" in header:
+                    lines.append(f"| {relative} | {row['memory_id']} | {_inline(row.get('title') or '')} |")
+                else:
+                    lines.append(f"| {relative} | {row['memory_id']} |")
     return "\n".join(lines) + "\n"
+
+
+def _index_time_bucket(row) -> str:
+    """``YYYY-MM`` from ``observed_at``; unusable values sort into ``undated``."""
+    observed = row.get("observed_at")
+    if isinstance(observed, str) and len(observed) >= 7 and observed[4] == "-" and observed[:4].isdigit():
+        return observed[:7]
+    return "undated"
 
 
 def src_untrusted_banner(heading: str) -> str:
@@ -576,14 +614,34 @@ class MemoryProjectionConsumer:
         expected_memory = [item for item in items if item[1] not in ("DIGEST.md", "INDEX.md")]
         unexpected = sorted(set(actual) - set(expected))
         missing = sorted(set(expected) - set(actual))
+        # T073: compare the manifest *values*, not only the path key sets. A
+        # same-path byte edit with the read-only bit restored used to look like a
+        # clean tree, so the tampered bytes stayed and the expected fingerprint
+        # was persisted as last-good. Any byte difference is drift.
+        content_mismatch = sorted(path for path, digest in actual.items()
+                                  if path in expected and expected[path] != digest)
         mismatch = self.guard.mode_mismatch(scope_dir, _enabled())
         fingerprint = tree_fingerprint(items)
-        drift = bool(missing or unexpected or mismatch) or not existing_manifest
+        drift = bool(missing or unexpected or content_mismatch or mismatch) or not existing_manifest
+
+        if session is not None and drift:
+            # T101: register the intended state as ``staging`` *before* publishing,
+            # so a crash mid-publish leaves an honest staging row instead of a fake
+            # "complete" one. The final upsert below moves it to ``complete``.
+            await _mark_staging(session, tree.scope_id, slug, tree.source_event_id,
+                                fingerprint, len(expected_memory))
+            await session.flush()
 
         if drift:
             self._publish(scope_dir, items)
         elif _enabled():
             self._lock_existing(scope_dir)
+
+        # T096: never claim the read-only depth bit without verifying it. If the
+        # OS refused the chmod (best-effort by design), report ``writable``.
+        guard_state = "readonly" if _enabled() else "writable"
+        if _enabled() and self.guard.mode_mismatch(scope_dir, True):
+            guard_state = "writable"
 
         report = ProjectionReport(
             scope_id=tree.scope_id,
@@ -592,10 +650,11 @@ class MemoryProjectionConsumer:
             file_count=len(expected_memory),
             tree_fingerprint=fingerprint,
             status="complete",
-            guard_state="readonly" if _enabled() else "writable",
+            guard_state=guard_state,
             unexpected_paths=unexpected,
             missing_paths=missing,
             mode_mismatch=mismatch,
+            content_mismatch_paths=content_mismatch,
             reason_code="drift_detected" if drift and existing_manifest else None,
             repaired=drift,
         )
@@ -612,7 +671,9 @@ class MemoryProjectionConsumer:
         row = await self._metadata(session, scope_id) if session is not None else None
         slug = row.scope_slug if row is not None else None
         if slug is not None:
-            scope_dir = self.root / normalise_scope_slug(slug)
+            # T082: the normative confinement guard decides the target, so a
+            # symlinked/junction scope directory can never be traversed or removed.
+            scope_dir = self.guard.resolve_scope_dir(slug)
             if scope_dir.is_dir():
                 _clear_readonly_tree(scope_dir)
                 shutil.rmtree(scope_dir)
@@ -636,14 +697,43 @@ class MemoryProjectionConsumer:
             raise ValueError("MEMORY_EVIDENCE_SCOPE_MISMATCH: slug differs from the canonical catalog value")
         slug = normalise_scope_slug(current_slug if current_slug is not None
                                     else expected_slug if expected_slug is not None else stored_slug)
+        if session is not None and current_slug is not None:
+            await self._assert_slug_is_unique(session, scope_id, slug)
         if stored_slug is not None and normalise_scope_slug(stored_slug) != slug:
             # A slug that moved is drift, never a silent rewrite: the old subtree
             # is removed and the new one is rendered under the current slug.
-            old_dir = self.root / normalise_scope_slug(stored_slug)
+            old_dir = self.guard.resolve_scope_dir(stored_slug)
             if old_dir.is_dir():
                 _clear_readonly_tree(old_dir)
                 shutil.rmtree(old_dir)
-        return self.root / slug, row is None
+        # T082: return the *resolved* target from the normative guard. Without
+        # this, a pre-existing symlink/junction at ``root/<slug>`` would be
+        # traversed by _publish/_lock_existing and the guard methods below would
+        # never run on the real publication path.
+        return self.guard.resolve_scope_dir(slug), row is None
+
+    async def _assert_slug_is_unique(self, session, scope_id: int, slug: str) -> None:
+        """T093: ASCII-lowercasing can collide two scopes on one directory.
+
+        ``knowledge_scopes.slug`` is unique case-sensitively, so ``Orders`` and
+        ``orders`` would both normalise to ``orders`` and each refresh would
+        remove the other's tree. Collisions fail closed instead of silently
+        rewriting a slug.
+        """
+        from sqlalchemy import func, select
+
+        from rag_mcp.models.knowledge_scope import KnowledgeScope
+
+        clash = await session.scalar(
+            select(KnowledgeScope.scope_id).where(
+                func.lower(KnowledgeScope.slug) == slug,
+                KnowledgeScope.scope_id != scope_id,
+            ).limit(1)
+        )
+        if clash is not None:
+            raise ValueError(
+                "MEMORY_EVIDENCE_SCOPE_MISMATCH: normalised scope slug collides with another scope"
+            )
 
     async def _current_slug(self, session, scope_id: int):
         if session is None:
@@ -664,6 +754,9 @@ class MemoryProjectionConsumer:
 
     def _publish(self, scope_dir: Path, items) -> None:
         """Staging + atomic-ish replace: readers never observe a half tree."""
+        # T082: defence in depth — the publish target must still resolve strictly
+        # inside the consumption root (never the root itself, never a symlink out).
+        scope_dir = self.guard._assert_confinement(Path(scope_dir))
         staging = scope_dir.parent / f".{scope_dir.name}.staging"
         if staging.exists():
             _clear_readonly_tree(staging)
@@ -732,9 +825,11 @@ def set_consumer(consumer: MemoryProjectionConsumer | None) -> None:
 def mark_memory_projection_dirty(scope_id: int) -> None:
     """O(1) post-commit nudge: never awaits, never raises, silently skips.
 
-    Called by ``MemoryService.record()`` right after ``mark_volume_hint``. The
-    nudge is never durable state and never enters the write critical path: a
-    rejected or lost hint is re-derived by the maintenance-window reconciliation.
+    Called by every authority-write path (014 T085): ``record()``, the governance
+    actions (delete/retract/correct/quarantine/archive/rollback) and the
+    consolidation commit. The nudge is never durable state and never enters the
+    write critical path: a rejected or lost hint is re-derived by the
+    maintenance-window reconciliation.
     """
     try:
         if isinstance(scope_id, bool) or not isinstance(scope_id, int) or scope_id <= 0:
@@ -745,13 +840,25 @@ def mark_memory_projection_dirty(scope_id: int) -> None:
         if loop.is_closed():
             return
         _DIRTY_SCOPES.add(scope_id)
-        if scope_id in _WORKER_TASKS:
-            return
-        get_runtime_activity().begin("rebuild")
-        task = loop.create_task(_worker(scope_id))
-        _WORKER_TASKS[scope_id] = task
+        _schedule_worker(scope_id)
     except Exception:  # noqa: BLE001 - a refresh hint must never break a write
         return
+
+
+def _schedule_worker(scope_id: int):
+    """Create the single-flight worker for ``scope_id`` when none is in flight."""
+    existing = _WORKER_TASKS.get(scope_id)
+    if existing is not None and not existing.done():
+        return existing
+    loop = asyncio.get_running_loop()
+    get_runtime_activity().begin("rebuild")
+    try:
+        task = loop.create_task(_worker(scope_id))
+    except Exception:
+        get_runtime_activity().end("rebuild")
+        raise
+    _WORKER_TASKS[scope_id] = task
+    return task
 
 
 def worker_task(scope_id: int):
@@ -771,21 +878,66 @@ def recycle_settled_workers() -> tuple[int, ...]:
     return recycled
 
 
+async def _record_last_error(scope_id: int, code: str) -> None:
+    """Best-effort persistence of a failed refresh so the retry is auditable.
+
+    Never raises: a failure inside the failure path must not escape the worker
+    (contract §5 keeps failures isolated from the write path).
+    """
+    try:
+        consumer = get_consumer()
+        factory = consumer.session_factory
+        if factory is None:
+            return
+        from rag_mcp.models.memory_consumption import MemoryConsumptionProjection
+
+        session = factory()
+        try:
+            row = await session.get(MemoryConsumptionProjection, scope_id)
+            if row is not None:
+                row.last_error = str(code)[:200]
+                await session.commit()
+        finally:
+            await session.close()
+    except Exception:  # noqa: BLE001 - failure bookkeeping is best effort
+        return
+
+
 async def _worker(scope_id: int) -> None:
+    keep_dirty = False
+    cancelled = False
     try:
         _DIRTY_SCOPES.discard(scope_id)
         consumer = get_consumer()
         async with _session_scope(consumer) as session:
-            await consumer.apply_tree(scope_id, session=session)
+            report = await consumer.apply_tree(scope_id, session=session)
+            # T094/T100: every refresh emits a verifiable report, not only the
+            # caller that happened to hold the return value.
+            logger.info("memory consumption refresh report: %s",
+                        json.dumps(report.as_dict(), ensure_ascii=False, default=str))
     except asyncio.CancelledError:
+        # T083: an interrupted pass keeps its dirty marker so the maintenance
+        # window (or the next write) retries it.
+        cancelled = True
+        keep_dirty = True
+        _DIRTY_SCOPES.add(scope_id)
         raise
-    except Exception:  # noqa: BLE001 - failures stay inside the worker
-        import logging
-
-        logging.getLogger(__name__).exception("memory consumption refresh failed for scope %s", scope_id)
+    except Exception as error:  # noqa: BLE001 - failures stay inside the worker
+        keep_dirty = True
+        _DIRTY_SCOPES.add(scope_id)
+        logger.exception("memory consumption refresh failed for scope %s", scope_id)
+        await _record_last_error(scope_id, f"refresh_failed:{type(error).__name__}")
     finally:
         _WORKER_TASKS.pop(scope_id, None)
         get_runtime_activity().end("rebuild")
+        # T083/A5: a write that landed while this pass ran left the scope dirty;
+        # coalesce exactly one more pass. A failing or cancelled scope is instead
+        # left dirty for the maintenance window so a broken source cannot hot-loop.
+        if not keep_dirty and not cancelled and scope_id in _DIRTY_SCOPES:
+            try:
+                _schedule_worker(scope_id)
+            except Exception:  # noqa: BLE001 - rescheduling is best effort
+                pass
 
 
 class _session_scope:
@@ -814,8 +966,50 @@ class _session_scope:
         return False
 
 
+def _compact_report_code(report: ProjectionReport) -> str | None:
+    """T094: the verifiable drift summary persisted on the registry row.
+
+    ``last_error`` is the only durable column available without a new migration,
+    so it carries a compact, machine-readable record of the last report instead
+    of the bare reason code.
+    """
+    if not report.repaired and report.reason_code is None:
+        return None
+    parts = [report.reason_code or "repaired",
+             f"content={len(report.content_mismatch_paths)}",
+             f"missing={len(report.missing_paths)}",
+             f"unexpected={len(report.unexpected_paths)}",
+             f"mode={len(report.mode_mismatch)}"]
+    return "|".join(parts)
+
+
+async def _mark_staging(session, scope_id: int, slug: str, source_event_id: int,
+                        fingerprint: str, file_count: int) -> None:
+    """T101: create/refresh the ``staging`` row before the publish happens."""
+    from datetime import UTC, datetime
+
+    from rag_mcp.models.memory_consumption import MemoryConsumptionProjection
+
+    row = await session.get(MemoryConsumptionProjection, scope_id, populate_existing=True)
+    if row is None:
+        row = MemoryConsumptionProjection(knowledge_scope_id=scope_id)
+        session.add(row)
+    row.scope_slug = slug
+    row.source_event_id = max(1, source_event_id)
+    row.tree_fingerprint = fingerprint
+    row.file_count = file_count
+    row.status = "staging"
+    row.guard_state = "writable"
+    row.last_error = None
+    stamp = datetime.now(UTC)
+    row.refreshed_at = stamp
+    row.updated_at = stamp
+
+
 async def upsert_metadata(session, report: ProjectionReport) -> None:
     """Register the last-good fingerprint in the dedicated table (never ``meta``)."""
+    from datetime import UTC, datetime
+
     from rag_mcp.models.memory_consumption import MemoryConsumptionProjection
 
     row = await session.get(MemoryConsumptionProjection, report.scope_id, populate_existing=True)
@@ -828,13 +1022,49 @@ async def upsert_metadata(session, report: ProjectionReport) -> None:
     row.file_count = report.file_count
     row.status = report.status
     row.guard_state = report.guard_state
-    row.last_error = report.reason_code
+    row.last_error = _compact_report_code(report)
+    # T096: the documented refreshed/updated timestamps must actually advance on
+    # every successful refresh, not only on insert.
+    stamp = datetime.now(UTC)
+    row.refreshed_at = stamp
+    row.updated_at = stamp
     await session.flush()
 
 
 # ---------------------------------------------------------------------------
 # Reconciliation / full rebuild (contract §5, FR-031a) — maintenance window
 # ---------------------------------------------------------------------------
+
+async def _reconcile_candidate_scope_ids(session, *, scope_id, registered) -> list[int]:
+    """T084: the full-layer sweep must see more than the registered rows.
+
+    A scope whose first refresh failed never wrote a metadata row, and a scope
+    that is merely dirty may not have been registered either. The authority log
+    is the discovery source: every *active* scope with memory events is a
+    reconciliation candidate.
+    """
+    from sqlalchemy import select
+
+    from rag_mcp.models.knowledge_scope import KnowledgeScope
+    from rag_mcp.models.memory_event import MemoryEvent
+
+    if scope_id is not None:
+        return [scope_id]
+    candidates = {row.knowledge_scope_id for row in registered}
+    candidates |= {sid for sid in _DIRTY_SCOPES if isinstance(sid, int) and not isinstance(sid, bool) and sid > 0}
+    event_scopes = set((await session.execute(
+        select(MemoryEvent.knowledge_scope_id).distinct()
+    )).scalars().all())
+    if event_scopes:
+        active = (await session.execute(
+            select(KnowledgeScope.scope_id).where(
+                KnowledgeScope.scope_id.in_(event_scopes),
+                KnowledgeScope.status == "active",
+            )
+        )).scalars().all()
+        candidates |= {int(sid) for sid in active}
+    return sorted(candidates)
+
 
 async def reconcile(scope_id: int | None = None, *, session_factory=None) -> dict:
     """Maintenance-window full-layer reconciliation.
@@ -859,32 +1089,36 @@ async def reconcile(scope_id: int | None = None, *, session_factory=None) -> dic
         statement = select(MemoryConsumptionProjection)
         if scope_id is not None:
             statement = statement.where(MemoryConsumptionProjection.knowledge_scope_id == scope_id)
-        stored = (await session.execute(statement)).scalars().all()
-        for row in sorted(stored, key=lambda item: item.knowledge_scope_id):
-            scope = await session.get(KnowledgeScope, row.knowledge_scope_id)
+        registered = (await session.execute(statement)).scalars().all()
+        by_id = {row.knowledge_scope_id: row for row in registered}
+        candidates = await _reconcile_candidate_scope_ids(
+            session, scope_id=scope_id, registered=registered
+        )
+        for candidate in candidates:
+            row = by_id.get(candidate)
+            scope = await session.get(KnowledgeScope, candidate)
             if scope is None or scope.status != "active":
-                await consumer.remove_scope(row.knowledge_scope_id, session=session)
-                processed.append({"scope_id": row.knowledge_scope_id, "status": "removed",
-                                  "reason_code": "scope_retired"})
+                if row is not None:
+                    await consumer.remove_scope(candidate, session=session)
+                    processed.append({"scope_id": candidate, "status": "removed",
+                                      "reason_code": "scope_retired"})
                 continue
             try:
-                tree = await consumer.source.state(row.knowledge_scope_id)
+                tree = await consumer.source.state(candidate)
             except Exception as error:  # noqa: BLE001 - one bad scope never stops the sweep
-                row.status, row.last_error = "failed", type(error).__name__
-                processed.append({"scope_id": row.knowledge_scope_id, "status": "failed",
+                if row is not None:
+                    row.status, row.last_error = "failed", type(error).__name__
+                processed.append({"scope_id": candidate, "status": "failed",
                                   "reason_code": type(error).__name__})
                 continue
-            report = await consumer.apply_tree_state(tree, session=session,
-                                                     force_rebuild=(row.status != "complete"))
-            if row.tree_fingerprint != report.tree_fingerprint:
-                row.last_error = "drift_detected"
+            report = await consumer.apply_tree_state(
+                tree, session=session, force_rebuild=(row is None or row.status != "complete")
+            )
             consumed.append(report.as_dict())
-            processed.append({"scope_id": row.knowledge_scope_id, "status": report.status,
+            processed.append({"scope_id": candidate, "status": report.status,
                               "reason_code": report.reason_code, "repaired": report.repaired})
-        if scope_id is not None and not stored:
-            tree = await consumer.source.state(scope_id)
-            report = await consumer.apply_tree_state(tree, session=session)
-            consumed.append(report.as_dict())
-            processed.append({"scope_id": scope_id, "status": report.status, "repaired": report.repaired})
+        # Swept scopes are no longer pending; a write that lands mid-sweep will
+        # re-mark them through the normal nudge.
+        _DIRTY_SCOPES.difference_update(item["scope_id"] for item in processed)
         await session.commit()
     return {"scopes": len(processed), "processed": processed, "reports": consumed}
