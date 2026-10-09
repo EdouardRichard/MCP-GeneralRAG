@@ -59,7 +59,7 @@ description: "Task list for 记忆评测治理与 3.0 定稿 (015)"
 ### 测试基座与证据导出
 
 - [X] T009 在 `backend/tests/conftest.py` 新增 session 级 autouse fixture `memory_eval_evidence_bundle`，由环境变量 `MEMORY_EVAL_EVIDENCE_DIR` 门控（未设置即惰性空转），并在既有 `pytest_sessionfinish` 中落盘 `aoep-cases.json`——与既有 `consolidation_evidence_bundle`/`CONSOLIDATION_EVIDENCE_DIR` 严格同构，MUST NOT 改动既有 013 fixture 与既有 sessionfinish 语义（依 research.md R3；文件：`backend/tests/conftest.py`）
-- [ ] T010 [P] 新增契约测试 `backend/tests/contract/test_015_memory_benchmark_datasets.py`（先红）：以 `$defs` 合并模式（加载两份文件、`$defs.update`、`$ref` 字符串替换后 `jsonschema` Draft2020-12 `validate`，不引入新的 schema registry）校验两份数据集的**正例**与**关键反例**——`primary` 低危档被拒、缺 `isolation` 块被拒、`freeze.iteration_scope` 非冻结字典范围被拒、删除传播缺投影被拒；并断言"新增一条对照用例后既有条目逐条哈希不变"的**只增不破坏**可复算性（依 T005/T006）
+- [X] T010 [P] 新增契约测试 `backend/tests/contract/test_015_memory_benchmark_datasets.py`（先红）：以 `$defs` 合并模式（加载两份文件、`$defs.update`、`$ref` 字符串替换后 `jsonschema` Draft2020-12 `validate`，不引入新的 schema registry）校验两份数据集的**正例**与**关键反例**——`primary` 低危档被拒、缺 `isolation` 块被拒、`freeze.iteration_scope` 非冻结字典范围被拒、删除传播缺投影被拒；并断言"新增一条对照用例后既有条目逐条哈希不变"的**只增不破坏**可复算性（依 T005/T006）
 
 **Checkpoint**: 契约层与证据导出骨架就绪 —— 全部用户故事可开始。
 
