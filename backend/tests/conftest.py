@@ -37,6 +37,31 @@ def consolidation_evidence_bundle(request):
     yield bundle
 
 
+@pytest.fixture(scope="session", autouse=True)
+def memory_eval_evidence_bundle(request):
+    """T009: real 015 per-case evidence collection, gated on the environment.
+
+    Strictly isomorphic with ``consolidation_evidence_bundle`` above: created for
+    every run so a whole-suite 015 run exports evidence, but it only writes files
+    when ``MEMORY_EVAL_EVIDENCE_DIR`` is configured. Unset means a lazy no-op.
+    """
+    target = os.environ.get("MEMORY_EVAL_EVIDENCE_DIR")
+    if not target:
+        yield None
+        return
+    from tests.integration.memory_eval_evidence import MemoryEvalEvidenceBundle
+
+    bundle = MemoryEvalEvidenceBundle(target)
+    request.config._memory_eval_evidence_bundle = bundle
+    yield bundle
+
+
+@pytest.fixture
+def memory_eval_evidence(request):
+    """Per-test accessor for the 015 evidence bundle (None when not configured)."""
+    return request.getfixturevalue("memory_eval_evidence_bundle")
+
+
 @pytest.fixture
 def consolidation_evidence(request, monkeypatch):
     """Per-test recorder for real 013 observations and observed hard counts.
@@ -58,6 +83,11 @@ def pytest_sessionfinish(session, exitstatus):
     bundle = getattr(session.config, "_consolidation_evidence_bundle", None)
     if bundle is not None:
         bundle.finalize(int(exitstatus))
+    # T009: additive 015 export. The 013 branch above is untouched, and an unset
+    # MEMORY_EVAL_EVIDENCE_DIR means no bundle was ever created.
+    memory_bundle = getattr(session.config, "_memory_eval_evidence_bundle", None)
+    if memory_bundle is not None:
+        memory_bundle.finalize(int(exitstatus))
 
 
 @pytest_asyncio.fixture(autouse=True)
