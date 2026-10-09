@@ -1414,7 +1414,8 @@ def assemble_map(run: Run) -> dict:
     for spec in GROUP_SPECS:
         outcome = statuses.get(spec["group"])
         if outcome is None:
-            outcome = _not_executed(spec, "not executed in this run (no measured status was recorded)")
+            outcome = _not_executed(spec, spec.get("not_executed_reason")
+                                    or "not executed in this run (no measured status was recorded)")
         entry = {
             "group": spec["group"], "runner": spec["runner"], "command": outcome.get("command"),
             "test_module": spec["test_module"], "artifact": outcome.get("artifact"),
