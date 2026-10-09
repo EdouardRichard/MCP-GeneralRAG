@@ -1170,9 +1170,73 @@
     ]
   },
   "reproducibility": {
-    "non_latency_reproducible": true,
+    "non_latency_reproducible": false,
     "tolerance": 0.01,
-    "checks": []
+    "checks": [
+      {
+        "metric": "hard_metrics.hard_memory_anchoring.error_code_distribution.MEMORY_EVIDENCE_ANCHOR_REQUIRED",
+        "run_1": 0.0,
+        "run_2": 1.0,
+        "relative_delta": 1.0,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.hard_memory_anchoring.error_code_distribution.MEMORY_WRITE_UNAVAILABLE",
+        "run_1": 1.0,
+        "run_2": 0.0,
+        "relative_delta": 1.0,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.quarantined_leakage.consolidation_window.examined",
+        "run_1": 1.0,
+        "run_2": 2.0,
+        "relative_delta": 0.5,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.quarantined_leakage.control_surface.examined",
+        "run_1": 1.0,
+        "run_2": 2.0,
+        "relative_delta": 0.5,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.tool_schema_validity.passed",
+        "run_1": 4.0,
+        "run_2": 5.0,
+        "relative_delta": 0.2,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.tool_schema_validity.rate",
+        "run_1": 0.6666666666666666,
+        "run_2": 0.8333333333333334,
+        "relative_delta": 0.20000000000000007,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      },
+      {
+        "metric": "hard_metrics.tool_schema_validity.value",
+        "run_1": 0.6666666666666666,
+        "run_2": 0.8333333333333334,
+        "relative_delta": 0.20000000000000007,
+        "tolerance": 0.01,
+        "passed": false,
+        "env_sensitive": false
+      }
+    ]
   },
   "not_measurable": [
     {
@@ -1290,6 +1354,7 @@
     "every hard metric names its caliber and the exact denominator it used; a zero denominator is reported as not_measurable with a reason and is never recorded as 0 or as a pass",
     "safety-class calibers keep zero tolerance; the 1 % non-latency tolerance applies only to the re-run reproducibility check and never to a safety verdict",
     "any model review is diagnostic only and does not gate this report",
-    "the itemised raw measurements of this run (per-tool validation errors, per-path denominators, per-axis metadata and the whole six-axis sample) live in eval/runs/015-20261009205637/hard-metrics-measurements.json"
+    "the itemised raw measurements of this run (per-tool validation errors, per-path denominators, per-axis metadata and the whole six-axis sample) live in eval/runs/015-20261009205637/hard-metrics-measurements.json",
+    "reproducibility corrected to the measured truth by 015 finalization: two live measurements of the same snapshot and version differ on 7 non-latency metrics (see evidence/baseline_reproducibility.json); the earlier block claimed non_latency_reproducible=true with no checks recorded. Latency stays excluded. A deterministic same-payload assembly agrees 182/182, but that is not the T036 re-run caliber."
   ]
 }
