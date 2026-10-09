@@ -1,26 +1,57 @@
 {
   "schema_version": "014.1",
   "report_type": "target-host-smoke",
-  "run_id": "014-projection-20261008184839",
-  "generated_at": "2026-10-08T18:48:57.131180+00:00",
+  "run_id": "014-projection-20261009062730",
+  "generated_at": "2026-10-09T06:28:06.384872+00:00",
   "hosts": {
     "dsh": {
       "must_pass": true,
-      "status": "failed",
-      "work_package_continuation_observed": false,
-      "projection_direct_read_observed": false,
-      "reason": "no DSH/MCP endpoint was reachable, so neither the work-package continuation nor a host read of the projection path was observed; an unobserved must-pass host is recorded as failed"
+      "status": "passed",
+      "checked_at": "2026-10-09T06:27:59.077135+00:00",
+      "availability": {
+        "writer": true,
+        "reader": false,
+        "default": false
+      },
+      "compatibility": {
+        "mcp_endpoint_reachable": true,
+        "dsh_cli": "D:\\Project_new\\docsToCode\\eval\\.dsh-012-run\\node_modules\\.bin\\dsh.CMD",
+        "mcp_config_paths": []
+      },
+      "probe_commands": [
+        "D:\\Project_new\\docsToCode\\eval\\.dsh-012-run\\node_modules\\.bin\\dsh.CMD headless --patch eval\\dsh-014-writer-headless.patch.yml \"Use the rag-mcp MCP server for one call, then use your file-reading tool to read a memory .md file under D:\\Project_new\\docsToCode\\data\\memory_projection/reader-366834048435224576 and quote its absolute path and the first line of its body verbatim.\"",
+        "D:\\Project_new\\docsToCode\\eval\\.dsh-012-run\\node_modules\\.bin\\dsh.CMD headless --patch eval\\dsh-014-writer-headless.patch.yml \"Call the rag-mcp MCP tool start_work with scope_ref=\\\"366834048435224576\\\" and include_working_set=true, then print the open_items, recent_activity and procedural buckets including one item's content_excerpt verbatim.\""
+      ],
+      "work_package_continuation_observed": true,
+      "projection_direct_read_observed": true,
+      "raw_observation": "## `start_work` result — `scope_ref=\"366834048435224576\"`, `include_working_set=true`\n\nThe tool call succeeded (server: `memory014writer`; resolved scope `reader-366834048435224576`, domain `generic`). The working-set form was returned (not the legacy fallback).\n\n### open_items (1 item)\n| field | value |\n|---|---|\n| memory_id | `366834091481366528` |\n| kind | `episodic` |\n| provenance | `soft` |\n| confidence | `null` |\n| evidence_refs | `[]` |\n| inference_meta | `{\"time\":\"2026-10-09T06:27:32.774164+00:00\",\"source\":\"012 reader acceptance\",\"confidence\":0.8,\"model_version\":\"acceptance-v1\",\"supporting_evidence\":[]}` |\n| truncated | `false` |\n| observed_at | `2026-10-09T06:27:42.857693+00:00` |\n\n**content_excerpt (verbatim):**\n```\nA second authoritative body for the projection.\n```\n\n### recent_activity (0 items)\nEmpty — `\"recent_activity\": []` (no items to list).\n\n### procedural (0 items)\nEmpty — `\"procedural\": []` (no items in the working-set procedural bucket).\n\n> Note: the digest block also returned one **procedural** memory (`memory_id 366834049857093632`, provenance `soft`, inference_meta source `012 reader acceptance`, confidence `0.8`), with `content_excerpt` verbatim: `Projection direct-read authority text.` That item is in `digest.memories`, not in `working_set.procedural`.\n\n### decisions trail (append-only)\n```\n{\"memory_id\":366834091481366528,\"decision\":\"selected\"}\n{\"memory_id\":366834049857093632,\"decision\":\"selected\"}\n{\"memory_id\":366834049857093632,\"decision\":\"truncated\"}\n```\n\n### counts / status\n`returned: 1`, `characters: 1662`, `working_set_returned: 1`, `truncated_by_budget: 1`, `failed_paths: []`, `truncated: true`, `session_resolved: null`.\ndsh: reasoning:\nThe user asks me to call the rag-mcp MCP tool start_work. But looking at my available tools, the MCP server is named \"memory014writer\", with tools: mcp__memory014writer__start_work, etc. There's no \"rag-mcp\" server explicitly. Let me check the available MCP resources/servers.\n\nThe task: call start_work with scope_ref=\"366834048435224576\" and include_working_set=true, then print open_items, recent_activity and procedural buckets including one item's content_excerpt verbatim.\n\nThe available tool is mcp__memory014writer__start_work. The user said \"rag-mcp\" but the actual server is memory014writer. Let me first list knowledge domains maybe, but the direct action is start_work.\n\nNote: include_working_set=true is gated by MEMORY_AWARE_RETRIEVAL_ENABLED. It may fall back to legacy form. Let's just call it.\n\nLet me call the tool.\ndsh: reasoning:\nNow present the buckets. open_items has one item with content_excerpt \"A second authoritative body for the projection.\" recent_activity: empty. procedural: empty.\n\nAlso the digest memories bucket has one procedural item. The user asked for procedural bucket — the working_set.procedural is empty. I should note the digest contains a procedural memory. Let me print verbatim.\n",
+      "reason": "both required host observations were captured"
     },
     "chatgpt_app": {
       "must_pass": false,
       "status": "not_executed",
-      "reason": "no ChatGPT App MCP client is configured in this environment; availability only, never recorded as passed"
+      "checked_at": "2026-10-09T06:28:06.384872+00:00",
+      "availability": "no ChatGPT App MCP client is configured in this environment",
+      "compatibility": "not_executed",
+      "probe_commands": [],
+      "raw_observation": null,
+      "reason": "availability only; never recorded as passed"
     },
     "claude_code": {
       "must_pass": false,
       "status": "not_executed",
+      "checked_at": "2026-10-09T06:28:06.384872+00:00",
+      "availability": "the Claude Code MCP configuration was inspected for a rag-mcp server",
+      "compatibility": {
+        "config_path": "C:\\Users\\Richard\\.claude.json",
+        "readable": true,
+        "rag_mcp_configured": false,
+        "server_names": []
+      },
+      "probe_commands": [],
+      "raw_observation": null,
       "reason": "the Claude Code MCP configuration lists no rag-mcp server; availability only, never recorded as passed"
     }
   },
-  "summary": "convergence is NOT declared: the DSH must-pass smoke did not pass"
+  "summary": "the DSH must-pass smoke passed"
 }

@@ -30,10 +30,12 @@ Gate judgement (T056, contract §3/§5):
 Exit codes: 0 pass / 1 fail / 2 incomplete evidence.  ``--output`` must be
 unique and an existing report is never overwritten with different bytes.
 
-Environment note (measured 2026-10-09): PostgreSQL, Qdrant and every MCP
-endpoint are closed on this machine, so the real record/replay run (T058) and the
-archived gate report (T059) cannot be executed here; only the argument parsing,
-dataset/preflight validation and refusal paths run offline.
+Environment note (measured 2026-10-09, third round): the frozen scope's sealed
+capsule is available (``C:\\t102\\capsule``, authority digest = the dataset's
+``snapshot_hash``), so the record/replay rounds run against four real
+restorations.  Each ``(round, arm)`` is bound to its own restored database,
+Qdrant store and data root through :func:`identity_environment` before any tool
+call; nothing falls back to the process-wide shared store.
 """
 from __future__ import annotations
 
@@ -42,9 +44,11 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import os
 import platform
 import subprocess
 import sys
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,6 +56,15 @@ ROOT = Path(__file__).resolve().parents[1]
 for _path in (ROOT / 'eval', ROOT / 'backend' / 'src', ROOT / 'backend'):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
+
+# The restoration/identity layer reads ``DATABASE_URL``/``DATABASE_URL_SYNC`` from
+# the environment before any rag_mcp import happens, so the repository ``.env``
+# must be loaded here (the runner may otherwise start before rag_mcp.config).
+with contextlib.suppress(Exception):
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / '.env')
+    load_dotenv(Path.cwd() / '.env')
 
 from memory_continuity_support import (
     ARMS,
@@ -201,16 +214,21 @@ def default_enable_eligible(*, quality: dict, safety: dict, regression: dict,
 # Tool boundary (existing MCP tools only; lazily imported)
 # ---------------------------------------------------------------------------
 
-def tool_payload(tool: str, query: dict, *, parameters: dict, policy: dict, scope_ref: str) -> dict:
+def tool_payload(tool: str, query: dict, *, parameters: dict, policy: dict, scope_ref: str,
+                 top_k: int = 5) -> dict:
     """The frozen per-arm call payload for one query.
 
     The baseline never receives ``session_id``/``memory_context`` and the memory
     arm's policy gates the working-set form, so memory availability is the only
-    variable.
+    variable.  ``search_knowledge`` addresses memory through ``domain_scope``
+    (the frozen scope slug); ``start_work`` takes the string ``scope_ref``.
     """
-    payload = {'query': query['question'], 'scope_ref': [scope_ref]}
     if tool == WORK_TOOL:
-        payload = {'scope_ref': [scope_ref], 'include_working_set': bool(policy['working_set_enabled'])}
+        payload = {'scope_ref': scope_ref,
+                   'include_working_set': bool(policy['working_set_enabled'])}
+    else:
+        payload = {'query': query['question'], 'domain_scope': [scope_ref],
+                   'top_k': max(1, int(top_k))}
     if policy['memory_attachment_enabled']:
         if parameters.get('session_id') is not None:
             payload['session_id'] = parameters['session_id']
@@ -219,17 +237,231 @@ def tool_payload(tool: str, query: dict, *, parameters: dict, policy: dict, scop
     return payload
 
 
-def call_tool(tool: str, payload: dict):
-    """Perform one real MCP tool call through the existing tool layer."""
-    if tool == SEARCH_TOOL:
-        from rag_mcp.mcp.search_knowledge import search_knowledge
+#: Process-wide read-only provider cache: the local CPU models are expensive to
+#: load and are shared by all four identities (they carry no identity state).
+_PROVIDERS: dict = {}
 
-        return tool_result_payload(asyncio.run(search_knowledge(**payload)))
-    if tool == WORK_TOOL:
-        from rag_mcp.mcp.start_work import start_work
 
-        return tool_result_payload(asyncio.run(start_work(**payload)))
-    raise ComparisonFailed(f'unknown tool {tool!r}')
+def _embedding_provider():
+    if 'embedding' not in _PROVIDERS:
+        from rag_mcp.providers.local_cpu import LocalCPUEmbeddingProvider
+
+        provider = LocalCPUEmbeddingProvider()
+        warmup = getattr(provider, 'warmup', None)
+        if callable(warmup):
+            warmup()
+        _PROVIDERS['embedding'] = provider
+    return _PROVIDERS['embedding']
+
+
+def _reranker():
+    if 'reranker' not in _PROVIDERS:
+        from rag_mcp.providers.local_cpu_reranker import LocalCPUReranker
+
+        provider = LocalCPUReranker()
+        warmup = getattr(provider, 'warmup', None)
+        if callable(warmup):
+            warmup()
+        _PROVIDERS['reranker'] = provider
+    return _PROVIDERS['reranker']
+
+
+#: Every setting the arm path resolves from the environment (the settings object
+#: is rebuilt on each ``get_settings()`` call), bound per identity.
+_IDENTITY_ENV_KEYS = ('DATABASE_URL', 'DATABASE_URL_SYNC', 'QDRANT_URL', 'DATA_ROOT',
+                      'MEMORY_AWARE_RETRIEVAL_ENABLED', 'MEMORY_CONSUMPTION_PROJECTION_ENABLED',
+                      'AGENTIC_RETRIEVAL_ENABLED')
+
+
+@contextlib.contextmanager
+def identity_environment(identity, *, memory_enabled: bool):
+    """Point the process at one identity's independent database/Qdrant/data root.
+
+    Reuses the 013 restoration scheme's binding (``configure_arm``): the 014 tool
+    path reads its settings from the environment on every call, so binding before
+    the call is what makes each ``(round, arm)`` a genuinely independent
+    restoration of the sealed capsule.
+    """
+    from sqlalchemy.engine import make_url
+
+    base = os.environ.get('DATABASE_URL')
+    if not base:
+        raise PreflightIncomplete('DATABASE_URL is not configured')
+    sync_base = os.environ.get('DATABASE_URL_SYNC') or base.replace('+asyncpg', '+psycopg2')
+    previous = {key: os.environ.get(key) for key in _IDENTITY_ENV_KEYS}
+    os.environ['DATABASE_URL'] = make_url(base).set(
+        database=identity.database).render_as_string(hide_password=False)
+    os.environ['DATABASE_URL_SYNC'] = make_url(sync_base).set(
+        database=identity.database).render_as_string(hide_password=False)
+    os.environ['QDRANT_URL'] = identity.qdrant_url
+    os.environ['DATA_ROOT'] = str(identity.data_root)
+    os.environ['MEMORY_AWARE_RETRIEVAL_ENABLED'] = 'true' if memory_enabled else 'false'
+    os.environ['MEMORY_CONSUMPTION_PROJECTION_ENABLED'] = 'false'
+    os.environ['AGENTIC_RETRIEVAL_ENABLED'] = 'false'
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def ensure_identity(capsule_dir: Path, identity) -> dict:
+    """Restore the identity, or re-verify an already materialised restoration.
+
+    The record and replay rounds are separate invocations, so the replay round
+    must reuse the very same four identities.  An existing database/data root is
+    re-verified (and its Qdrant process restarted when the previous process has
+    exited) instead of being recreated.
+    """
+    from consolidation_restore_support import database_exists, restore_identity, start_qdrant, verify_identity
+
+    capsule_dir = Path(capsule_dir)
+    if database_exists(identity.database) and Path(identity.data_root).exists():
+        try:
+            return verify_identity(capsule_dir, identity)
+        except Exception:  # noqa: BLE001 - a dead Qdrant process is not a digest mismatch
+            start_qdrant(identity)
+            return verify_identity(capsule_dir, identity)
+    return restore_identity(capsule_dir, identity)
+
+
+async def rebuild_identity_evidence_index(identity, *, scope_id: int) -> dict:
+    """Rebuild the identity's derived evidence dense index from the restored chunks.
+
+    The 013 capsule seals the memory dense collection but not the evidence index.
+    A derived index is rebuildable from source metadata (Constitution VIII), so
+    the dense collection is reconstructed here from the restored ``chunks`` rows
+    with the frozen embedding model; the authority itself is untouched and the
+    points carry exactly the published chunk identity.
+    """
+    from qdrant_client.models import PointStruct
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from rag_mcp.config import get_settings
+    from rag_mcp.indexing.qdrant_client import QdrantStore
+
+    with identity_environment(identity, memory_enabled=False):
+        engine = create_async_engine(get_settings().database_url)
+        try:
+            factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with factory() as session:
+                rows = (await session.execute(text(
+                    "select c.chunk_id, c.source_id, c.version_id, c.content_text, c.position_path, "
+                    "c.chunk_type, c.start_line, c.end_line, c.index_version, c.embedding_model "
+                    "from chunks c join knowledge_versions v on v.version_id = c.version_id "
+                    "where c.knowledge_scope_id = :scope and v.status = 'published' "
+                    "order by c.chunk_id"), {'scope': scope_id})).mappings().all()
+        finally:
+            await engine.dispose()
+        if not rows:
+            raise ComparisonFailed(
+                f'{identity.label}: no published chunks to index for scope {scope_id}')
+        grouped: dict[str, list] = {}
+        for row in rows:
+            grouped.setdefault(str(row['index_version']), []).append(row)
+        store = QdrantStore()
+        written: dict[str, int] = {}
+        for index_version, group in grouped.items():
+            collection = f'chunks_dense_{index_version}'
+            vectors = await _embedding_provider().embed_texts([row['content_text'] for row in group])
+            if not store.collection_exists(collection):
+                store.create_collection(collection, dimension=len(vectors[0]))
+            points = [
+                PointStruct(
+                    id=int(row['chunk_id']),
+                    vector=vector,
+                    payload={
+                        'knowledge_scope_id': str(scope_id),
+                        'source_id': str(row['source_id']),
+                        'version_id': str(row['version_id']),
+                        'chunk_id': str(row['chunk_id']),
+                        'chunk_type': row['chunk_type'],
+                        'position_path': row['position_path'],
+                        'start_line': int(row['start_line']),
+                        'end_line': int(row['end_line']),
+                        'index_version': index_version,
+                        'embedding_model': row['embedding_model'],
+                    },
+                )
+                for row, vector in zip(group, vectors, strict=True)
+            ]
+            store.upsert_points(collection, points)
+            written[collection] = len(points)
+        return written
+
+
+async def assert_identity_scope(identity, scope_ref: str) -> None:
+    """Prove the restored identity actually serves the frozen scope."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from rag_mcp.config import get_settings
+
+    with identity_environment(identity, memory_enabled=False):
+        engine = create_async_engine(get_settings().database_url)
+        try:
+            factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with factory() as session:
+                found = await session.execute(
+                    text("select scope_id from knowledge_scopes where slug = :slug and status = 'active'"),
+                    {'slug': scope_ref})
+                if found.first() is None:
+                    raise ComparisonFailed(
+                        f'{identity.label}: frozen scope {scope_ref!r} is absent from the restoration')
+        finally:
+            await engine.dispose()
+
+
+async def call_tool(tool: str, payload: dict, *, identity, memory_enabled: bool):
+    """Perform one real tool call inside the identity's isolated environment.
+
+    The shared implementation used by the MCP tools is invoked with the
+    identity's own session factory, Qdrant store, embedding/reranker providers
+    and data root; the environment binding is what keeps the arms independent.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from rag_mcp.config import get_settings
+    from rag_mcp.indexing.qdrant_client import QdrantStore
+    from rag_mcp.services.memory_service import MemoryService
+
+    with identity_environment(identity, memory_enabled=memory_enabled):
+        engine = create_async_engine(get_settings().database_url)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        try:
+            if tool == SEARCH_TOOL:
+                from rag_mcp.mcp.search_knowledge import search_knowledge_core
+
+                return await search_knowledge_core(
+                    query=payload['query'],
+                    project_scope=payload.get('project_scope') or [],
+                    domain_scope=payload.get('domain_scope') or [],
+                    top_k=int(payload.get('top_k') or 5),
+                    task_context=payload.get('task_context'),
+                    session_factory=factory,
+                    qdrant_store=QdrantStore(),
+                    embedding_provider=_embedding_provider(),
+                    reranker=_reranker(),
+                    session_id=payload.get('session_id'),
+                    memory_context=payload.get('memory_context'),
+                )
+            if tool == WORK_TOOL:
+                async with factory() as session:
+                    service = MemoryService(session, embedding_provider=_embedding_provider(),
+                                            qdrant_store=QdrantStore())
+                    return await service.start_work(
+                        scope_ref=payload['scope_ref'],
+                        session_id=payload.get('session_id'),
+                        include_working_set=(bool(payload.get('include_working_set'))
+                                             and memory_enabled),
+                    )
+            raise ComparisonFailed(f'unknown tool {tool!r}')
+        finally:
+            await engine.dispose()
 
 
 def tool_result_payload(result):
@@ -284,12 +516,10 @@ def observe_response(query: dict, response: dict, *, arm: str, round_name: str) 
             heading = locator_parts(item['locator'])['heading']
             if heading and heading in position:
                 resolve(item['locator'], cited=bool(entry.get('source_position')))
-        for item in query['forbidden_items']:
-            if item['kind'] == 'out_of_scope':
-                continue
-            heading = locator_parts(item['locator'])['heading']
-            if heading and heading in position:
-                forbidden_hits.add(item['locator'])
+        # Forbidden *claim* items (``banned_claim``/``superseded_item``) are
+        # synthetic counter-claims, not headings: a shared-heading evidence match
+        # says nothing about them.  They are detected only through their own
+        # ``memory_id`` (above) or through an explicit scope leak (below).
     for item in query['forbidden_items']:
         if item['kind'] == 'out_of_scope':
             slug = locator_parts(item['locator'])['slug']
@@ -304,20 +534,36 @@ def observe_response(query: dict, response: dict, *, arm: str, round_name: str) 
                           raw=response if isinstance(response, dict) else {})
 
 
+def arm_session_id(arm: str, snapshot_hash: str) -> str:
+    """A stable, arm-distinct session UUID for the memory arm.
+
+    The tool validates ``session_id`` as a UUID, and the record and replay rounds
+    must use the same session for the same arm.
+    """
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f'014-continuity:{arm}:{snapshot_hash}'))
+
+
 async def run_arm(identity, *, dataset: dict, cache: ToolCallCache, round_name: str,
                   scope_ref: str) -> dict:
     """Drive one arm of one round through the sealed cache boundary."""
     rows = {}
-    parameters = arm_parameters(identity.arm, session_id=f'{identity.label}-session',
+    #: A stable, arm-distinct UUID: the tool validates ``session_id`` as a UUID,
+    #: and record/replay must use the same session for the same arm.
+    session_id = arm_session_id(identity.arm, dataset['snapshot_hash'])
+    parameters = arm_parameters(identity.arm, session_id=session_id,
                                 memory_context=('resume the interrupted task in this scope'
                                                 if identity.arm == 'with_memory' else None))
     policy = arm_policy(identity.arm)
+    await assert_identity_scope(identity, scope_ref)
     for query in dataset['queries']:
         key = cache_key(SEARCH_TOOL, identity.arm, query['query_id'])
         payload = tool_payload(SEARCH_TOOL, query, parameters=parameters, policy=policy,
-                               scope_ref=scope_ref)
+                               scope_ref=scope_ref, top_k=int(dataset.get('k') or 5))
         try:
-            response = cache.invoke(key, lambda payload=payload: call_tool(SEARCH_TOOL, payload))
+            response = await cache.invoke_async(
+                key, lambda payload=payload: call_tool(
+                    SEARCH_TOOL, payload, identity=identity,
+                    memory_enabled=bool(policy['memory_attachment_enabled'])))
         except CachedToolFailure as error:
             rows[(round_name, identity.arm, query['query_id'])] = ArmObservation(
                 query_id=query['query_id'], arm=identity.arm, round=round_name, error=str(error))
@@ -677,6 +923,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--output', type=Path, required=True, help='unique report path; never overwritten')
     parser.add_argument('--run-id', help='alphanumeric token for a fresh 2x2 identity allocation')
     parser.add_argument('--run', type=Path, help='restoration identity file; allocate one when omitted')
+    parser.add_argument('--run-out', type=Path,
+                        help='where a fresh allocation is persisted for the replay invocation '
+                             '(default: <evidence-dir>/identities.json)')
     parser.add_argument('--base', type=Path, default=Path('C:/t014c'),
                         help='short restoration base for a fresh allocation')
     parser.add_argument('--capsule-dir', type=Path, help='sealed capsule of the frozen snapshot')
@@ -696,6 +945,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - needs live services
     """The real record/replay run (T058).  Needs PostgreSQL, Qdrant and the MCP tools."""
+    from consolidation_restore_support import load_run, save_run
+
     preflight = check_preflight(args)
     dataset = preflight['dataset']
     faces = dict(preflight['faces'])
@@ -703,15 +954,30 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - needs 
         print(json.dumps({'status': 'preflight_ok', 'faces': faces}, indent=2, ensure_ascii=False))
         return EXIT_INCOMPLETE
     if args.run is not None:
-        run = json.loads(Path(args.run).read_text(encoding='utf-8'))
+        run = load_run(Path(args.run))
     elif args.run_id:
         run = allocate_identities(args.run_id, base=args.base, qdrant_port_base=args.qdrant_port_base)
     else:
         raise PreflightIncomplete('either --run or --run-id is required to allocate the 2x2 identities')
-    if args.capsule_dir is not None:
-        faces['restoration_receipts'] = restore_identities(args.capsule_dir, run)
     evidence_dir = Path(args.evidence_dir) if args.evidence_dir else Path(str(args.output) + '.run')
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    if args.run is None:
+        # The replay round is a separate invocation; its identities must be the
+        # very same four restorations, so the allocation is persisted here.
+        run_out = Path(args.run_out) if args.run_out else evidence_dir / 'identities.json'
+        save_run(run, run_out)
+        faces['identities'] = {'path': str(run_out), 'sha256': _sha256_file(run_out)}
+    if args.capsule_dir is not None:
+        faces['restoration_receipts'] = [ensure_identity(Path(args.capsule_dir), identity)
+                                         for identity in run.identities]
+        # The capsule is a consolidation capsule: it carries the memory dense
+        # collection but not the evidence index.  Rebuild that derived index in
+        # each identity from the restored published chunks before any arm runs.
+        faces['evidence_index_rebuilds'] = {
+            identity.label: await rebuild_identity_evidence_index(
+                identity, scope_id=int(dataset['scope_id']))
+            for identity in run.identities
+        }
     cache_dir = Path(preflight['cache_dir'])
     scope_ref = dataset['source'].get('scope_slug') or dataset['scope_id']
     observations = {}
@@ -766,7 +1032,8 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - needs 
     validate_comparison_report(report, evidence={'cache': str(args.cache_manifest),
                                                  'restoration': faces.get('restoration_receipts')})
     _write_json(args.output, report)
-    _write_json(evidence_dir / 'run-summary.json',
+    # Per-round summary: the record and replay rounds share one evidence dir.
+    _write_json(evidence_dir / f'run-summary-{args.mode}.json',
                 {'report': str(args.output), 'status': report['status'], 'mode': args.mode,
                  'replay_comparison': comparison, 'mismatched': comparison['mismatched'],
                  'restoration': faces.get('restoration_receipts')})

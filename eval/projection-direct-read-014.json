@@ -1,0 +1,67 @@
+{
+  "schema_version": "014.1",
+  "report_type": "projection-direct-read",
+  "run_id": "014-projection-20261009062730",
+  "generated_at": "2026-10-09T06:28:06.383294+00:00",
+  "layers": {
+    "filesystem": {
+      "scope_id": 366834048435224576,
+      "scope_slug": "reader-366834048435224576",
+      "tree_root": "D:\\Project_new\\docsToCode\\data\\memory_projection",
+      "files": [
+        "DIGEST.md",
+        "INDEX.md",
+        "episodic\\366834091481366528.md",
+        "procedural\\366834049857093632.md"
+      ],
+      "file_count": 2,
+      "authoritative_bodies": [
+        "A second authoritative body for the projection.",
+        "Projection direct-read authority text."
+      ],
+      "frontmatter_complete": true,
+      "frontmatter_issues": [],
+      "untrusted_marker_complete": true,
+      "body_matches_authority": true,
+      "body_issues": [],
+      "fingerprint_before_clear": "38897e1d3ca86c6d24d50a4301d6391a3e50aaebbaee884c4861d00f28460840",
+      "fingerprint_after_rebuild": "38897e1d3ca86c6d24d50a4301d6391a3e50aaebbaee884c4861d00f28460840",
+      "rebuild_reproduced_the_tree": true,
+      "model_calls": 0,
+      "digest_empty_state": true,
+      "passed": true,
+      "observed": true
+    },
+    "dsh_host_observation": {
+      "observed": true,
+      "status": "passed",
+      "reason": "",
+      "checked_at": "2026-10-09T06:27:44.830543+00:00",
+      "probe_command": "D:\\Project_new\\docsToCode\\eval\\.dsh-012-run\\node_modules\\.bin\\dsh.CMD headless --patch eval\\dsh-014-writer-headless.patch.yml \"Use the rag-mcp MCP server for one call, then use your file-reading tool to read a memory .md file under D:\\Project_new\\docsToCode\\data\\memory_projection/reader-366834048435224576 and quote its absolute path and the first line of its body verbatim.\"",
+      "availability": {
+        "writer": true,
+        "reader": false,
+        "default": false
+      },
+      "environment": {
+        "dsh_cli": "D:\\Project_new\\docsToCode\\eval\\.dsh-012-run\\node_modules\\.bin\\dsh.CMD",
+        "mcp_config_paths": [],
+        "reachable_endpoints": [
+          "127.0.0.1:18080"
+        ],
+        "patch_paths": [
+          "eval\\dsh-014-writer-headless.patch.yml"
+        ]
+      },
+      "raw_observation": "Done — one MCP call (the available `rag-mcp`-family server is exposed here as `memory014writer__list_knowledge_domains`), then a file read.\n\n**File read:** `D:\\Project_new\\docsToCode\\data\\memory_projection\\reader-366834048435224576\\episodic\\366834091481366528.md`\n\n- **Absolute path:** `D:\\Project_new\\docsToCode\\data\\memory_projection\\reader-366834048435224576\\episodic\\366834091481366528.md`\n- **First line of body (line 14, after the YAML front matter), verbatim:**\n  `A second authoritative body for the projection.`\n\nNote: the directory also contains `DIGEST.md`, `INDEX.md`, and `procedural/366834049857093632.md`. Also, the MCP call returned a very large payload (~7.7 MB) that was spilled to a temp file; the relevant entry confirmed scope `reader-366834048435224576` (project scope, domain_key `generic`, no graph).\ndsh: reasoning:\nThe user wants me to use the \"rag-mcp\" MCP server for one call. But the available MCP server is named \"memory014writer\". Hmm. There's a mismatch. Let me check the available MCP resources. The tools available are mcp__memory014writer__*. Maybe rag-mcp isn't available. Let me first list MCP resources for memory014writer, and also try to find the memory file.\n\nLet me do: list knowledge domains (one MCP call), and glob for the memory file.\n\nThe task: use the rag-mcp MCP server for one call, then read the memory .md file under the given directory, quote absolute path and first line of body.\n\nLet me start with a call to the MCP server and a glob in parallel.\ndsh: reasoning:\nI used one MCP call (list_knowledge_domains). That's the \"rag-mcp\" MCP server call (the only MCP server available is memory014writer). Now read a memory .md file. Let's read the episodic one — that's a memory file. Actually \"a memory .md file\" — the episodic or procedural files are memory files. Let's read episodic/366834091481366528.md.\n\nThe task says quote its absolute path and the first line of its body verbatim. Let me read it.\ndsh: reasoning:\nThe first line of the body (after frontmatter) is \"A second authoritative body for the projection.\"\n\nReport both.\n",
+      "source": "dsh_host_probe"
+    },
+    "protocol": {
+      "observed": false,
+      "status": "not_applicable",
+      "reason": "the consumption layer is a file-system surface and is deliberately not exposed through MCP, so no protocol-layer direct-read evidence can exist"
+    }
+  },
+  "conclusion": "passed",
+  "conclusion_reason": "the required filesystem layer and the DSH real-observation layer both passed"
+}

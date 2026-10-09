@@ -277,6 +277,11 @@ async def _cross_domain(factory, provider, memory_scope, other_scope) -> dict:
             scope_ref=[str(other_scope)], memory_context="overview", session_id=str(uuid.uuid4()))
     items = list(attach.get("items") or [])
     leaked = [item for item in items if item.get("knowledge_scope_id") != other_scope]
+    if not items:
+        # T098: a zero denominator is not a measured zero.
+        return {"leaks": 0, "examined": 0, "value": None, "state": "not_measurable",
+                "reason": "a zero denominator is not a measured zero",
+                "caliber": "memory attachment path", "requested_scope": other_scope}
     return {"leaks": len(leaked), "examined": len(items), "value": len(leaked),
             "caliber": "memory attachment path", "requested_scope": other_scope,
             "foreign_scope_present_in_other_scope": memory_scope in {i.get("knowledge_scope_id") for i in items}}
@@ -316,6 +321,9 @@ async def _quarantined(factory, provider) -> dict:
     )
     return {"occurrences": occurrences, "value": occurrences,
             "quarantined_status_observed": quarantined["status"],
+            "state": "measured" if quarantined["status"] == "quarantined" else "not_measurable",
+            "reason": None if quarantined["status"] == "quarantined"
+                      else "the probe row was not quarantined, so exclusion was not exercised",
             "benign_memory_visible_in_recall": any(
                 row["memory_id"] == benign["memory_id"] for row in recall["memories"]),
             "caliber": "default recall + attachment + working set"}

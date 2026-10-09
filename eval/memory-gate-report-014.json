@@ -1,0 +1,1151 @@
+{
+  "schema_version": "014.1",
+  "report_type": "014_memory_continuity_gate_report",
+  "run_id": "t014a",
+  "archived_at": "2026-10-09T06:51:33.688762+00:00",
+  "archive": {
+    "record": {
+      "path": "eval\\runs\\t014a\\memory-record.json",
+      "sha256": "d76f3fa7dd426016a0d115d5c239f9423539abc3e3c1b23018fe1d4b0ce1a89f",
+      "status": "failed"
+    },
+    "replay": {
+      "path": "eval\\runs\\t014a\\memory-replay.json",
+      "sha256": "fce08e8ab29eb7fb82e980c192c120ab1deb0ae74344869bedf906a3dc8da645",
+      "status": "failed"
+    }
+  },
+  "commit": "6653740ef56a83c3c70b9846766b33c9cd090e67",
+  "dataset_version": "014.eval.1",
+  "snapshot_hash": "9b05336cba28f45dd264631d0f18cf886f1e42db2bb1538d3afac8e9bf88dbb8",
+  "k": 5,
+  "queries": [
+    {
+      "category": "resume_after_break",
+      "criterion": "The answer must name Li as the owner and 2026-09-08 as the due date of the outstanding CPU reranker latency benchmark; it must not assign that action item to Wei.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-owner-wei",
+          "reason": "the CPU reranker latency benchmark is owned by Li, never by Wei"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_resume_01",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "memory_id": "366085127752646656",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "resume_after_break",
+      "criterion": "答案必须给出 Wei 认领的「发布格式扩展评测数据集」待办且截止日期为 2026-09-05；不得把该待办归给 Li。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-eval-dataset-owner-li",
+          "reason": "该待办由 Wei 认领，归给 Li 即判不通过"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_resume_02",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "resume_after_break",
+      "criterion": "The answer must name Maria Rodriguez as the current owner of the frontend management console rewrite (React + antd); it must not present Wei Zhang as the current owner.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "superseded_item",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "reason": "the Wei Zhang assignment was superseded and must not be presented as the current owner"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_resume_03",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "memory_id": "366085087126618112",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "resume_after_break",
+      "criterion": "答案必须同时给出两项开放待办：Wei 的格式扩展评测数据集发布（截止 2026-09-05）与 Li 的 CPU 重排延迟基准（截止 2026-09-08）；不得声称当前没有开放待办。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:open-items-none",
+          "reason": "至少有两项待办仍未完成，声称没有开放待办即判不通过"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_resume_04",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "require_citation": true
+        },
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "memory_id": "366085127752646656",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:publish-format-expansion-eval-dataset",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > action:benchmark-reranker-latency-cpu"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "recall_last_decision",
+      "criterion": "The answer must name BAAI/bge-m3 as the approved upgrade and text-embedding-3-large as the superseded predecessor; it must not present text-embedding-3-large as the current choice.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:text-embedding-3-large-is-current",
+          "reason": "text-embedding-3-large was superseded by BAAI/bge-m3 and must not be presented as the approved upgrade"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_recall_01",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "memory_id": "366085067493081088",
+          "require_citation": true
+        },
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "memory_id": "366085059708452864",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "recall_last_decision",
+      "criterion": "答案必须给出「每个检索请求都必须携带显式作用域引用，禁止隐式全库检索」这一结论；不得声称允许隐式全库检索。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:implicit-whole-library-search-allowed",
+          "reason": "隐式全库检索被明令禁止，声称其被允许即判不通过"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_recall_02",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "recall_last_decision",
+      "criterion": "The answer must state that domain differences are expressed declaratively through domain profiles instead of code paths; it must not state that per-domain code branches are required.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:domain-code-branches-required",
+          "reason": "domain differences are declared through domain profiles, not code branches"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_recall_03",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles",
+          "memory_id": "366085099046830080",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "recall_last_decision",
+      "criterion": "答案必须给出混合检索 Recall@5 从 0.71 提升到 0.79 且相对稠密基线达到统计显著；不得声称该 A/B 实验未达统计显著。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-not-significant",
+          "reason": "A/B 实验已达统计显著，声称未达显著即判不通过"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_recall_04",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:hybrid-ab-recall-at-5"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "lesson_effective",
+      "criterion": "The answer must correct the proposal: the assignment to Wei Zhang was superseded and Maria Rodriguez is the current owner; it must not accept Wei Zhang as the current owner.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-owner-still-wei",
+          "reason": "accepting the stale assignment repeats the corrected mistake"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_lesson_01",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "memory_id": "366085087126618112",
+          "require_citation": true
+        },
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "memory_id": "366085076624080896",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:frontend-console-owner",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > correction:frontend-console-owner-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "lesson_effective",
+      "criterion": "答案必须纠正该提议：已批准的升级是 BAAI/bge-m3，text-embedding-3-large 已被取代；不得把 text-embedding-3-large 当作当前批准方案。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:text-embedding-3-large-is-current",
+          "reason": "把已被取代的模型当作当前批准方案即判不通过"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_lesson_02",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "memory_id": "366085067493081088",
+          "require_citation": true
+        },
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded",
+          "memory_id": "366085059708452864",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade",
+          "c013-eval-meeting-notes#heading:2026-09-01 Weekly Sync > decision:embedding-model-upgrade-superseded"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "lesson_effective",
+      "criterion": "The answer must apply the lesson that every retrieval request carries an explicit scope reference and implicit whole-library search is forbidden; it must not permit the implicit whole-library search.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:implicit-whole-library-search-allowed",
+          "reason": "the review forbade implicit whole-library search; permitting it repeats the mistake"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_lesson_03",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "lesson_effective",
+      "criterion": "答案必须说明域差异通过 domain profiles 声明式表达、不得再用域专属代码分支；不得主张继续新增按域代码分支。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:domain-code-branches-required",
+          "reason": "继续新增按域代码分支即重复已被否决的做法"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_lesson_04",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles",
+          "memory_id": "366085112481185792",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > decision:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "preference_applied",
+      "criterion": "The answer must state that new members read the constitution first and then the 1.0 architecture blueprint, and that the eval/ README documents how to rerun every baseline report; it must not state that the blueprint comes first.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:blueprint-before-constitution",
+          "reason": "the onboarding preference puts the constitution first, not the blueprint"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_pref_01",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "memory_id": "366085053198893056",
+          "require_citation": true
+        },
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:baseline-rerun-procedure"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "preference_applied",
+      "criterion": "答案必须指出新成员先读宪法（constitution）、再读 1.0 架构蓝图；不得声称先读 1.0 架构蓝图。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:blueprint-before-constitution",
+          "reason": "约定是先读宪法再读 1.0 架构蓝图"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_pref_02",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order",
+          "memory_id": "366085053198893056",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-18 Onboarding Notes > preference:onboarding-reading-order"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "preference_applied",
+      "criterion": "The answer must state that every retrieval call carries an explicit scope reference and implicit whole-library search is forbidden; it must not state that the scope reference is optional.",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:scope-optional",
+          "reason": "the scope reference is mandatory, so calling it optional fails the task"
+        }
+      ],
+      "language": "en",
+      "query_id": "q_pref_03",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference",
+          "memory_id": "366085012090519552",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:explicit-scope-reference"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    },
+    {
+      "category": "preference_applied",
+      "criterion": "答案必须说明团队偏好用 domain profiles 声明式表达各域格式与图词表差异；不得主张用域专属代码分支表达。",
+      "difference": "both arms complete the frozen task",
+      "forbidden_items": [
+        {
+          "kind": "banned_claim",
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:domain-code-branches-required",
+          "reason": "团队偏好是声明式域配置，不是按域代码分支"
+        }
+      ],
+      "language": "zh",
+      "query_id": "q_pref_04",
+      "required_items": [
+        {
+          "locator": "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles",
+          "memory_id": "366085099046830080",
+          "require_citation": true
+        }
+      ],
+      "with_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      },
+      "without_memory": {
+        "citation_required": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "cost_usd": null,
+        "delivered": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "error": null,
+        "forbidden": [],
+        "hit": [
+          "c013-eval-meeting-notes#heading:2026-08-25 Architecture Review > preference:declarative-domain-profiles"
+        ],
+        "latency_ms": null,
+        "missing": [],
+        "task_complete": true,
+        "uncited": []
+      }
+    }
+  ],
+  "aggregates": {
+    "with_memory": {
+      "completed": 16,
+      "completion_rate": 1.0,
+      "queries": 16
+    },
+    "without_memory": {
+      "completed": 16,
+      "completion_rate": 1.0,
+      "queries": 16
+    }
+  },
+  "relative_gain": {
+    "code": null,
+    "formula": "(with_memory - without_memory) / without_memory",
+    "threshold": 0.03,
+    "value": 0.0,
+    "zero_baseline": false
+  },
+  "zero_baseline": {
+    "code": null,
+    "is_zero": false,
+    "without_memory_completion_rate": 1.0
+  },
+  "criteria": {
+    "explicit_criterion": {
+      "minimum_completed_with_memory": 12,
+      "per_category_minimum_completed": 1,
+      "queries_total": 16,
+      "source": "pre-frozen with the dataset before any run (contracts/continuity-evaluation-contract.md §3: default >=12/15 and each of the four categories >=1; queries_total is 16 here)"
+    },
+    "explicit_criterion_met": true,
+    "explicit_criterion_source": "dataset.explicit_criterion (frozen before the run)",
+    "quality_met": true,
+    "reasons": [
+      "RELATIVE_GAIN_BELOW_THRESHOLD"
+    ],
+    "relative_gain_threshold": 0.03,
+    "relative_gain_threshold_met": false,
+    "relative_gain_value": 0.0
+  },
+  "redundancy": {
+    "distinct_items": 13,
+    "formula": "1 - distinct_items / total_items",
+    "scope": "auxiliary observation only; never a gate (contract §3)",
+    "total_items": 21,
+    "value": 0.38095238095238093
+  },
+  "reproducibility": {
+    "evidence_complete": true,
+    "max_non_latency_relative_drift": 0.0,
+    "non_latency_relative_tolerance": 0.01,
+    "record_real_network_calls": 32,
+    "replay_real_network_calls": 0,
+    "response_match_rate": 1.0,
+    "status": "passed"
+  },
+  "hard_metrics": {
+    "cross_domain_leaks": null,
+    "evidence_source_locatable_rate": 0.0,
+    "mcp_schema_validity_rate": 1.0,
+    "memory_context_detection_first_rate": null,
+    "memory_context_detection_out_of_order": null,
+    "memory_entries_with_evidence_locators": null,
+    "memory_provenance_complete_rate": null,
+    "quarantined_memory_inputs": null
+  },
+  "cache": {
+    "corrupt": 0,
+    "evidence_complete": true,
+    "expected_keys": 32,
+    "manifest_hash": "189a4debc71426d290974137afa4b25697a5687f6419649945dcc9739b323672",
+    "matched": 32,
+    "missing": 0,
+    "path": "eval\\runs\\t014a\\cache-manifest.json.cache",
+    "real_calls": 0,
+    "record_real_network_calls": 32,
+    "recorded_failure": 0,
+    "recorded_success": 32,
+    "replayed_failure": 0,
+    "replayed_success": 32,
+    "response_match_rate": 1.0,
+    "version_mismatch": 0
+  },
+  "gates": {
+    "quality": {
+      "checks": {
+        "baseline_zero": false,
+        "explicit_criterion_met": true,
+        "quality_met": true,
+        "relative_gain_threshold_met": false
+      },
+      "evidence": [
+        "dataset:8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4",
+        "rounds:2"
+      ],
+      "reasons": [
+        "RELATIVE_GAIN_BELOW_THRESHOLD"
+      ],
+      "status": "passed"
+    },
+    "regression": {
+      "checks": {
+        "approved_window_change_recorded": true,
+        "evidence_complete": false,
+        "legacy_contract_evidence_present": false,
+        "non_latency_drift_within_tolerance": true,
+        "regression_met": false,
+        "replay_zero_network": false,
+        "reproducibility_passed": true
+      },
+      "evidence": [
+        "eval\\memory_continuity_eval_dataset.json",
+        "eval\\runs\\t014a\\cache-manifest.json"
+      ],
+      "reasons": [
+        "REPLAY_ZERO_NETWORK_FAILED",
+        "LEGACY_CONTRACT_EVIDENCE_PRESENT_FAILED"
+      ],
+      "status": "incomplete"
+    },
+    "safety": {
+      "checks": {
+        "all_required_observed": false,
+        "cross_domain_leaks": false,
+        "evidence_source_locatable_rate": false,
+        "mcp_schema_validity_rate": true,
+        "memory_context_detection_first_rate": false,
+        "memory_context_detection_out_of_order": false,
+        "memory_entries_with_evidence_locators": false,
+        "memory_provenance_complete_rate": false,
+        "quarantined_memory_inputs": false,
+        "violations": 1,
+        "zero_tolerance_clean": false
+      },
+      "evidence": [
+        "observed:evidence_source_locatable_rate,mcp_schema_validity_rate"
+      ],
+      "reasons": [
+        "SAFETY_OBSERVATION_INCOMPLETE:cross_domain_leaks",
+        "SAFETY_OBSERVATION_INCOMPLETE:quarantined_memory_inputs",
+        "SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_out_of_order",
+        "SAFETY_OBSERVATION_INCOMPLETE:memory_entries_with_evidence_locators",
+        "EVIDENCE_SOURCE_LOCATABLE_RATE_VIOLATION",
+        "SAFETY_OBSERVATION_INCOMPLETE:memory_provenance_complete_rate",
+        "SAFETY_OBSERVATION_INCOMPLETE:memory_context_detection_first_rate"
+      ],
+      "status": "failed"
+    }
+  },
+  "status": "failed",
+  "default_enable_eligible": false,
+  "default_configuration": {
+    "memory_aware_retrieval_enabled": false,
+    "memory_consumption_projection_enabled": false,
+    "reason": "evidence-only report: both 014 deployment switches stay false and no domain policy was published",
+    "switches_changed": false
+  },
+  "evidence_paths": [
+    "eval\\memory_continuity_eval_dataset.json",
+    "eval\\runs\\t014a\\cache-manifest.json"
+  ],
+  "failed_paths": [],
+  "conclusion": "quality=passed; safety=failed; regression=incomplete; relative_gain=0.0000; default_enable_eligible=False; switches unchanged; the report is evidence only"
+}

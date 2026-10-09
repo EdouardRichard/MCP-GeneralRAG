@@ -1,8 +1,8 @@
 {
   "schema_version": "014.1",
   "report_type": "hard-metrics",
-  "run_id": "014-hard-metrics-20261008185724",
-  "generated_at": "2026-10-08T18:57:51.034511+00:00",
+  "run_id": "014-hard-metrics-20261009044650",
+  "generated_at": "2026-10-09T04:47:17.146740+00:00",
   "metrics": {
     "scope_selection": {
       "evidence_scope": 355308332640108544,
@@ -68,7 +68,7 @@
       "hard_items_examined": 0,
       "hard_items_note": "no hard item was produced by the sampled scopes; the hard anchor rule is covered by tests/unit/test_014_attachment_gating.py and tests/contract/test_014_search_attachment_schema.py",
       "scope_kind": "throwaway acceptance scope created for this measurement",
-      "scope_id": 366660442442956800,
+      "scope_id": 366808774968606720,
       "failed_paths": [],
       "query_source": "fixed acceptance phrase",
       "caliber": "related_memories[] items only",
@@ -88,22 +88,22 @@
             "failed_paths": []
           },
           {
-            "scope_id": 366659111523188736,
+            "scope_id": 366722107180056576,
             "items": 0,
             "failed_paths": []
           },
           {
-            "scope_id": 366659014655737856,
+            "scope_id": 366721979660632064,
             "items": 0,
             "failed_paths": []
           },
           {
-            "scope_id": 366658899073302528,
+            "scope_id": 366723091419627520,
             "items": 0,
             "failed_paths": []
           },
           {
-            "scope_id": 365474063021244416,
+            "scope_id": 366724790867722240,
             "items": 0,
             "failed_paths": []
           }
@@ -113,10 +113,11 @@
     "cross_domain_leakage": {
       "leaks": 0,
       "examined": 0,
-      "value": 0,
+      "value": null,
+      "state": "not_measurable",
+      "reason": "a zero denominator is not a measured zero",
       "caliber": "memory attachment path",
-      "requested_scope": 353212999147716608,
-      "foreign_scope_present_in_other_scope": false
+      "requested_scope": 353212999147716608
     },
     "context_detection_first": {
       "passed": 1,
@@ -133,6 +134,8 @@
       "occurrences": 0,
       "value": 0,
       "quarantined_status_observed": "quarantined",
+      "state": "measured",
+      "reason": null,
       "benign_memory_visible_in_recall": false,
       "caliber": "default recall + attachment + working set"
     },
@@ -148,7 +151,7 @@
       "total": 4,
       "rate": 1.0,
       "value": 1.0,
-      "root": "D:\\Project_new\\docsToCode\\eval\\runs\\014-projection-20261008184839\\consumption",
+      "root": "D:\\Project_new\\docsToCode\\eval\\runs\\014-projection-20261009044013\\consumption",
       "caliber": "consumption-layer markdown files incl. DIGEST/INDEX banners"
     },
     "view_keys_unchanged": {

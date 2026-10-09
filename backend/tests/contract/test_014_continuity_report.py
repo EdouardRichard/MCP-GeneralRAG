@@ -83,7 +83,7 @@ from run_memory_comparison import (  # noqa: E402
 )
 
 DATASET_PATH = ROOT / "eval" / "memory_continuity_eval_dataset.json"
-DATASET_SHA256 = "83cedefdb13c9a4b1cea441b4ddf1ac20c9c6d0c02c5241294ce54e0a204f4b5"
+DATASET_SHA256 = "8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4"
 GREEN_LEGACY_NEW_FIELDS = ("related_memories", "memory_notice", "counts", "working_set")
 
 
@@ -639,3 +639,173 @@ def test_a_passed_report_requires_complete_real_evidence(dataset):
     unreproduced["reproducibility"]["status"] = "incomplete"
     with pytest.raises(ComparisonFailed, match="reproducibility"):
         validate_comparison_report(unreproduced, evidence={"cache": "sealed"})
+
+
+# --- T087: the tracked target-host smoke record --------------------------------
+
+
+def test_target_host_smoke_record_is_complete_and_never_fakes_a_pass():
+    """T087/FR-037/SC-014: per-host availability, compatibility and probe evidence."""
+    record = json.loads((ROOT / "eval" / "target-host-smoke-014.json").read_text(encoding="utf-8"))
+    assert record["report_type"] == "target-host-smoke"
+    hosts = record["hosts"]
+    assert set(hosts) == {"dsh", "chatgpt_app", "claude_code"}
+    required = {"must_pass", "status", "checked_at", "availability", "compatibility",
+                "probe_commands", "raw_observation", "reason"}
+    for name, host in hosts.items():
+        assert required <= set(host), (name, sorted(required - set(host)))
+    for name in ("chatgpt_app", "claude_code"):
+        assert hosts[name]["status"] != "passed", "an unexecuted host is never a pass"
+    dsh = hosts["dsh"]
+    assert dsh["must_pass"] is True
+    if dsh["status"] == "passed":
+        assert dsh["work_package_continuation_observed"]
+        assert dsh["projection_direct_read_observed"]
+    else:
+        assert dsh["reason"]
+
+
+def test_tracked_projection_direct_read_record_is_honest():
+    """T087/T065: the canonical direct-read evidence is on a tracked path."""
+    record = json.loads((ROOT / "eval" / "projection-direct-read-014.json").read_text(encoding="utf-8"))
+    layers = record["layers"]
+    assert set(layers) >= {"filesystem", "dsh_host_observation", "protocol"}
+    assert layers["filesystem"]["observed"] is True
+    host_layer = layers["dsh_host_observation"]
+    if host_layer["status"] == "passed":
+        assert host_layer["observed"] is True
+        assert record["conclusion"] == "passed"
+    else:
+        assert record["conclusion"] == "failed"
+
+
+def test_tracked_hard_metrics_never_reports_an_unmeasured_zero():
+    """T098: a zero denominator is reported as not_measurable, never as 0."""
+    record = json.loads((ROOT / "eval" / "hard-metrics-014.json").read_text(encoding="utf-8"))
+    leakage = record["metrics"]["cross_domain_leakage"]
+    if not leakage.get("examined"):
+        assert leakage.get("state") == "not_measurable", leakage
+        assert leakage.get("value") is None, leakage
+    quarantined = record["metrics"]["quarantined_exclusion"]
+    if quarantined.get("quarantined_status_observed") != "quarantined":
+        assert quarantined.get("state") == "not_measurable", quarantined
+
+
+# --- T058 runner wiring: payload schema + per-identity binding -----------------
+
+
+def test_tool_payload_addresses_the_scope_through_the_tool_schema():
+    """T058: ``search_knowledge`` takes ``domain_scope``; ``start_work`` a string scope_ref."""
+    from run_memory_comparison import WORK_TOOL, tool_payload
+
+    memory_policy = {"memory_attachment_enabled": True, "working_set_enabled": True}
+    baseline_policy = {"memory_attachment_enabled": False, "working_set_enabled": False}
+    search = tool_payload("search_knowledge", {"question": "q"},
+                          parameters={"session_id": "s", "memory_context": "c"},
+                          policy=memory_policy, scope_ref="slug-x", top_k=5)
+    assert search == {"query": "q", "domain_scope": ["slug-x"], "top_k": 5,
+                      "session_id": "s", "memory_context": "c"}
+    assert "scope_ref" not in search
+    baseline = tool_payload("search_knowledge", {"question": "q"},
+                            parameters={"session_id": None, "memory_context": None},
+                            policy=baseline_policy, scope_ref="slug-x")
+    assert "session_id" not in baseline and "memory_context" not in baseline
+    work = tool_payload(WORK_TOOL, {"question": "q"},
+                        parameters={"session_id": "s", "memory_context": None},
+                        policy=memory_policy, scope_ref="slug-x")
+    assert work == {"scope_ref": "slug-x", "include_working_set": True, "session_id": "s"}
+
+
+def test_identity_environment_binds_and_restores_every_key(monkeypatch):
+    """T058: each arm is pointed at its own restored store and the env is restored."""
+    import os
+    from types import SimpleNamespace
+
+    from run_memory_comparison import _IDENTITY_ENV_KEYS, identity_environment
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:5432/rag_mcp")
+    monkeypatch.setenv("DATABASE_URL_SYNC", "postgresql+psycopg2://u:p@h:5432/rag_mcp")
+    identity = SimpleNamespace(database="memory_consolidation_013_014_run_0",
+                               qdrant_url="http://127.0.0.1:18900",
+                               data_root="C:/t014c/run/00/root", label="record/with_memory")
+    before = {key: os.environ.get(key) for key in _IDENTITY_ENV_KEYS}
+    with identity_environment(identity, memory_enabled=True):
+        assert os.environ["DATABASE_URL"].endswith("/memory_consolidation_013_014_run_0")
+        assert os.environ["DATABASE_URL_SYNC"].endswith("/memory_consolidation_013_014_run_0")
+        assert os.environ["QDRANT_URL"] == "http://127.0.0.1:18900"
+        assert os.environ["DATA_ROOT"] == "C:/t014c/run/00/root"
+        assert os.environ["MEMORY_AWARE_RETRIEVAL_ENABLED"] == "true"
+        assert os.environ["AGENTIC_RETRIEVAL_ENABLED"] == "false"
+    assert {key: os.environ.get(key) for key in _IDENTITY_ENV_KEYS} == before
+
+
+def test_runner_uses_the_shared_implementations_with_identity_services():
+    """T058: the runner must not import tool names that do not exist, and must bind."""
+    source = (ROOT / "eval" / "run_memory_comparison.py").read_text(encoding="utf-8")
+    assert "from rag_mcp.mcp.search_knowledge import search_knowledge_core" in source
+    assert "from rag_mcp.mcp.search_knowledge import search_knowledge\n" not in source
+    assert "from rag_mcp.mcp.start_work import start_work\n" not in source
+    assert "def identity_environment(" in source
+    assert "invoke_async" in source
+    assert "async def call_tool(" in source
+
+
+def test_forbidden_claims_are_not_hit_by_a_shared_heading(dataset):
+    """T058: the forbidden claim locators share the evidence heading, so a heading
+    match is not a forbidden hit; only a real memory_id/scope can be one."""
+    from run_memory_comparison import observe_response
+
+    query = dataset["queries"][0]
+    assert any(item["kind"] == "banned_claim" for item in query["forbidden_items"])
+    response = {
+        "completion_status": "complete", "request_id": "r",
+        "evidence": [{"evidence_id": "e-1", "source_id": "1", "source_version": "1",
+                      "source_position": "2026-09-01 Weekly Sync > action items"}],
+    }
+    observation = observe_response(query, response, arm="without_memory", round_name="record")
+    assert observation.forbidden_hits == ()
+    assert observation.hits, "the required heading must still resolve from evidence"
+
+
+def test_memory_arm_session_id_is_a_stable_valid_uuid(dataset):
+    """T058: the tool validates session_id as a UUID and record/replay share it."""
+    import uuid as uuid_module
+
+    from run_memory_comparison import arm_session_id
+
+    snapshot = dataset["snapshot_hash"]
+    record = arm_session_id("with_memory", snapshot)
+    replay = arm_session_id("with_memory", snapshot)
+    assert uuid_module.UUID(record)
+    assert record == replay, "the same arm must use the same session in both rounds"
+    assert arm_session_id("without_memory", snapshot) != record
+
+
+def test_gate_report_archiver_archives_and_refuses_overwrite(tmp_path):
+    """T059: the gate report is an archive of the validated reports, never a rewrite."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "archive_memory_gate_report", ROOT / "eval" / "archive_memory_gate_report.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    record = tmp_path / "memory-record.json"
+    replay = tmp_path / "memory-replay.json"
+    record.write_text(json.dumps({"status": "incomplete"}), encoding="utf-8")
+    replay.write_text(json.dumps({
+        "status": "failed", "default_enable_eligible": False,
+        "gates": {"quality": {"status": "passed"}, "safety": {"status": "failed"},
+                  "regression": {"status": "incomplete"}},
+        "relative_gain": {"value": 0.0, "zero_baseline": False},
+        "default_configuration": {"switches_changed": False},
+    }), encoding="utf-8")
+    output = tmp_path / "memory-gate-report.json"
+    arguments = ["--record", str(record), "--replay", str(replay), "--output", str(output)]
+    assert module.main(arguments) == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["default_enable_eligible"] is False
+    assert payload["gates"]["quality"]["status"] == "passed"
+    assert "default_enable_eligible=False" in payload["conclusion"]
+    assert payload["archive"]["replay"]["sha256"]
+    assert module.main(arguments) == 2, "an existing gate report is never overwritten"

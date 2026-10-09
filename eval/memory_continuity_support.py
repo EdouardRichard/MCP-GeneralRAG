@@ -617,6 +617,25 @@ class ToolCallCache:
         self._write(key, {'parser': CACHE_PARSER_VERSION, 'reason': None, 'output': output})
         return output
 
+    async def invoke_async(self, key: str, call):
+        """Async sibling of :meth:`invoke` for tool calls that must be awaited.
+
+        Same sealed semantics: ``record`` performs the real awaited call and
+        persists success *and* failure; ``replay`` consumes the recorded outcome
+        and never runs the call.
+        """
+        if self.mode == 'replay':
+            return self.invoke(key, None)
+        self.real_calls += 1
+        try:
+            output = await call()
+        except Exception as error:  # noqa: BLE001 - a real failure is a recorded outcome
+            self._write(key, {'parser': CACHE_PARSER_VERSION,
+                              'reason': f'{type(error).__name__}: {error}', 'output': None})
+            raise
+        self._write(key, {'parser': CACHE_PARSER_VERSION, 'reason': None, 'output': output})
+        return output
+
     def seal(self, manifest_path, *, dataset_hash: str, snapshot_hash: str,
              model_version: str = 'none', responses: dict | None = None,
              hard_metrics: dict | None = None) -> dict:

@@ -1,0 +1,9 @@
+- insert:
+    - id: mcp-014-writer
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory014writer
+        transport: streamable-http
+        url: http://127.0.0.1:18080/mcp
+        failOnStartupError: true
+        toolCallTimeoutMs: 120000

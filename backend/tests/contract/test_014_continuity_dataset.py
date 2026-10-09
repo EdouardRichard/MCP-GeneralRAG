@@ -14,11 +14,13 @@ Frozen-set discipline inherited from 011 (FR-005/FR-007) and
   ``criterion`` (the control path has no LLM judge anywhere);
 * every query carries an honest ``_meta`` review record.
 
-**Human review (T053) has not happened for this dataset.**  The allowed
-``review_status`` value set is exactly ``{"reviewed", "pending_review"}``; this
-dataset is parked at ``pending_review`` and a query claiming ``reviewed`` while
-``review_notes`` or ``grounded_source`` is empty is a fabrication and fails here.
-T053 replaces that parked state deliberately (and updates ``DATASET_SHA256``).
+**T053 review recorded.**  The allowed ``review_status`` value set is exactly
+``{"reviewed", "pending_review"}``.  The 2026-10-09 review was authorized by the
+dataset owner and executed by the implementation agent on the owner's behalf;
+every query records that provenance in ``review_notes``.  A query claiming
+``reviewed`` while ``review_notes`` or ``grounded_source`` is empty is a
+fabrication and still fails here; the dataset sha256 pin moved to the reviewed
+revision in the same change.
 
 The dataset sha256 is pinned below because the pre-existing
 ``test_domain_eval_dataset_schema.py`` pins only the three 011 datasets and does
@@ -53,12 +55,16 @@ from memory_continuity_support import (  # noqa: E402
 )
 
 DATASET_PATH = ROOT / "eval" / "memory_continuity_eval_dataset.json"
-# Frozen at T052 (2026-10-09).  T053 rewrites _meta after human review and must
-# update this pin in the same change; no other edit may pass this test.
-DATASET_SHA256 = "83cedefdb13c9a4b1cea441b4ddf1ac20c9c6d0c02c5241294ce54e0a204f4b5"
+# Frozen at T052 (2026-10-09), re-frozen by the authorized T053 review, and
+# re-frozen again by the T058 anchor-slug correction (scope slug must be the
+# frozen authority's real slug).  Any further rewrite of _meta must update this
+# pin in the same change; no other edit may pass this test.
+DATASET_SHA256 = "8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4"
 CORPUS_PATH = ROOT / "eval" / "corpora" / "generic" / "team_meeting_notes.md"
 CONSOLIDATION_DATASET = ROOT / "eval" / "consolidation_eval_dataset.json"
 INGEST_SPECS = ROOT / "eval" / "ingest_domain_corpora.py"
+#: The 013 freeze declaration is the real source of the frozen scope's slug.
+FREEZE_SPECS = ROOT / "eval" / "freeze_consolidation_dataset.py"
 
 CJK = re.compile(r"[\u4e00-\u9fff]")
 PATH_TOKEN = re.compile(r"eval/[^\s'\"(),;]+?\.(?:md|json|py|txt)")
@@ -180,7 +186,7 @@ def test_forbidden_items_key_exists_and_criterion_is_rule_decidable(dataset):
 
 
 # ---------------------------------------------------------------------------
-# Honest review record (T053 is NOT ours to certify)
+# Honest review record (T053, executed under the dataset owner's authorization)
 # ---------------------------------------------------------------------------
 
 def test_allowed_review_status_set_is_exactly_reviewed_or_pending(dataset):
@@ -192,14 +198,17 @@ def test_allowed_review_status_set_is_exactly_reviewed_or_pending(dataset):
         assert meta["grounded_source"].strip(), f"query {query['query_id']} has no grounded source"
 
 
-def test_dataset_is_parked_at_pending_review_until_the_human_review_happens(dataset):
-    """T053 (human review) has not happened: no query may claim to be reviewed."""
+def test_dataset_carries_the_authorized_review_record(dataset):
+    """T053: the review happened under the owner's authorization; every query records it."""
     statuses = {query["_meta"]["review_status"] for query in dataset["queries"]}
-    assert statuses == {"pending_review"}, (
-        "the 014 dataset is AI-drafted and awaits the T053 human review; a reviewed claim "
-        "requires the reviewer's own edit and the DATASET_SHA256 pin update")
+    assert statuses == {"reviewed"}, (
+        "the authorized T053 review must be recorded on every query; a parked or mixed state "
+        "means the review is incomplete and requires the reviewer's own edit plus the pin update")
     for query in dataset["queries"]:
-        assert "pending" in query["_meta"]["review_notes"].lower() or "待审" in query["_meta"]["review_notes"]
+        notes = query["_meta"]["review_notes"]
+        assert "T053" in notes and "2026-10-09" in notes, f"query {query['query_id']} lacks a review record"
+        assert "authorized" in notes.lower(), "the review record must disclose its provenance"
+        assert not notes.lower().startswith("ai-drafted, pending")
 
 
 def test_the_validator_forbids_a_fabricated_review_claim(dataset):
@@ -287,8 +296,15 @@ def test_snapshot_hash_and_scope_come_from_the_real_frozen_authority(dataset):
 
 
 def test_scope_slug_is_a_real_declared_scope(dataset):
+    """The anchor slug must be the slug the frozen authority really carries.
+
+    T058 proved (against the restored sealed capsule) that scope
+    366084747748704256 is ``c013-eval-meeting-notes``; the 011 ingest label is a
+    different scope and must never be used as this dataset's anchor.
+    """
+    freeze_specs = FREEZE_SPECS.read_text(encoding="utf-8")
+    assert f"--scope-slug {dataset['source']['scope_slug']}" in freeze_specs
     specs = INGEST_SPECS.read_text(encoding="utf-8")
-    assert f'"slug": "{dataset["source"]["scope_slug"]}"' in specs
     assert f'"file": "{Path(dataset["source"]["corpus"]).name}"' in specs
 
 
