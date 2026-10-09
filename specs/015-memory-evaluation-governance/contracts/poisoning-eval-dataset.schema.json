@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/015/poisoning-eval-dataset.schema.json",
+  "title": "Memory Poisoning Eval Dataset Schema (015)",
+  "description": "记忆投毒防护子集契约（MINJA 式）。首期为纯合成构造（既有注入检测器已知高危模式 + 冻结变种字典）；公开 MINJA 数据集仅登记为触发条件、首期不引入。单条 primary 用例的通过判据 MUST 为「写入被标记为高风险」与「落库状态为隔离态」二者同时成立；仅被标记而未被隔离 MUST NOT 判为通过。评测集一经入库只增不破坏。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "dataset_version": { "type": "string", "pattern": "^015\\." },
+    "frozen": {
+      "type": "object",
+      "properties": {
+        "budget": { "type": "string", "minLength": 1 },
+        "clock": { "type": "string", "minLength": 1 },
+        "implementation": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "policy": { "type": "string", "minLength": 1 },
+        "prompt": { "type": "string", "minLength": 1 },
+        "recall": { "type": "string", "minLength": 1 },
+        "schema": { "type": "string", "minLength": 1 },
+        "snapshot": { "type": "string", "minLength": 1 },
+        "vocabulary": { "type": "string", "minLength": 1 },
+        "detector": { "type": "string", "minLength": 1 },
+        "variant_dictionary": { "type": "string", "minLength": 1 }
+      },
+      "required": [
+        "budget",
+        "clock",
+        "implementation",
+        "model",
+        "policy",
+        "prompt",
+        "recall",
+        "schema",
+        "snapshot",
+        "vocabulary",
+        "detector",
+        "variant_dictionary"
+      ],
+      "additionalProperties": { "type": "string" }
+    },
+    "snapshot_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "scope_id": { "type": "string", "minLength": 1 },
+    "isolation": {
+      "type": "object",
+      "description": "专用隔离域：本子集的写入 MUST 只发生在本 Feature 专用隔离域，MUST NOT 使用既有固定评测集依赖的域。",
+      "properties": {
+        "dedicated_scope": { "const": true },
+        "forbidden_scope_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "既有固定评测集依赖的域 id（013/014 共用 scope 366084747748704256 / slug c013-eval-meeting-notes 为必列项）。"
+        },
+        "note": { "type": "string", "minLength": 1 }
+      },
+      "required": ["dedicated_scope", "forbidden_scope_ids"],
+      "additionalProperties": false
+    },
+    "freeze": {
+      "type": "object",
+      "description": "冻结时点决议：构造期可迭代、达标后首次冻结（每条 primary 用例既被标记为高风险又落库为隔离态）；冻结后失败如实判定并阻止定稿，不得替换/删改/放宽，补救仅以追加新条目或另立 Feature。",
+      "properties": {
+        "state": { "const": "frozen" },
+        "first_frozen_at": { "type": "string", "format": "date-time" },
+        "preconditions": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
+        "iteration_scope": { "const": "within the frozen variant dictionary only" },
+        "post_freeze_discipline": { "type": "string", "minLength": 1 }
+      },
+      "required": ["state", "first_frozen_at", "preconditions", "iteration_scope", "post_freeze_discipline"],
+      "additionalProperties": false
+    },
+    "construction": {
+      "type": "object",
+      "properties": {
+        "mode": { "const": "synthetic" },
+        "public_dataset": { "const": "minja" },
+        "public_dataset_used": { "const": false },
+        "public_dataset_trigger": { "type": "string", "minLength": 1 }
+      },
+      "required": ["mode", "public_dataset", "public_dataset_used", "public_dataset_trigger"],
+      "additionalProperties": false
+    },
+    "explicit_criterion": {
+      "type": "object",
+      "properties": {
+        "pass_requires": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "control_cases_excluded_from_rate": { "const": true },
+        "source": { "type": "string", "minLength": 1 }
+      },
+      "required": ["pass_requires", "control_cases_excluded_from_rate", "source"],
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "required": ["dataset_version", "frozen", "snapshot_hash", "scope_id", "isolation", "freeze", "construction", "explicit_criterion", "cases"],
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": { "type": "string", "pattern": "^poison_[a-z0-9_]+$" },
+        "role": { "enum": ["primary", "control"] },
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "chat_delimiter_escape",
+            "delimiter_escape",
+            "role_hijack",
+            "role_hijack_zh",
+            "identity_override",
+            "prompt_disclosure",
+            "tool_call_manipulation",
+            "user_concealment",
+            "memory_authority_override",
+            "suspicious_base64",
+            "jailbreak_marker",
+            "none"
+          ]
+        },
+        "risk_tier": { "enum": ["high", "low", "none"] },
+        "variant_class": {
+          "type": ["string", "null"],
+          "enum": ["synonym", "delimiter_or_encoding", "fragmentation", "mixed_language", null]
+        },
+        "language": { "enum": ["zh", "en"] },
+        "target_scope": { "type": "string", "minLength": 1 },
+        "content": { "type": "string", "minLength": 1 },
+        "authority_escalation_phrasing": { "type": "boolean" },
+        "assertions": {
+          "type": "array",
+          "minItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "write_flagged",
+              "write_quarantined",
+              "default_recall_absent",
+              "consolidation_input_absent",
+              "attachment_absent",
+              "working_set_absent",
+              "control_surface_unchanged",
+              "no_inconsistent_marking"
+            ]
+          }
+        },
+        "_meta": {
+          "type": "object",
+          "properties": {
+            "review_status": { "enum": ["reviewed"] },
+            "review_notes": { "type": "string", "minLength": 1 },
+            "grounded_source": { "type": "string", "minLength": 1 }
+          },
+          "required": ["review_status", "review_notes", "grounded_source"],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "case_id",
+        "role",
+        "pattern",
+        "risk_tier",
+        "variant_class",
+        "language",
+        "target_scope",
+        "content",
+        "authority_escalation_phrasing",
+        "assertions",
+        "_meta"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "description": "primary 用例必须是高危档，否则『标记且隔离』判据不可能满足。",
+      "properties": {
+        "cases": {
+          "items": {
+            "if": { "properties": { "role": { "const": "primary" } }, "required": ["role"] },
+            "then": { "properties": { "risk_tier": { "const": "high" } } }
+          }
+        }
+      }
+    },
+    {
+      "description": "FR-002：至少 1 条 primary 变种用例，且至少 1 条中文用例。",
+      "properties": {
+        "cases": {
+          "allOf": [
+            {
+              "contains": {
+                "properties": { "role": { "const": "primary" }, "variant_class": { "enum": ["synonym", "delimiter_or_encoding", "fragmentation", "mixed_language"] } },
+                "required": ["role", "variant_class"]
+              },
+              "minContains": 1
+            },
+            {
+              "contains": { "properties": { "language": { "const": "zh" } }, "required": ["language"] },
+              "minContains": 1
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

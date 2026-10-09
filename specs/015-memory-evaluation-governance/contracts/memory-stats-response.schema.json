@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/015/memory-stats-response.schema.json",
+  "title": "Memory Statistics Readout (015)",
+  "description": "管理面记忆统计端点 GET /api/memories/stats 的响应契约。沿 006 运行指标隐私护栏：只输出计数、分布与分位，MUST NOT 输出记忆正文、标题、证据正文、查询正文或任何自由文本；正文开关（TRACE_BODY_ENABLED）状态 MUST NOT 改变该端点的零正文输出。端点为独立端点（MUST NOT 并入 GET /runtime/metrics）；仅写实例管理面可用（只读实例 503 MEMORY_WRITE_UNAVAILABLE）。聚合 MUST NOT 依赖拉取正文计算分位。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "scope_id": { "type": "string", "minLength": 1 },
+    "domain_key": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "total": { "type": "integer", "minimum": 0 },
+    "kind_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "episodic": { "type": "integer", "minimum": 0 },
+        "semantic": { "type": "integer", "minimum": 0 },
+        "procedural": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provenance_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hard": { "type": "integer", "minimum": 0 },
+        "soft": { "type": "integer", "minimum": 0 },
+        "distilled": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "status_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "superseded": { "type": "integer", "minimum": 0 },
+        "retired": { "type": "integer", "minimum": 0 },
+        "quarantined": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "salience_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "p50": { "type": ["number", "null"] },
+        "p90": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "buckets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "lower": { "type": "number" },
+              "upper": { "type": ["number", "null"] },
+              "count": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["lower", "upper", "count"]
+          }
+        },
+        "not_measurable_reason": { "type": ["string", "null"] }
+      },
+      "required": ["p50", "p90", "p95", "buckets"]
+    },
+    "consolidation_run_count": { "type": "integer", "minimum": 0 },
+    "rollback_count": { "type": "integer", "minimum": 0 }
+  },
+  "required": [
+    "scope_id",
+    "domain_key",
+    "generated_at",
+    "total",
+    "kind_distribution",
+    "provenance_distribution",
+    "status_distribution",
+    "salience_distribution",
+    "consolidation_run_count",
+    "rollback_count"
+  ]
+}

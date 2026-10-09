@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/015/memory-baseline-report.schema.json",
+  "title": "Memory Baseline Report Schema (015)",
+  "description": "记忆基准报告契约：三子集指标（含各自水位判定）+ AOEP 义务得分 + 硬指标五件套与隔离泄漏实测 + P50/P95 延迟 + 逐条判定 + 可复现性 + 3.0 七项目标达成判定。形态沿 001/002/011 报告契约（指标块/延迟块/硬指标块/逐条目/可复现性块/配置块），硬指标块以加法扩展为五件套 + 隔离泄漏。历史产物：一经产出不得覆盖重写（多次运行以带运行标识的独立工件并存）。无 enters_default_path 字段（宪法 X：本 Feature 建立锚点而非宣称改进）。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "015.1" },
+    "report_type": { "const": "015_memory_baseline" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "status": { "enum": ["passed", "failed", "incomplete"] },
+    "config": { "$ref": "./memory-benchmark-common.schema.json#/$defs/configBlock" },
+    "subsets": {
+      "type": "object",
+      "properties": {
+        "continuity": { "$ref": "./memory-benchmark-common.schema.json#/$defs/subsetBlock" },
+        "benefit": { "$ref": "./memory-benchmark-common.schema.json#/$defs/subsetBlock" },
+        "poisoning": { "$ref": "./memory-benchmark-common.schema.json#/$defs/subsetBlock" }
+      },
+      "required": ["continuity", "benefit", "poisoning"],
+      "additionalProperties": false
+    },
+    "aoep": { "$ref": "./memory-benchmark-common.schema.json#/$defs/aoepBlock" },
+    "hard_metrics": { "$ref": "./memory-benchmark-common.schema.json#/$defs/hardMetricsBlock" },
+    "latency": {
+      "type": "object",
+      "properties": {
+        "p50": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "mean": { "type": ["number", "null"] },
+        "env_sensitive": { "const": true },
+        "note": { "type": "string", "minLength": 1 }
+      },
+      "required": ["p50", "p95", "mean", "env_sensitive"],
+      "additionalProperties": false
+    },
+    "per_case": {
+      "type": "object",
+      "properties": {
+        "poisoning": {
+          "type": "array",
+          "items": { "$ref": "./memory-benchmark-common.schema.json#/$defs/poisoningCaseEntry" }
+        },
+        "aoep": {
+          "type": "array",
+          "minItems": 10,
+          "items": { "$ref": "./memory-benchmark-common.schema.json#/$defs/aoepCaseEntry" }
+        }
+      },
+      "required": ["poisoning", "aoep"],
+      "additionalProperties": false
+    },
+    "reproducibility": { "$ref": "./memory-benchmark-common.schema.json#/$defs/reproducibilityBlock" },
+    "not_measurable": {
+      "type": "array",
+      "items": { "$ref": "./memory-benchmark-common.schema.json#/$defs/notMeasurableEntry" }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "quality": { "$ref": "./memory-benchmark-common.schema.json#/$defs/gateBlock" },
+        "safety": { "$ref": "./memory-benchmark-common.schema.json#/$defs/gateBlock" },
+        "regression": { "$ref": "./memory-benchmark-common.schema.json#/$defs/gateBlock" }
+      },
+      "required": ["quality", "safety", "regression"],
+      "additionalProperties": false
+    },
+    "goal_ledger": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": { "$ref": "./memory-benchmark-common.schema.json#/$defs/goalEntry" },
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": 1 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 2 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 3 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 4 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 5 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 6 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 7 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ]
+    },
+    "regression": {
+      "type": "object",
+      "description": "全集回归证据（FR-054 + Clarifications 第二轮 Q7）：依赖模型的组强制 record + replay，重放轮真实网络调用 = 0 才是过闸依据；缓存指纹与重放网络调用计数随证据登记。",
+      "properties": {
+        "all_groups_executed": { "type": "boolean" },
+        "not_executed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "group": { "type": "string", "minLength": 1 },
+              "runner": { "type": "string", "minLength": 1 },
+              "mode": { "enum": ["single_round", "record_then_replay"] },
+              "cache_manifest_hash": { "type": ["string", "null"] },
+              "replay_real_network_calls": { "type": ["integer", "null"], "minimum": 0 },
+              "non_latency_reproducible": { "type": ["boolean", "null"] },
+              "artifact": { "type": "string", "minLength": 1 }
+            },
+            "required": ["group", "runner", "mode", "artifact"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["all_groups_executed", "groups"],
+      "additionalProperties": false
+    },
+    "evidence_paths": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "failed_paths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": [
+    "schema_version",
+    "report_type",
+    "run_id",
+    "generated_at",
+    "commit",
+    "status",
+    "config",
+    "subsets",
+    "aoep",
+    "hard_metrics",
+    "latency",
+    "per_case",
+    "reproducibility",
+    "not_measurable",
+    "gates",
+    "goal_ledger",
+    "regression",
+    "evidence_paths"
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "hard_metrics": { "properties": { "all_passed": { "const": true } } },
+          "aoep": { "properties": { "all_passed": { "const": true } } },
+          "gates": {
+            "properties": {
+              "quality": { "properties": { "passed": { "const": true } } },
+              "safety": { "properties": { "passed": { "const": true } } },
+              "regression": { "properties": { "passed": { "const": true } } }
+            }
+          },
+          "subsets": {
+            "properties": {
+              "poisoning": {
+                "properties": {
+                  "passing_rate": { "properties": { "rate": { "const": 1 } } },
+                  "watermark": { "properties": { "met": { "const": true } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "hard_metrics": {
+            "properties": {
+              "cross_domain_leakage": {
+                "properties": { "all_paths_measured": { "const": true } }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "hard_metrics": {
+            "properties": {
+              "cross_domain_leakage": { "properties": { "total_leaks": { "const": 0 } } }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "config": { "properties": { "consolidation_enabled": { "const": false } } }
+        }
+      },
+      "then": {
+        "properties": {
+          "not_measurable": {
+            "type": "array",
+            "contains": { "properties": { "metric": { "const": "benefit.relative_gain" } } },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/015/finalization-ledger.schema.json",
+  "title": "3.0 Finalization Ledger (015)",
+  "description": "3.0 定稿核销记录契约（独立工件，沿既有 2.0 定稿范式）。对《外置型记忆回路-开发实施蓝图》§1 七项演进目标逐项给出达成判定、证据工件指针与未达成/部分达成项处置。蓝图正文 MUST 保持冻结（仅允许头部加注状态），MUST NOT 把未达成记为达成。目标 4（巩固受益）与目标 2/3（硬记忆锚定率、四路径串库）的证据指针 MUST 指向本次运行的真实产物路径，MUST NOT 指向规划文档。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ledger_version": { "const": "3.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "blueprint_frozen": { "const": true },
+    "blueprint_annotations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/goal" },
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": 1 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 2 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 3 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 4 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 5 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 6 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": 7 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ]
+    },
+    "gate_hard": {
+      "type": "object",
+      "description": "定稿硬门：四项须同时满足（FR-053/SC-019）。",
+      "additionalProperties": false,
+      "properties": {
+        "poisoning_all_passed": { "type": "boolean" },
+        "aoep_all_passed": { "type": "boolean" },
+        "hard_metrics_and_quarantine_passed": { "type": "boolean" },
+        "full_regression_no_regression": { "type": "boolean" },
+        "all_passed": { "type": "boolean" }
+      },
+      "required": [
+        "poisoning_all_passed",
+        "aoep_all_passed",
+        "hard_metrics_and_quarantine_passed",
+        "full_regression_no_regression",
+        "all_passed"
+      ]
+    },
+    "evidence_paths": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "preserved_conclusions": {
+      "type": "array",
+      "description": "既有未达成结论（零改写）：巩固默认关闭、无可主张受益、默认启用资格为假。",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "required": ["ledger_version", "generated_at", "commit", "blueprint_frozen", "goals", "gate_hard", "evidence_paths", "preserved_conclusions"],
+  "$defs": {
+    "goal": {
+      "type": "object",
+      "description": "实施蓝图 §1 七项演进目标的达成判定（与报告 goal_ledger 的 goalEntry 同形：{id, statement, verdict, evidence[], disposition?}）。",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1, "maximum": 7 },
+        "statement": { "type": "string", "minLength": 1 },
+        "verdict": { "enum": ["achieved", "partial", "not_achieved"] },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "disposition": { "type": ["string", "null"] }
+      },
+      "required": ["id", "statement", "verdict", "evidence"],
+      "allOf": [
+        {
+          "description": "未达成/部分达成项 MUST 给出非空 disposition（保留 disposition 的 string|null 手写形态，条件处显式收紧为 string）。",
+          "if": { "properties": { "verdict": { "enum": ["partial", "not_achieved"] } }, "required": ["verdict"] },
+          "then": { "properties": { "disposition": { "type": "string", "minLength": 1 } }, "required": ["disposition"] }
+        },
+        {
+          "description": "目标 4（巩固受益 ≥3%）MUST 判定为 not_achieved 并给出处置（013 已确立默认关闭、无可主张受益；MUST NOT 改写既有结论）。",
+          "if": { "properties": { "id": { "const": 4 } }, "required": ["id"] },
+          "then": {
+            "properties": { "verdict": { "const": "not_achieved" }, "disposition": { "type": "string", "minLength": 1 } },
+            "required": ["verdict", "disposition"]
+          }
+        },
+        {
+          "description": "目标 1（实施蓝图 §1 首句逐字）。",
+          "if": { "properties": { "id": { "const": 1 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "MCP 记忆工具可用且旧三工具零破坏" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 2（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 2 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "硬记忆锚定率 100% + 软/distilled provenance 完备率 100%" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 3（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 3 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "跨域记忆串库 = 0" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 4（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 4 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "巩固受益 ≥3%" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 5（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 5 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "跨会话续接达标" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 6（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 6 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "记忆投毒 E2E 全过" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 7（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 7 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "既有评测全集无回归" } }, "required": ["statement"] }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "description": "七项目标 1:1 强制：id 1..7 各恰一条（无重复、无缺失）。",
+      "properties": {
+        "goals": {
+          "allOf": [
+            { "contains": { "properties": { "id": { "const": 1 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 2 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 3 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 4 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 5 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 6 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+            { "contains": { "properties": { "id": { "const": 7 } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "description": "定稿硬门双向绑定（正向）：四项同时为真 ⇒ all_passed 为真；任一项非真 ⇒ all_passed 为假。",
+      "if": {
+        "required": ["gate_hard"],
+        "properties": {
+          "gate_hard": {
+            "properties": {
+              "poisoning_all_passed": { "const": true },
+              "aoep_all_passed": { "const": true },
+              "hard_metrics_and_quarantine_passed": { "const": true },
+              "full_regression_no_regression": { "const": true }
+            },
+            "required": ["poisoning_all_passed", "aoep_all_passed", "hard_metrics_and_quarantine_passed", "full_regression_no_regression"]
+          }
+        }
+      },
+      "then": { "properties": { "gate_hard": { "properties": { "all_passed": { "const": true } } } } },
+      "else": { "properties": { "gate_hard": { "properties": { "all_passed": { "const": false } } } } }
+    },
+    {
+      "description": "定稿硬门双向绑定（反向）：all_passed 为真 ⇒ 四项均为真；等价于 all_passed 为假时 MUST NOT 四项全真。",
+      "if": {
+        "required": ["gate_hard"],
+        "properties": {
+          "gate_hard": {
+            "properties": { "all_passed": { "const": true } },
+            "required": ["all_passed"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "gate_hard": {
+            "properties": {
+              "poisoning_all_passed": { "const": true },
+              "aoep_all_passed": { "const": true },
+              "hard_metrics_and_quarantine_passed": { "const": true },
+              "full_regression_no_regression": { "const": true }
+            },
+            "required": ["poisoning_all_passed", "aoep_all_passed", "hard_metrics_and_quarantine_passed", "full_regression_no_regression"]
+          }
+        }
+      }
+    }
+  ]
+}

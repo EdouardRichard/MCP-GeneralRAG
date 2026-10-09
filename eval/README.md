@@ -348,3 +348,12 @@ unreachable), one real transport attempt is credited once (a `call_id` distingui
 the started/settled receipts), and the warm-up is awaited with one discarded real
 recall per arm so the first timed query measures retrieval instead of a cold start.
 
+### 015 记忆评测治理与 3.0 定稿（数据集 / 报告 / 运行器）
+
+015 在既有评测面上**只增不破坏**：不改动 001–014 的任何数据集、报告、运行器或测试
+断言，新增两份冻结数据集（投毒防护子集、AOEP 状态义务用例）、一份基准报告契约族、
+两个薄入口运行器（`run_memory_baseline.py`、`run_regression_015.py`）与一个只读统计
+端点。本节登记 015 的数据集、报告与运行器用法及重跑口径，供后续运行者按同一口径复核。
+
+（本节内容随 T002、T037 逐项补齐。）
+

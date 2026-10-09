@@ -1,0 +1,639 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-rag-mcp.local/schemas/015/memory-benchmark-common.schema.json",
+  "title": "Memory Benchmark Report — Shared Definitions (015)",
+  "description": "记忆基准报告共享 $defs：指标块、比率块、延迟块、硬指标五件套块、子集块、AOEP 义务块、投毒/AOEP 逐条条目、可复现性块、配置块、闸门块、核销项。由 memory-baseline-report.schema.json 引用；字段语义沿用 002/011 eval-comparison-report 与 domain-baseline-common，并以加法方式扩展硬指标块（五件套 + 隔离泄漏）与零分母编码（not_measurable 而非 0）。",
+  "$defs": {
+    "metricBlock": {
+      "type": "object",
+      "properties": {
+        "mean": { "type": "number" },
+        "min": { "type": "number" },
+        "max": { "type": "number" }
+      },
+      "required": ["mean", "min", "max"],
+      "additionalProperties": false
+    },
+    "rateBlock": {
+      "type": "object",
+      "description": "比率型指标。零分母 MUST 编码为 rate=null 且 value=\"not_measurable\" 并给 reason，MUST NOT 记为 0 或 1。",
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "required": ["passed", "total", "rate", "value"],
+      "allOf": [
+        {
+          "description": "零分母 MUST 记为 not_measurable 且给出原因；MUST NOT 记为 0 或 1（FR-024/SC-011）。",
+          "if": { "properties": { "total": { "const": 0 } }, "required": ["total"] },
+          "then": {
+            "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+            "required": ["rate", "value", "reason"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "countBlock": {
+      "type": "object",
+      "description": "计数型观测。零分母 MUST 为 state=\"not_measurable\" 并给 reason。",
+      "properties": {
+        "examined": { "type": "integer", "minimum": 0 },
+        "occurrences": { "type": "integer", "minimum": 0 },
+        "state": { "enum": ["measured", "not_measurable"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "required": ["examined", "occurrences", "state"],
+      "allOf": [
+        {
+          "description": "零分母 MUST 记为 not_measurable 且给出原因；MUST NOT 记为达标（FR-024/FR-032）。",
+          "if": { "properties": { "examined": { "const": 0 } }, "required": ["examined"] },
+          "then": { "properties": { "state": { "const": "not_measurable" } }, "required": ["state", "reason"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "latencyBlock": {
+      "type": "object",
+      "description": "延迟块。仅记录，不设通过门、不参与容差判定（env_sensitive=true）。样本为空时 p50/p95 MUST 为 null 并记入 not_measurable，不得取 0。",
+      "properties": {
+        "p50": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "mean": { "type": ["number", "null"] },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] }
+      },
+      "required": ["p50", "p95", "mean"],
+      "additionalProperties": false
+    },
+    "leakPath": {
+      "type": "object",
+      "properties": {
+        "examined": { "type": "integer", "minimum": 0 },
+        "leaks": { "type": "integer", "minimum": 0 },
+        "value": { "type": ["number", "null"] },
+        "state": { "enum": ["measured", "not_measurable"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "required": ["examined", "leaks", "value", "state"],
+      "allOf": [
+        {
+          "description": "该路径零分母即不可测量，MUST NOT 记为 0 达标（FR-028/SC-012）。",
+          "if": { "properties": { "examined": { "const": 0 } }, "required": ["examined"] },
+          "then": {
+            "properties": { "value": { "type": "null" }, "state": { "const": "not_measurable" } },
+            "required": ["value", "state", "reason"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "hardMetricsBlock": {
+      "type": "object",
+      "description": "硬指标五件套 + 隔离泄漏附加项。安全类零容差，MUST NOT 以 1% 非延迟容差替代；每项 MUST 给出 caliber 与分母。",
+      "properties": {
+        "cross_domain_leakage": {
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "object",
+              "properties": {
+                "event_log": { "$ref": "#/$defs/leakPath" },
+                "relation": { "$ref": "#/$defs/leakPath" },
+                "vector": { "$ref": "#/$defs/leakPath" },
+                "file": { "$ref": "#/$defs/leakPath" }
+              },
+              "required": ["event_log", "relation", "vector", "file"],
+              "additionalProperties": false
+            },
+            "total_leaks": { "type": "integer", "minimum": 0 },
+            "all_paths_measured": { "type": "boolean" },
+            "all_passed": { "type": "boolean" }
+          },
+          "required": ["paths", "total_leaks", "all_paths_measured", "all_passed"],
+          "additionalProperties": false
+        },
+        "tool_schema_validity": {
+          "type": "object",
+          "description": "六工具契约合法率。字段与 rateBlock 同语义，另带工具清单与负例拒绝数（故不能与 additionalProperties:false 的 rateBlock 用 allOf 组合）。",
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 },
+            "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+            "reason": { "type": "string", "minLength": 1 },
+            "tools_checked": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "items": { "enum": ["search_knowledge", "get_evidence", "list_knowledge_domains", "recall_memory", "start_work", "record_memory"] }
+            },
+            "negative_controls_rejected": { "type": "integer", "minimum": 0 },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["passed", "total", "rate", "value", "tools_checked", "negative_controls_rejected", "caliber"],
+          "allOf": [
+            {
+              "description": "零分母守卫（FR-024/SC-011）：total=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason，MUST NOT 记为 0 或 1。",
+              "if": { "properties": { "total": { "const": 0 } }, "required": ["total"] },
+              "then": {
+                "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+                "required": ["rate", "value", "reason"]
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "source_locatability": {
+          "type": "object",
+          "description": "证据路径来源可定位率 100%（与记忆 provenance 完备率分开统计、不合并）。",
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 },
+            "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+            "reason": { "type": "string", "minLength": 1 },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["passed", "total", "rate", "value", "caliber"],
+          "allOf": [
+            {
+              "description": "零分母守卫（FR-024/SC-011）：total=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason，MUST NOT 记为 0 或 1。",
+              "if": { "properties": { "total": { "const": 0 } }, "required": ["total"] },
+              "then": {
+                "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+                "required": ["rate", "value", "reason"]
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "memory_provenance_completeness": {
+          "type": "object",
+          "description": "记忆路径 provenance 完备率 100%（hard 逐条锚定复验；soft/distilled 五元数据齐备）；分母分列。",
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 },
+            "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+            "reason": { "type": "string", "minLength": 1 },
+            "hard_items_examined": { "type": "integer", "minimum": 0 },
+            "soft_distilled_items_examined": { "type": "integer", "minimum": 0 },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["passed", "total", "rate", "value", "hard_items_examined", "soft_distilled_items_examined", "caliber"],
+          "allOf": [
+            {
+              "description": "零分母守卫（FR-024/SC-011）：total=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason，MUST NOT 记为 0 或 1。",
+              "if": { "properties": { "total": { "const": 0 } }, "required": ["total"] },
+              "then": {
+                "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+                "required": ["rate", "value", "reason"]
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "hard_memory_anchoring": {
+          "type": "object",
+          "description": "硬记忆锚定率 100%（无锚写入一律拒绝、无例外路径）；须给出被拒样本与错误码分布，且分母为非零真实硬记忆样本。",
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 },
+            "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+            "reason": { "type": "string", "minLength": 1 },
+            "rejected_samples": { "type": "array", "items": { "type": "object" } },
+            "error_code_distribution": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["passed", "total", "rate", "value", "rejected_samples", "error_code_distribution", "caliber"],
+          "allOf": [
+            {
+              "description": "零分母守卫（FR-024/SC-011）：total=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason，MUST NOT 记为 0 或 1。",
+              "if": { "properties": { "total": { "const": 0 } }, "required": ["total"] },
+              "then": {
+                "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+                "required": ["rate", "value", "reason"]
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "quarantined_leakage": {
+          "type": "object",
+          "properties": {
+            "default_recall": { "$ref": "#/$defs/countBlock" },
+            "consolidation_window": { "$ref": "#/$defs/countBlock" },
+            "attachment": { "$ref": "#/$defs/countBlock" },
+            "working_set": { "$ref": "#/$defs/countBlock" },
+            "control_surface": { "$ref": "#/$defs/countBlock" }
+          },
+          "required": ["default_recall", "consolidation_window", "attachment", "working_set", "control_surface"],
+          "additionalProperties": false
+        },
+        "projection_integrity": {
+          "type": "object",
+          "description": "投影完整率 100%（宪法 XIII 第一条 / 硬约束 6 / FR-057）：逐投影实测『可从 append-only 日志复算』与『运行期只读』，每投影各自给出分母；drift MUST 为 0。MUST NOT 以 route 打桩或组件测试替代该实测。supports_initial_state 为真表示该投影经 reducer 的 initial_state 加载路径复算而不依赖运行期物化回放（须显式记录，不得默认为真）。",
+          "properties": {
+            "views": {
+              "type": "object",
+              "properties": {
+                "relation": { "$ref": "#/$defs/projectionIntegrityView" },
+                "dense": { "$ref": "#/$defs/projectionIntegrityView" },
+                "links": { "$ref": "#/$defs/projectionIntegrityView" },
+                "summary": { "$ref": "#/$defs/projectionIntegrityView" },
+                "file": { "$ref": "#/$defs/projectionIntegrityView" },
+                "salience": { "$ref": "#/$defs/projectionIntegrityView" }
+              },
+              "required": ["relation", "dense", "links", "summary", "file", "salience"],
+              "additionalProperties": false
+            },
+            "all_views_measured": { "type": "boolean" },
+            "all_passed": { "type": "boolean" },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["views", "all_views_measured", "all_passed", "caliber"],
+          "additionalProperties": false
+        },
+        "state_metadata_completeness": {
+          "type": "object",
+          "description": "状态元数据齐备率 100%（宪法 XIII 第二条 / FR-058）：authority/scope/mutability/provenance/recoverability/actionability 六轴逐轴给出分母与齐备数；任一并集为空须记 not_measurable + 原因，MUST NOT 记为齐备。",
+          "properties": {
+            "authority": { "$ref": "#/$defs/metadataAxis" },
+            "scope": { "$ref": "#/$defs/metadataAxis" },
+            "mutability": { "$ref": "#/$defs/metadataAxis" },
+            "provenance": { "$ref": "#/$defs/metadataAxis" },
+            "recoverability": { "$ref": "#/$defs/metadataAxis" },
+            "actionability": { "$ref": "#/$defs/metadataAxis" },
+            "all_passed": { "type": "boolean" },
+            "caliber": { "type": "string", "minLength": 1 }
+          },
+          "required": ["authority", "scope", "mutability", "provenance", "recoverability", "actionability", "all_passed", "caliber"],
+          "additionalProperties": false
+        },
+        "all_passed": { "type": "boolean" }
+      },
+      "required": [
+        "cross_domain_leakage",
+        "tool_schema_validity",
+        "source_locatability",
+        "memory_provenance_completeness",
+        "hard_memory_anchoring",
+        "quarantined_leakage",
+        "projection_integrity",
+        "state_metadata_completeness",
+        "all_passed"
+      ],
+      "allOf": [
+        {
+          "description": "all_passed 为真 ⇒ 五件套各自达标（FR-033/SC-012）：四个比率块 MUST 100%（passed ≥ 1 且 rate = value = 1），串库块 MUST 四路径全测且 total_leaks = 0，隔离泄漏五处 occurrences MUST = 0。注意：四个比率块的 passed 是『通过条数』（整数，沿 014 口径），故以 rate/value = 1 表达『全过』，不可写为布尔 const true。",
+          "if": { "properties": { "all_passed": { "const": true } }, "required": ["all_passed"] },
+          "then": {
+            "properties": {
+              "tool_schema_validity": { "properties": { "passed": { "type": "integer", "minimum": 1 }, "rate": { "const": 1 }, "value": { "const": 1 } } },
+              "source_locatability": { "properties": { "passed": { "type": "integer", "minimum": 1 }, "rate": { "const": 1 }, "value": { "const": 1 } } },
+              "memory_provenance_completeness": { "properties": { "passed": { "type": "integer", "minimum": 1 }, "rate": { "const": 1 }, "value": { "const": 1 } } },
+              "hard_memory_anchoring": { "properties": { "passed": { "type": "integer", "minimum": 1 }, "rate": { "const": 1 }, "value": { "const": 1 } } },
+              "cross_domain_leakage": { "properties": { "all_paths_measured": { "const": true }, "total_leaks": { "const": 0 } } },
+              "quarantined_leakage": {
+                "properties": {
+                  "default_recall": { "properties": { "occurrences": { "const": 0 } } },
+                  "consolidation_window": { "properties": { "occurrences": { "const": 0 } } },
+                  "attachment": { "properties": { "occurrences": { "const": 0 } } },
+                  "working_set": { "properties": { "occurrences": { "const": 0 } } },
+                  "control_surface": { "properties": { "occurrences": { "const": 0 } } }
+                }
+              },
+              "projection_integrity": { "properties": { "all_views_measured": { "const": true }, "all_passed": { "const": true } } },
+              "state_metadata_completeness": { "properties": { "all_passed": { "const": true } } }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "poisoningCaseEntry": {
+      "type": "object",
+      "properties": {
+        "case_id": { "type": "string", "pattern": "^poison_[a-z0-9_]+$" },
+        "role": { "enum": ["primary", "control"] },
+        "pattern": { "type": "string", "minLength": 1 },
+        "risk_tier": { "enum": ["high", "low", "none"] },
+        "variant_class": { "type": ["string", "null"] },
+        "language": { "enum": ["zh", "en"] },
+        "flag_observed": { "type": ["string", "null"] },
+        "status_observed": { "type": ["string", "null"] },
+        "criterion_met": { "type": ["boolean", "null"] },
+        "six_assertions": {
+          "type": "object",
+          "properties": {
+            "write_flagged": { "type": "boolean" },
+            "write_quarantined": { "type": "boolean" },
+            "default_recall_absent": { "type": "boolean" },
+            "consolidation_input_absent": { "type": "boolean" },
+            "attachment_absent": { "type": "boolean" },
+            "working_set_absent": { "type": "boolean" },
+            "control_surface_unchanged": { "type": "boolean" },
+            "no_inconsistent_marking": { "type": "boolean" }
+          },
+          "required": [
+            "write_flagged",
+            "write_quarantined",
+            "default_recall_absent",
+            "consolidation_input_absent",
+            "attachment_absent",
+            "working_set_absent",
+            "control_surface_unchanged",
+            "no_inconsistent_marking"
+          ],
+          "additionalProperties": false
+        },
+        "control_surface_changes": { "type": "integer", "minimum": 0 },
+        "authority_gain_counts": {
+          "type": "object",
+          "properties": {
+            "became_hard": { "type": "integer", "minimum": 0 },
+            "entered_promotion_candidates": { "type": "integer", "minimum": 0 },
+            "auto_promoted_to_canonical": { "type": "integer", "minimum": 0 },
+            "gained_effective_authority_via_consolidation": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["became_hard", "entered_promotion_candidates", "auto_promoted_to_canonical", "gained_effective_authority_via_consolidation"],
+          "additionalProperties": false
+        },
+        "detector_available": { "type": "boolean" },
+        "not_measurable_reason": { "type": ["string", "null"] }
+      },
+      "required": ["case_id", "role", "pattern", "risk_tier", "language", "six_assertions", "control_surface_changes", "authority_gain_counts"],
+      "additionalProperties": false
+    },
+    "aoepCaseEntry": {
+      "type": "object",
+      "properties": {
+        "case_id": { "type": "string", "pattern": "^aoep_[a-z0-9_]+$" },
+        "invariant": { "enum": ["traceable_rollback", "deletion_propagation", "authority_monotonicity", "provenance_preservation", "scope_non_expansion"] },
+        "request_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed", "not_measurable"] },
+        "target_kind": { "type": ["string", "null"] },
+        "before_fingerprints": { "type": "object", "additionalProperties": { "type": "string" } },
+        "after_fingerprints": { "type": "object", "additionalProperties": { "type": "string" } },
+        "watermark_before": { "type": ["integer", "null"] },
+        "watermark_after": { "type": ["integer", "null"] },
+        "impact": {
+          "type": "object",
+          "properties": {
+            "entries": { "type": "integer", "minimum": 0 },
+            "projections": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+          },
+          "required": ["entries", "projections"],
+          "additionalProperties": false
+        },
+        "event_chain_closed": { "type": ["boolean", "null"] },
+        "re_rollback_consistent": { "type": ["boolean", "null"] },
+        "reproducible": { "type": ["boolean", "null"] },
+        "projection_denominators": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "isolated_scope_id": { "type": "string", "minLength": 1 },
+        "not_measurable_reason": { "type": ["string", "null"] }
+      },
+      "required": ["case_id", "invariant", "request_id", "status", "isolated_scope_id"],
+      "additionalProperties": false
+    },
+    "watermark": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["hard", "existing_criteria", "record_only"] },
+        "value": { "type": ["number", "string", "null"] },
+        "met": { "type": ["boolean", "null"] },
+        "source": { "type": "string", "minLength": 1 }
+      },
+      "required": ["kind", "value", "met", "source"],
+      "additionalProperties": false
+    },
+    "subsetBlock": {
+      "type": "object",
+      "properties": {
+        "size": { "type": "integer", "minimum": 0 },
+        "judged": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "passing_rate": { "$ref": "#/$defs/rateBlock" },
+        "watermark": { "$ref": "#/$defs/watermark" },
+        "caliber": { "type": "string", "minLength": 1 },
+        "not_measurable_reason": { "type": ["string", "null"] }
+      },
+      "required": ["size", "judged", "passed", "passing_rate", "watermark"],
+      "additionalProperties": false
+    },
+    "aoepBlock": {
+      "type": "object",
+      "properties": {
+        "by_invariant": {
+          "type": "object",
+          "properties": {
+            "traceable_rollback": { "$ref": "#/$defs/invariantScore" },
+            "deletion_propagation": { "$ref": "#/$defs/invariantScore" },
+            "authority_monotonicity": { "$ref": "#/$defs/invariantScore" },
+            "provenance_preservation": { "$ref": "#/$defs/invariantScore" },
+            "scope_non_expansion": { "$ref": "#/$defs/invariantScore" }
+          },
+          "required": ["traceable_rollback", "deletion_propagation", "authority_monotonicity", "provenance_preservation", "scope_non_expansion"],
+          "additionalProperties": false
+        },
+        "score": { "$ref": "#/$defs/rateBlock" },
+        "all_passed": { "type": "boolean" }
+      },
+      "required": ["by_invariant", "score", "all_passed"],
+      "additionalProperties": false
+    },
+    "invariantScore": {
+      "type": "object",
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "not_measurable": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["passed", "total", "failed", "not_measurable"],
+      "additionalProperties": false
+    },
+    "reproducibilityBlock": {
+      "type": "object",
+      "properties": {
+        "non_latency_reproducible": { "type": "boolean" },
+        "tolerance": { "type": "number" },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "metric": { "type": "string" },
+              "run_1": { "type": "number" },
+              "run_2": { "type": "number" },
+              "relative_delta": { "type": "number" },
+              "tolerance": { "type": "number" },
+              "passed": { "type": "boolean" },
+              "env_sensitive": { "type": "boolean" }
+            },
+            "required": ["metric", "run_1", "run_2", "relative_delta", "tolerance", "passed"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["non_latency_reproducible", "tolerance", "checks"],
+      "additionalProperties": false
+    },
+    "configBlock": {
+      "type": "object",
+      "properties": {
+        "dataset_paths": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "dataset_versions": { "type": "object", "additionalProperties": { "type": "string" } },
+        "snapshot_hash": { "type": "string", "minLength": 1 },
+        "embedding_model": { "type": "string", "minLength": 1 },
+        "reranker_model": { "type": ["string", "null"] },
+        "k": { "type": "integer", "minimum": 1 },
+        "consolidation_enabled": { "type": "boolean" },
+        "actual_run_mode": { "type": "string", "minLength": 1 },
+        "num_queries": { "type": "integer", "minimum": 1 },
+        "environment_fingerprint": { "type": "string", "minLength": 1 }
+      },
+      "required": ["dataset_paths", "dataset_versions", "snapshot_hash", "embedding_model", "k", "consolidation_enabled", "actual_run_mode", "num_queries", "environment_fingerprint"],
+      "additionalProperties": false
+    },
+    "gateBlock": {
+      "type": "object",
+      "properties": {
+        "passed": { "type": "boolean" },
+        "detail": { "type": "string", "minLength": 1 }
+      },
+      "required": ["passed", "detail"],
+      "additionalProperties": false
+    },
+    "goalEntry": {
+      "type": "object",
+      "description": "实施蓝图 §1 七项演进目标的达成判定（报告与定稿核销工件共用）。",
+      "properties": {
+        "id": { "type": "integer", "minimum": 1, "maximum": 7 },
+        "statement": { "type": "string", "minLength": 1 },
+        "verdict": { "enum": ["achieved", "partial", "not_achieved"] },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "disposition": { "type": ["string", "null"] }
+      },
+      "required": ["id", "statement", "verdict", "evidence"],
+      "allOf": [
+        {
+          "description": "未达成/部分达成项 MUST 给出非空 disposition（保留 disposition 的 string|null 手写形态，条件处显式收紧为 string）。",
+          "if": { "properties": { "verdict": { "enum": ["partial", "not_achieved"] } }, "required": ["verdict"] },
+          "then": { "properties": { "disposition": { "type": "string", "minLength": 1 } }, "required": ["disposition"] }
+        },
+        {
+          "description": "目标 4（巩固受益 ≥3%）MUST 判定为 not_achieved 并给出处置（013 已确立默认关闭、无可主张受益；MUST NOT 改写既有结论）。",
+          "if": { "properties": { "id": { "const": 4 } }, "required": ["id"] },
+          "then": {
+            "properties": { "verdict": { "const": "not_achieved" }, "disposition": { "type": "string", "minLength": 1 } },
+            "required": ["verdict", "disposition"]
+          }
+        },
+        {
+          "description": "目标 1（实施蓝图 §1 首句逐字）。",
+          "if": { "properties": { "id": { "const": 1 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "MCP 记忆工具可用且旧三工具零破坏" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 2（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 2 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "硬记忆锚定率 100% + 软/distilled provenance 完备率 100%" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 3（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 3 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "跨域记忆串库 = 0" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 4（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 4 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "巩固受益 ≥3%" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 5（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 5 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "跨会话续接达标" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 6（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 6 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "记忆投毒 E2E 全过" } }, "required": ["statement"] }
+        },
+        {
+          "description": "目标 7（实施蓝图 §1 逐字）。",
+          "if": { "properties": { "id": { "const": 7 } }, "required": ["id"] },
+          "then": { "properties": { "statement": { "const": "既有评测全集无回归" } }, "required": ["statement"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "notMeasurableEntry": {
+      "type": "object",
+      "properties": {
+        "metric": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "required": ["metric", "reason"],
+      "additionalProperties": false
+    },
+    "projectionIntegrityView": {
+      "type": "object",
+      "description": "单个投影的完整率分母与结论（FR-057）。examined 为该投影的实测样本量，drift 为复算与物化不一致次数。",
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+        "reason": { "type": "string", "minLength": 1 },
+        "examined": { "type": "integer", "minimum": 0 },
+        "drift": { "type": "integer", "minimum": 0 },
+        "criterion": { "type": "string", "minLength": 1 },
+        "supports_initial_state": { "type": "boolean" }
+      },
+      "required": ["passed", "total", "rate", "value", "examined", "drift", "criterion"],
+      "allOf": [
+        {
+          "description": "零分母守卫（FR-057/FR-024/SC-025）：examined=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason；该投影 MUST NOT 记为传播/完整达标。",
+          "if": { "properties": { "examined": { "const": 0 } }, "required": ["examined"] },
+          "then": {
+            "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+            "required": ["rate", "value", "reason"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "metadataAxis": {
+      "type": "object",
+      "description": "Governance 六轴之一的齐备率分母与结论（FR-058）。examined 为该轴实测样本量；missing 为缺失条数。",
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "value": { "oneOf": [{ "type": "number" }, { "const": "not_measurable" }] },
+        "reason": { "type": "string", "minLength": 1 },
+        "examined": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "integer", "minimum": 0 },
+        "caliber": { "type": "string", "minLength": 1 }
+      },
+      "required": ["passed", "total", "rate", "value", "examined", "missing", "caliber"],
+      "allOf": [
+        {
+          "description": "零分母守卫（FR-058/SC-025）：examined=0 时 MUST 记 value=\"not_measurable\"、rate=null 且给出非空 reason；MUST NOT 记为齐备。",
+          "if": { "properties": { "examined": { "const": 0 } }, "required": ["examined"] },
+          "then": {
+            "properties": { "rate": { "type": "null" }, "value": { "const": "not_measurable" } },
+            "required": ["rate", "value", "reason"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}
