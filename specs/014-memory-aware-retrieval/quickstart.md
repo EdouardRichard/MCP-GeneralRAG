@@ -125,6 +125,10 @@ python ..\eval\run_memory_comparison.py --dataset ..\eval\memory_continuity_eval
 
 ```powershell
 # DSH（唯一必过参考客户端；需先启动 PostgreSQL/Qdrant 与 writer/reader MCP 端点）
+# T074/T087: 真实宿主探针 —— 产出 T064/T065 的工作集续接与文件投影直读观测。
+# 端点与 DSH 配置就绪后以 DSH_HOST_SMOKE=1 显式启用真实会话；未启用/未观测一律如实记 failed。
+$env:DSH_HOST_SMOKE = "1"
+python eval\probe_projection_direct_read.py   # 写 eval/target-host-smoke-014.json + eval/projection-direct-read-014.json
 python eval\probe_mcp_host.py
 python -m pytest backend/tests/integration/test_target_host_smoke.py -q
 
@@ -220,8 +224,40 @@ python ..\eval\run_comparison.py --output ..\eval\runs\<run-id>\retrieval-regres
 
 - 契约零破坏：未触发响应在四个 completion 状态下与 T002 golden 逐字节一致（含 pretty 镜像与 wire 字面量）、`AGENTIC_RETRIEVAL_ENABLED=true` 下同样一致；旧三工具与旧客户端行为不变（102 项相关用例通过）。
 - 既有能力无回归：012 的 11 项 E2E 全绿；既有检索契约/评测集 pin 全集无回归（`test_domain_eval_dataset_schema.py` 14 passed，三个既有评测集 sha256 与 011 pin 一致，`eval/runs` 既有报告零改动）。
-- **目标宿主结论不成立**：DSH 必过冒烟未通过（无端点、未观测），按纪律**不得宣布收敛**。
+- **目标宿主结论不成立（第二轮）**：DSH 必过冒烟未通过（无端点、未观测），按纪律**不得宣布收敛**。
 - 未执行项：013 的 5 项隔离门 E2E、连续性记录/重放双轮与闸门报告、ChatGPT App / Claude Code 冒烟。
+
+### T099 第三轮补充：DSH 必过冒烟已真实通过（2026-10-09）
+
+第二轮之后 DSH 本机可用，第三轮补做了真实宿主观测：
+
+1. 启动 `python backend/_run_mcp.py --mode writer --port 18080`（`MEMORY_AWARE_RETRIEVAL_ENABLED=true`，schema head `0106_memory_consumption`，实例注册成功）；
+2. 用 012 同款 MCP 注入方式：`eval/dsh-014-writer-headless.patch.yml`（`@deepseek-ai/dsh-mcp-client` → `http://127.0.0.1:18080/mcp`）；
+3. `DSH_HOST_SMOKE=1 DSH_HOST_SMOKE_PATCH=eval/dsh-014-writer-headless.patch.yml python eval/probe_projection_direct_read.py` 触发两次 `dsh headless` 会话（退出码 0）：
+   - **工作集续接**：宿主真实调用 `start_work(include_working_set=true)`，返回 `open_items`（含 `content_excerpt`）、`recent_activity: []`、`procedural: []`、`working_set_returned: 1`；
+   - **投影直读**：宿主真实读取 `data/memory_projection/<slug>/<kind>/<memory_id>.md` 并逐字引用绝对路径与正文首行。
+4. 证据：`eval/target-host-smoke-014.json` → `hosts.dsh.status = "passed"`（两项观测均 `true`，2 条探针命令，原始观测留存）；`eval/projection-direct-read-014.json` → 三层 `conclusion = "passed"`（filesystem passed / DSH 真实观测 passed / 协议层 `not_applicable`）。run-id：`014-projection-20261009062730`。
+
+**仍未执行**：ChatGPT App / Claude Code 宿主、013 的 5 项隔离门 E2E。数据集人工审核（T053）已于 2026-10-09 按所有者授权完成（16 条 `reviewed` + pin 同步，见 `tasks.md` Phase 11 第四轮留证）。发布判定仍为**未通过**，两个开关保持默认关闭。
+
+### T058/T059 第五轮：连续性对照与闸门报告已真实产出（2026-10-09）
+
+1. 前置：封印 capsule `C:\t102\capsule`（scope `366084747748704256`，`authority_digest` 等于数据集 `snapshot_hash`）。
+2. 运行（run-id `t014a`，4 个隔离身份各自恢复 DB/Qdrant/data-root，并在每个身份内按宪法 VIII 从 published `chunks` 重建派生证据索引）：
+   ```powershell
+   python eval\run_memory_comparison.py --dataset eval\memory_continuity_eval_dataset.json --mode record `
+       --capsule-dir C:\t102\capsule --run-id t014a --base C:/t014c `
+       --run-out eval\runs\t014a\identities.json --cache-manifest eval\runs\t014a\cache-manifest.json `
+       --output eval\runs\t014a\memory-record.json --evidence-dir eval\runs\t014a
+   python eval\run_memory_comparison.py --dataset eval\memory_continuity_eval_dataset.json --mode replay `
+       --capsule-dir C:\t102\capsule --run eval\runs\t014a\identities.json `
+       --cache-manifest eval\runs\t014a\cache-manifest.json `
+       --output eval\runs\t014a\memory-replay.json --evidence-dir eval\runs\t014a
+   python eval\archive_memory_gate_report.py --record eval\runs\t014a\memory-record.json `
+       --replay eval\runs\t014a\memory-replay.json --output eval\runs\t014a\memory-gate-report.json
+   ```
+3. 结果：replay `response_match_rate=1.0`、漂移 `0.0`、真实网络调用 32→0、缓存证据完整；两臂各 16/16 完成、`relative_gain=0.0`；质量闸经预冻显式判据 passed，`safety=failed`、`regression=incomplete` ⇒ **`default_enable_eligible=false`**，开关不变。
+4. 注意：`eval/runs/` 为 gitignored；本次结果与 runner/archiver 修复见 `tasks.md` Phase 11 第五轮留证。隔离身份（4 DB + 端口 18900–18907）如需清理：`python eval/restore_consolidation_arm.py drop --run eval/runs/t014a/identities.json`。
 
 ---
 
@@ -233,7 +269,7 @@ python ..\eval\run_comparison.py --output ..\eval\runs\<run-id>\retrieval-regres
 |---|---|---|---|
 | **CHK006** | `start_work` 顶层 `required` 与属性顺序不变、`include_working_set=false` 分支逐字节不变，是否明确？ | **已明确且有断言**：`required == ["scope_ref"]` 不变、六属性 canonical JSON 逐字节不变、只多 `include_working_set`（默认 false）——`tests/contract/test_014_start_work_schema.py`（15 passed）；两种取值下的运行时顶层顺序均被冻结断言；`test_memory_reader_budgets.py` / `test_012_reader_boundaries.py` 的 012 包体字节断言保持绿色 | 014 **输出** schema 的**声明**顺序与运行时顺序不一致（声明 `... package_fingerprint, counts ...`，运行时 `... counts, package_fingerprint ...`）；契约 §3 已记录"以运行时为权威"。评审者需确认该"声明/运行时两序并存 + 文档化"是否满足"顺序不变"的判据 |
 | **CHK019** | agentic 检索路径下附加层与工作集同样受不可信隔离、不得因路径切换而绕过，是否被**显式**规定？ | **已显式实现**：`attachment_triggered(...) and not settings.agentic.enabled` —— agentic 开启时附加层**根本不进入**编排状态机（比"不绕过"更强），未触发响应两路径逐字节一致（`test_agentic_switch_on_keeps_the_untriggered_response_byte_identical`）；`start_work` 工作集不经 agentic 开关，其不可信隔离由同一可见性/状态谓词与 `untrusted` 声明承担（T032/T033/T040 断言） | 评审者需确认"不进入状态机"是"不绕过"的可接受读法，以及是否需要在 spec 中把该读法写成文字（当前依据为批准决议 ④ 与实现断言） |
-| **CHK049** | "人工审核"的记录载体是否被定义，使"经人工审核"可判定而非口头声明？ | **载体已定义且强制**：`_meta.review_status` / `review_notes` / `grounded_source`；允许值集合恰为 `{"reviewed","pending_review"}`；测试**拒绝**任何在 `review_notes` 或 `grounded_source` 为空时声称 `reviewed` 的记录（反伪造）——`tests/contract/test_014_continuity_dataset.py`（含变异证明） | **审核尚未发生**：数据集 16 条全部为 `pending_review`（T053 未执行）。这是本 Feature 唯一需要**人**完成的开放项；在人工审核完成并将 `_meta` 与 sha256 pin 同步更新之前，该判据不成立 |
+| **CHK049** | "人工审核"的记录载体是否被定义，使"经人工审核"可判定而非口头声明？ | **载体已定义且强制**：`_meta.review_status` / `review_notes` / `grounded_source`；允许值集合恰为 `{"reviewed","pending_review"}`；测试**拒绝**任何在 `review_notes` 或 `grounded_source` 为空时声称 `reviewed` 的记录（反伪造）——`tests/contract/test_014_continuity_dataset.py`（含变异证明） | **审核已完成（2026-10-09，所有者授权、实现代理代审）**：16 条全部 `reviewed`，逐条 `review_notes` 披露授权与核验依据，两处 `DATASET_SHA256` 已同步；发布批准仍需 T058/T059 的连续性与三闸证据 |
 | **CHK072** | 顶层字段顺序契约在"契约文档、schema 属性顺序、冻结断言"三处是否一致，且 partial/failed 分支出现条件无冲突？ | **三处一致且已终检**：`field-order-contract.md` §2 文本、`mcp-search-output.schema.json` 的 `properties` 前 8 项、运行时 `ATTACHMENT_FIELD_ORDER` 三者逐字相同（`test_documented_order_equals_the_runtime_and_schema_order`，154 项 014 契约测试全绿）；出现条件亦已澄清：`gaps` 仅 `partial` 或去重致空；`error` 在 014 分支**永不**出现（014 分支只在主检索非 `failed` 时构建），实测以"冻结表剔除缺席键"的子序列断言覆盖 complete/partial/no_evidence | 评审者需确认"子序列而非恒 8 键"的断言形式是否满足该完整性判据（契约 §6.1 已记录该实测补充） |
 
 **T072 结论**：4 项中 3 项（CHK006 / CHK019 / CHK072）已有可复核的实现证据与断言，1 项（CHK049）载体已定义但**人工审核本身未执行**。**本实现方未勾选任何 `[x]`，并主张在 CHK049 的人工审核完成前不应视为全部满足。**

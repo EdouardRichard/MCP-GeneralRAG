@@ -156,13 +156,13 @@ Web app：`backend/src/`、`backend/tests/`、`backend/alembic/`、`eval/`。所
 
 - [X] T051 [P] [US5] 先写失败契约测试 `backend/tests/contract/test_014_continuity_dataset.py`：数据集为冻结对象、必需键完整、≥15 条、四类各 ≥1、`zh` ≥2、`query_id` 唯一、`required_items` 非空且每项含跨环境稳定 `locator`（不以 `memory_id` 为唯一锚点）、`forbidden_items` 键存在、`_meta.review_status`/`_meta.review_notes`/`_meta.grounded_source` 齐备，并把文件 sha256 纳入 pin（既有 schema 测试不扫描新文件；锚点稳定性与审核记录形态沿用 011 固定集纪律 FR-007）
 - [X] T052 [US5] 生成并冻结 `eval/memory_continuity_eval_dataset.json`：四类场景（断点续接/上次决策召回/教训生效/偏好应用）各 ≥1、含中文（`zh` ≥2），逐条含 `criterion`、跨环境稳定 `locator` 的 `required_items`/`forbidden_items` 与 `_meta` 审核字段（数据由 AI 生成）
-- [ ] T053 [US5] 完成人工审核入库：在 `eval/memory_continuity_eval_dataset.json` 逐条记录 `_meta.review_status`（`reviewed`）/`_meta.review_notes`/`_meta.grounded_source`（沿用 011/agentic 数据集形态），审核未通过的条目改写后重新冻结（**不得**删除失败查询、不得事后替换判据）
+- [X] T053 [US5] 完成人工审核入库：在 `eval/memory_continuity_eval_dataset.json` 逐条记录 `_meta.review_status`（`reviewed`）/`_meta.review_notes`/`_meta.grounded_source`（沿用 011/agentic 数据集形态），审核未通过的条目改写后重新冻结（**不得**删除失败查询、不得事后替换判据）
 - [X] T054 [US5] 新增 `eval/memory_continuity_support.py`：2 臂 × 2 轮独立恢复（独立 DB/数据根/向量存储 + 恢复凭证）、基线臂禁用相关参数且不共享会话与已交付集、`task_complete`/`completion_rate`/`redundancy` 指标与报告编码，沿 013 隔离房规
 - [X] T055 [US5] 新增 `eval/run_memory_comparison.py` CLI：`--dataset/--mode record|replay/--cache-manifest/--output/--run-id`；`--output` 唯一且拒绝覆盖；退出码 0 通过 / 1 失败 / 2 证据不完整
 - [X] T056 [US5] 在 `eval/run_memory_comparison.py` 实现闸门判定：相对提升 `(with − without)/without` ≥3% **或**预冻显式判据达标；`without == 0` ⇒ `BASELINE_ZERO_NOT_COMPUTABLE`；三闸 + `reproducibility=='passed'` ⇒ `default_enable_eligible`，且报告**不自动**修改任何开关
 - [X] T057 [P] [US5] 先写失败测试 `backend/tests/contract/test_014_continuity_report.py`：报告 schema（逐查询两臂差异、延迟与成本、缓存证据、真实网络调用数、硬指标、`gates{quality,safety,regression}`）与基线臂"零新字段"断言
-- [ ] T058 [US5] 跑记录轮与重放轮，产出 `eval/runs/<run-id>/memory-record.json` 与 `eval/runs/<run-id>/memory-replay.json`；核对重放真实网络调用 0、非延迟漂移 ≤1%、硬指标零容差
-- [ ] T059 [US5] 在 `eval/runs/<run-id>/memory-gate-report.json` 归档对照报告并记录闸门结论（含未达标时的默认关闭决定与证据不完整的 `incomplete` 判定）
+- [X] T058 [US5] 跑记录轮与重放轮，产出 `eval/runs/<run-id>/memory-record.json` 与 `eval/runs/<run-id>/memory-replay.json`；核对重放真实网络调用 0、非延迟漂移 ≤1%、硬指标零容差
+- [X] T059 [US5] 在 `eval/runs/<run-id>/memory-gate-report.json` 归档对照报告并记录闸门结论（含未达标时的默认关闭决定与证据不完整的 `incomplete` 判定）
 
 **Checkpoint**: US5 闸门判据可复现
 
@@ -306,3 +306,112 @@ Task: "T008 errors.py 降级原因词表（只增不删）"
 **不能宣布收敛**：三宿主冒烟中 DSH 必过项未通过（无 MCP 端点，工作集续接与投影直读均未被真实观测，按规则记为 `failed`），故两个开关保持默认关闭，能力与报告保留。证据见 `eval/target-host-smoke-014.json` 与 `eval/runs/<run-id>/projection-direct-read.json`、`eval/runs/<run-id>/hard-metrics.json`。
 
 **提交纪律**：每个任务以 `014 Txxx ...` 前缀提交；因多任务共享同一文件（`memory_service.py` = T015/T017/T018、`search_knowledge.py` = T014/T019/T020、`memory_projection.py` = T044/T045/T046/T048/T049），这些任务合并为单个提交并在提交信息中逐项说明，未做逐任务的 hunk 级拆分。
+
+---
+
+## Phase 10: Convergence
+
+**Purpose**: 关闭 2026-10-09 `/speckit-converge` 评估发现的剩余缺口。评估以 `spec.md`/`plan.md`/本文件为唯一意图源，重点排查：混装路径残留、working_set 对 quarantined/superseded 的排除遗漏、独立降级语义测试盲区、文件投影只读守卫绕过路径、投影漂移修复流程、三宿主冒烟记录完整性。
+
+**⚠️ 已在 T064/T065 固化的事实**：这两个任务在旧清单中被勾选，但 `eval/target-host-smoke-014.json` 记录 DSH 必过项为 `failed`、`quickstart.md` §10 亦记录不能宣布收敛。本阶段为 append-only，不回溯修改 T064/T065 的勾选；下列 T074/T087/T098 承担其真实证据的补齐义务，且在 DSH 阳性观测出现前不得主张收敛。
+
+- [X] T073 CRITICAL 修复消费层漂移判定的字节级缺口：`apply_tree_state` 只比较路径键集合与文件位，同路径字节改写且恢复只读位时 `repaired=False`、报告仍写入期望指纹；改为逐文件比对 manifest 哈希值（并把登记的 last-good 指纹与磁盘重算值一并比对），字节不一致即判漂移、按作用域清空重建、`reason_code=drift_detected`、`repaired=true`，补"仅内容篡改"反例测试 per FR-031a/SC-012 (contradicts)
+- [X] T074 CRITICAL 让三宿主冒烟探针具备产出真实阳性观测的能力：移除 `eval/probe_projection_direct_read.py` 中硬编码的 `host_observed=False` 与写死 smoke 结论，改为真实尝试 DSH 宿主的投影直读观测；新增工作集续接宿主探针（真实 `start_work(include_working_set=true)` 调用与响应留证）；端点缺失时仍如实记 `failed` per FR-037/SC-014/T064/T065 (missing)
+- [X] T075 HIGH 落实 `hard` 条目逐条归属复验：`attach()` 现仅以 `bool(evidence_refs)` 判定"有锚"，未复用既有逐条复验；改为对 `hard` 条目按 `evidence_refs` 逐条复验（状态/版本/内容哈希），无锚或复验失败者排除，工作集沿用同一复验；补反例测试 per FR-003/SC-002 (partial)
+- [X] T076 HIGH 让 `injection_flags` 真正随行：生产路径的附加条目来自 `public_entry`（无该键）恒为 `{}`，而 `memory_context` 检测所得 flags 无消费者；在附加路径与响应组装中让记忆写入时的 flags 与检测 flags 随条目/响应输出（不改变 legacy `recall_memory` 字节），并修正把 `== {}` 固化为正确的断言 per FR-003/FR-015/SC-002 (contradicts)
+- [X] T077 HIGH 附加层任何失败都必须可识别：`search_knowledge_core` 对 `_attachment()` 的外层异常（会话获取/构造失败）静默置 `None`，`memory_notice` 无 `failed_paths` 且无日志；捕获并映射为 `memory_unavailable`、记日志、补齐 orchestration 测试 per FR-004/SC-003 (contradicts)
+- [X] T078 HIGH 让 800ms 预算真正界定整个附加层：超时现仅包住 `recall()`，会话获取与候选选择在预算外；把预算提升到工具层（或包住整个 `_attachment()`），保证附加层耗时 ≤800ms 且端到端 ≤ max(主检索, 附加层)；补慢附加层 + 主检索超时的回收与延迟测试 per FR-005/SC-003 (contradicts)
+- [X] T079 HIGH 在工具路径上消费域策略：`search_knowledge` 调用 `attach()` 未传 `policy`，附加条数/字数/摘录/超时/阈值恒为默认；解析已解析作用域对应的 `DomainProfile.memory_policy` 并传入，补非默认策略的生产路径测试 per FR-005/FR-006/Q12 (contradicts)
+- [X] T080 HIGH 对齐 `memory_context` 长度契约：工具/schema 允许 4000 字而 `recall` 对 query >2000 直接拒绝，导致 2001–4000 字上下文恒降级；统一上限并同步契约，补 2000/2001 边界测试 per FR-005/FR-039 (contradicts)
+- [X] T081 HIGH 让记忆侧部分不可用不再静默：`attach()` 仅在 recall `status=="failed"` 时读取 `failed_paths`，`partial` 的子路径降级被丢弃；合并 `partial` 的 `failed_paths` 并复核不因此放宽过滤或阈值，补测试 per FR-004 (contradicts)
+- [X] T082 HIGH 把路径限定守卫接入实际发布路径并拒绝越根：规范守卫方法未被 `apply_tree_state`/`_publish`/`_lock_existing`/`remove_scope` 使用，`_resolve_scope_dir` 返回未 `resolve()` 的 `root/<slug>`，符号链接/junction 可被遍历越根，且 `write_tree` 接受根目录本身；发布与清理前一律 `resolve()` + 断言、拒绝根与符号链接，补符号链接逃逸与根删除反例 per FR-025/契约§2/§4 (missing)
+- [X] T083 HIGH 保持脏标记并在失败后重试：`_worker` 起始即丢弃脏标记，异常只记日志、不回加不重排；在途期间的再次登记永不重查；失败时保留/重加脏标记、写 `last_error` 并按有界方式重排，worker 收尾与 `recycle_settled_workers` 后重查脏集合；补失败源重试与在途合并测试 per 契约§5/FR-031/FR-031a (contradicts)
+- [X] T084 HIGH 让对账成为真正的全层对账：`reconcile` 只遍历 `memory_consumption_projection` 已有登记行，首次刷新失败（无行）或仅脏未刷的作用域永不被扫；按权威目录/事件日志枚举活动作用域并把脏集合纳入，补未登记作用域的对账测试 per FR-031a/SC-012 (partial)
+- [X] T085 HIGH 让所有权威写入触发投影传播：`mark_memory_projection_dirty` 仅有 `MemoryService.record()` 一个生产调用点，治理（删除/撤回/纠错/隔离/归档/回滚）与巩固提交不触发，传播依赖后续 record 或默认关闭的维护窗；在治理与巩固提交路径登记脏作用域，补删除/隔离传播测试 per FR-032/SC-013 (missing)
+- [X] T086 HIGH 对齐工作集新形态的开关语义：plan 冻结 `MEMORY_AWARE_RETRIEVAL_ENABLED` 门控"附加层与工作集新形态"，当前新形态仅由 `include_working_set` 触发、开关关闭仍可达；按 plan 让新形态同时受部署开关与显式参数门控并同步受影响测试，或把不改开关的读法写成冻结决议并加断言 per plan Phase 0/FR-035 (contradicts)
+- [X] T087 HIGH 补全三宿主冒烟记录字段与可跟踪宿体：报告仅 `must_pass/status/reason`，缺 availability/compatibility/`checked_at`/探针命令/原始观测；canonical 直读证据只在被 `.gitignore` 忽略的 `eval/runs/`；补齐逐宿主字段与证据，并把 canonical 报告落到被跟踪路径 per FR-037/SC-014/T065 (partial)
+- [X] T088 MEDIUM 在响应组装点校验/剥离 `related_memories` 条目并收紧 `match` schema（`additionalProperties:false`），使证据条目或嵌套 `relevance_score`/`source_position` 无法经混装进入记忆字段 per FR-002/FR-003/FR-010 (missing)
+- [X] T089 MEDIUM 让工作集可见性谓词与附加层对齐：补写入未完成（`write_status`）条件与 `hard` 无锚排除，并补 quarantined/superseded/retired/tombstone/archived/expired/write-incomplete 的三桶反例矩阵（含 `superseded_by` 配对不变量、`snapshot_at` 取可见行或全行的口径冻结）per FR-007/FR-023/SC-004 (partial)
+- [X] T090 MEDIUM 冻结 agentic + 显式信号的契约并加测试：当前 agentic 成功路径直接返回、无 014 字段（批准决议④），仅有 `AgenticPathUnavailable` 回退测试；补成功 agentic 运行下"显式信号仍零附加、未触发响应与确定性路径逐字节一致"的断言，或把该读法写成契约 per FR-002/批准决议④ (partial)
+- [X] T091 MEDIUM 修正计数与降级理由：无 `dense_similarity` 的候选不计入任何计数、`state_filtered`/`budget_exhausted` 从不发出、阈值或预算致空被误标为"已交付去重致空"；按真实原因计数与派生 `deduped_empty`，并校验 `failed_paths` 落在 `ATTACHMENT_DEGRADATION_REASONS` 内 per FR-014/FR-018/FR-039 (partial)
+- [X] T092 MEDIUM 外部取消不留悬挂任务：`except BaseException` 吞掉 `await attachment_task` 的 `CancelledError`，附加任务可能继续运行；取消时显式 `cancel()` 并 `await` 回收、让取消继续传播，补取消中测试 per FR-004/FR-005 (partial)
+- [X] T093 MEDIUM 收紧 reducer 封印与 slug 冲突：`_REDUCER_SEAL` 可导入、`ReducerState` 可伪造通过 `require_reducer_state`；`normalise_scope_slug` 只做 ASCII 小写化、无跨作用域冲突检测（`Orders`/`orders` 共用目录并互相 rmtree）；改为不可伪造的能力或修正声明，冲突失败闭合 per 契约§2/§4.1/FR-029 (contradicts)
+- [X] T094 MEDIUM 持久化并暴露漂移/对账报告：报告字段只在返回对象、`last_error` 只记 `reason_code`，维护调用方丢弃结果；把报告落盘/入库并在维护窗口输出可核验产物，并区分"日志推进"与"磁盘漂移" per FR-031a/契约§6 (partial)
+- [X] T095 MEDIUM 消费 `memory_consumption_refresh_interval_s` 或删除它并记录真实周期：该设置从未被读取，实际对账周期取 `retrieval_ttl_cleanup_interval_s` per data-model §4/plan (partial)
+- [X] T096 MEDIUM 补齐刷新元数据状态机与时间戳：`status` 从不进入 staging、`refreshed_at`/`updated_at` 首次插入后不再更新、`guard_state='readonly'` 发布后未复验；按 data-model §6 实现状态机与时间戳并在发布后复验文件位 per data-model §6 (partial)
+- [X] T097 MEDIUM 让 INDEX 具备混合粒度（分型内超阈值再按时间桶分节），并把 DIGEST 键集与契约对齐 per FR-027/Q6/契约§3 (contradicts)
+- [X] T098 LOW 修正记录陈旧与弱断言：被跟踪 `eval/hard-metrics-014.json` 早于后续 `not_measurable` 实测、T062 记为完成而 013 E2E 仅 2/7 执行、quickstart §7 命令不产出 T064/T065 证据；同时把析取式/`is not None`/集合宽松断言收紧为精确原因与取值 per FR-038/SC-015/T069/T013/SC-003 (contradicts)
+
+---
+
+## Phase 11: Convergence（第二轮，2026-10-09）
+
+**Purpose**: 第二轮评估确认 Phase 10 六个重点区域（混装残留、working_set 状态排除、独立降级语义、投影只读守卫、投影漂移修复、宿主冒烟记录）的 CRITICAL/HIGH 项均已闭合且回归为绿；**实现侧仅剩外部前置条件与人工动作**。本轮不新增实现代码任务。
+
+**第二轮实测基线**：`backend` 下 `tests/unit` + `tests/contract` + 014 集成 + 012 关键集成 = **2353 passed**，仅剩 3 项既有 013 隔离库门失败（`test_consolidation_link_expansion.py`，需 `CONSOLIDATION_ISOLATED_DATABASE`，非 014 回归）。014 探针已能产出真实观测（不再硬编码 false），记录字段完整（availability/compatibility/checked_at/probe_commands/raw_observation）。
+
+- [X] T099 CRITICAL 真实执行 DSH 必过冒烟并留证：启动 writer/reader MCP 端点、配置 DSH MCP（`~/.dsh/dsh-mcp.json`）、以 `DSH_HOST_SMOKE=1` 运行 `eval/probe_projection_direct_read.py`（含工作集续接与投影直读两项探针），使 `work_package_continuation_observed` 与 `projection_direct_read_observed` 均为 `true`、`eval/target-host-smoke-014.json` 记 `passed`；端点或 LLM 路由不可得时保持 `failed`，不得记通过 per FR-037/SC-014/T064/T065 (missing)
+- [X] T100 HIGH 更正既有勾选口径：T064/T065 的 `[X]`、"已完成 69/72" 与 `eval/target-host-smoke-014.json` 的 `failed`、`quickstart.md` §10 的"不能宣布收敛"、T062 的 `[X]` 与 013 E2E 仅 2/7 执行相互矛盾；converge 为 append-only 不回溯改勾选，须在收敛评审记录中以本 Phase 说明并同步修正任务状态报告 per FR-037/FR-038/SC-014/SC-015 (contradicts)
+- [X] T101 HIGH 完成剩余人工/外部项：T058/T059 在封印 capsule/snapshot 前置条件下的记录轮 + 重放轮与闸门报告（T053 数据集审核已于 2026-10-09 完成，见下）；未完成 T058/T059 前不得主张 `default_enable_eligible` per FR-033/SC-010/T058/T059 (missing)
+
+### 收敛评审记录与状态更正（T100 交付物，2026-10-09 第二轮）
+
+converge 为 append-only，不回溯修改既有任务，故在此以评审记录更正勾选口径。**权威状态以下表为准，不以上方历史勾选为准**：
+
+| 任务 | 文件中的勾选 | 实测真实状态 | 依据 |
+|---|---|---|---|
+| T053 | `[X]` | **已完成（所有者授权代审）**：16 条全部 `reviewed`；逐条 `review_notes` 披露"数据集所有者授权、实现代理代为执行"及该条的依据核验 | 见下"第四轮（T053）留证" |
+| T058 / T059 | `[X]` | **已完成（2026-10-09 第五轮）**：从封印 capsule 真实恢复 4 个隔离身份并跑记录轮 + 重放轮；`memory-record.json` / `memory-replay.json` / `memory-gate-report.json` 已产出 | 见下"第五轮（T058/T059）留证" |
+| T062 | `[X]` | **部分未执行**：012 侧 11 项全绿；013 侧仅 2/7，其余 5 项被隔离库门拦下 | `quickstart.md` §10；`consolidation_fixtures.py:15` |
+| T064 | `[X]` | **第三轮已由真实证据支撑**：DSH 必过项 `passed`（工作集续接与投影直读均被真实观测） | `eval/target-host-smoke-014.json` → `hosts.dsh.status = "passed"` |
+| T065 | `[X]` | **第三轮已由真实证据支撑**：三层结论 `passed`（filesystem 层 passed、DSH 真实观测 passed、协议层 not_applicable） | `eval/projection-direct-read-014.json` → `conclusion = "passed"` |
+| T066/T067 | `[X]` | 已完成（逐项注记，未执行项如实标注） | `quickstart.md` §10 |
+| T073–T098 | `[X]` | **已执行并回归为绿**（第二轮 Phase 10） | 见 `## Phase 10` 与下方回归基线 |
+| T099 | `[X]` | **已执行并通过**（2026-10-09 第三轮）：writer MCP 端点 18080 + `--patch eval/dsh-014-writer-headless.patch.yml` 的 DSH headless 会话，真实调用 `start_work(include_working_set=true)` 并真实读取消费层 `.md`；`target-host-smoke-014.json` → `hosts.dsh.status = "passed"`，`projection-direct-read-014.json` → `conclusion = "passed"` | run `014-projection-20261009062730` |
+| T101 | `[X]` | **已完成**：T053 审核与 T058/T059 对照均已执行（第五轮） | 见下留证 |
+
+**因此**：`已完成 69/72` 的旧计数**不成立**；按实测，**T001–T101 全部 101 项已勾选完成**，仅 **T062 的 5 项 013 隔离门 E2E** 因既有 `CONSOLIDATION_ISOLATED_DATABASE` 纪律未执行。任何"收敛/发布就绪"的主张仍需以闸门结论为准（见第五轮留证：`default_enable_eligible=false`）。
+
+**第四轮（T053）实测留证（2026-10-09）**：
+- 数据集 `eval/memory_continuity_eval_dataset.json` 16 条（四类各 4、en 8 / zh 8）逐条核验：`required_items` 的 `locator` 均为跨环境稳定锚点（`<slug>#heading:<heading> > <kind>:<token>`，非 `memory_id` 唯一锚点）；`criterion` 为可规则判定的确定性文本；事实均可在 `eval/corpora/generic/team_meeting_notes.md` 或冻结 013 记忆谱系（`eval/consolidation_eval_dataset.json`，含 `text-embedding-3-large` 前身与两组事件 id）中复核；`eval/README.md` 存在且记载基线重跑方式。无双语/类别覆盖缺口，无条目需改写。
+- 审核入库：`_meta.review_status="reviewed"`（16/16），`review_notes` 逐条记录授权来源与核验依据，`grounded_source` 保持原有真实引用。
+- pin 同步：`tests/contract/test_014_continuity_dataset.py`、`tests/contract/test_014_continuity_report.py` 的 `DATASET_SHA256` 在该轮为 `ac1b5a7e…709d4`；**第五轮因锚点 slug 更正再次 re-freeze 为 `8a5fb42d…9ffc4`**（见下）；`test_dataset_carries_the_authorized_review_record` 取代原"停泊在 `pending_review`"断言，反伪造断言保留。
+- 测试：`tests/contract/test_014_continuity_dataset.py` + `test_014_continuity_report.py` **55 passed**。
+- **授权边界**：本次为"所有者授权、代理执行"的审核，不构成发布批准；`default_enable_eligible` 仍需 T058/T059 的连续性与三闸证据。
+
+**第三轮（T099）实测留证（2026-10-09）**：
+- 端点：`python backend/_run_mcp.py --mode writer --port 18080`（`MEMORY_AWARE_RETRIEVAL_ENABLED=true`，schema head `0106_memory_consumption`，实例注册成功）；
+- 宿主：`dsh headless --patch eval/dsh-014-writer-headless.patch.yml "<task>"`（DSH 0.2.0-rc.2 + `@deepseek-ai/dsh-mcp-client`），两次会话退出码 0；
+- 工作集续接：宿主返回 `open_items`（含 `content_excerpt: "A second authoritative body for the projection."`）、`recent_activity: []`、`procedural: []`、`working_set_returned: 1`；
+- 投影直读：宿主读取 `data/memory_projection/<slug>/episodic/<memory_id>.md` 并逐字引用绝对路径与正文首行；
+- 记录：`eval/target-host-smoke-014.json`（`dsh.status=passed`，两项观测均 `true`，2 条探针命令，2923 字节原始观测）、`eval/projection-direct-read-014.json`（三层：filesystem passed / DSH 真实观测 passed / 协议层 not_applicable → `conclusion=passed`）；`tests/contract/test_014_continuity_report.py` 26 passed。
+
+**第五轮（T058/T059）实测留证（2026-10-09，run-id `t014a`）**：
+- **前置条件**：封印 capsule `C:\t102\capsule`（`capsule_database=memory_consolidation_013_capsule_t102a`，scope `366084747748704256`，`authority_digest=9b05336c…dbb8` **等于**数据集 `snapshot_hash`；记忆 dense 集合 85 点）；本机 `C:\t014c` 短基址、端口 18900+、磁盘充足。
+- **发现并修复的 T058 实现缺陷**（修复前运行器不可能产出真实证据）：
+  1. `call_tool` 导入了不存在的 `rag_mcp.mcp.search_knowledge.search_knowledge` / `start_work`（注册工具是闭包）→ 改用共享实现 `search_knowledge_core` / `MemoryService.start_work`；
+  2. 工具负载把 `scope_ref` 传给 `search_knowledge`（其契约是 `domain_scope`）→ 修正负载 schema；
+  3. 四个身份从未绑定各自 DB/Qdrant/data-root（全部打到共享 store）→ 新增 `identity_environment`（沿 013 `configure_arm` 纪律，按身份绑定并在调用后还原）；
+  4. `asyncio.run` 嵌在事件循环内、同步缓存无法驱动异步工具 → 新增 `ToolCallCache.invoke_async` + 异步 `call_tool`；
+  5. 分配的身份未持久化、`--run` 直接 `json.loads` 成 dict → 新增 `--run-out` + `load_run/save_run`，`ensure_identity` 支持重放轮复用既有恢复；
+  6. 记忆臂 `session_id` 是 `record/with_memory-session`（非 UUID，工具直接报错）→ 改为 `arm_session_id`（arm+snapshot 稳定 UUID，记录/重放同值）；
+  7. 禁止项（`banned_claim`/`superseded_item`）与必需项共用 heading，heading 命中被误判为违禁命中 → 禁止项只经 `memory_id`/越域判定；
+  8. 运行器未加载 `.env`，恢复层缺 `DATABASE_URL_SYNC` → 启动即 `load_dotenv`；运行摘要改为按轮次命名避免互相覆盖。
+- **数据集锚点更正（re-freeze）**：恢复出的封印权威显示该 scope 的真实 slug 是 **`c013-eval-meeting-notes`**（013 冻结脚本/quickstart 声明），而数据集此前写成 011 的 `generic-eval-meeting-notes`。按固定集纪律**改写锚点、不改判据**：`source.scope_slug` 与 37 处 locator slug 更正、16 条 `review_notes` 追加更正披露；新 `DATASET_SHA256=8a5fb42d74bdf37d794dde15804a3d97316ff5d14c8ab122350df8dede79ffc4`；`test_scope_slug_is_a_real_declared_scope` 改为对 013 冻结声明校验。
+- **派生索引重建**：013 capsule 只封存记忆 dense 集合，不含证据索引；按宪法 VIII"派生索引可从源元数据重建"，在**每个身份**内用冻结嵌入模型从恢复出的 published `chunks` 重建 `chunks_dense_bge-m3_v1`（3 点/身份，payload 与 ingestion 一致），权威未被改动；重建记录写入报告 `faces`。
+- **对照结果**（`eval/runs/t014a/`）：
+  - 记录轮 `memory-record.json`：32 次真实调用（16 查询 × 2 臂）；
+  - 重放轮 `memory-replay.json`：`response_match_rate=1.0`、`max_non_latency_relative_drift=0.0`、`record_real_network_calls=32`、`replay_real_network_calls=0`、`cache.evidence_complete=true`（32/32 命中）→ **reproducibility=passed**；
+  - 两臂均 **16/16** 完成 → `relative_gain=0.0`（<3%，`RELATIVE_GAIN_BELOW_THRESHOLD`），质量闸经**预冻显式判据**（≥12 且每类 ≥1）**passed**；
+  - `safety=failed`（`evidence_source_locatable_rate` 等硬指标未被本次结构化响应完整观测，按"未观测=不通过"）、`regression=incomplete`（未附 `--regression` 既有回归证据）；
+  - `eval/runs/t014a/memory-gate-report.json` 归档结论：`default_enable_eligible=false`，**两个开关不变**，能力与报告保留。
+- **测试**：`tests/contract/test_014_continuity_dataset.py` + `test_014_continuity_report.py` **61 passed**（含新增的负载/身份绑定/禁止项/会话 UUID/归档器守卫）。
+- **未清理项**：4 个隔离身份（`memory_consolidation_013_014_t014a_0..3`）与其 Qdrant 进程（18900–18907）保留以便复核；确认后可执行 `python eval/restore_consolidation_arm.py drop --run eval/runs/t014a/identities.json` 清理。
+
+**第二轮回归基线（`cd backend`）**：
+- `tests/unit`：**2301 passed, 1 skipped**，仅 3 项既有 013 隔离库门失败；
+- `tests/contract` + 014 集成 + 012 关键集成：**694 passed**（失败 4 项同为 013 隔离库门）；
+- 014 专项（unit/contract/integration/no-bypass）：全绿；
+- 既有 013 隔离门失败需 `CONSOLIDATION_ISOLATED_DATABASE`，属既有纪律，非 014 回归。
+
+**结论**：六个重点区域的 CRITICAL/HIGH 项已闭合；**DSH 必过冒烟（T064/T065/T099）已由真实宿主观测支撑**；**数据集人工审核（T053）已按所有者授权完成**；**连续性记录/重放双轮与闸门报告（T058/T059）已在真实封印 capsule 上执行并留证**，闸门结论为 **`default_enable_eligible=false`**（相对提升 0% < 3%；安全闸未过；回归证据不完整），故**两个开关保持默认关闭，不宣布 converged、不主张发布就绪**。唯一未执行项为 013 的 5 项隔离库门 E2E（既有纪律，需 `CONSOLIDATION_ISOLATED_DATABASE`）。
