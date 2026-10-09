@@ -39,6 +39,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVAL_DIR = REPO_ROOT / "eval"
@@ -128,7 +129,16 @@ RECORD_MEMORY_ARGS = {
 #: Identity carried in ``task_context`` so every probe row this runner writes into
 #: a shared scope is countable by exactly this run — a scoped, deterministic
 #: denominator rather than "all rows that happen to accumulate".
-PROBE_TOKEN = {"probe": "015-memory-baseline", "run_id": support.RUN_ID}
+#:
+#: ``invocation`` is what makes the denominator stable across re-runs: RUN_ID is
+#: frozen for the whole feature, so a predicate keyed on it alone matched the probe
+#: rows of every previous measurement and the denominator grew by one hard row per
+#: re-run, which made the two-run reproducibility check fail for a reason that was an
+#: artifact of the sampling rule rather than of the system (found during the
+#: registry-repair re-measurement). The token still carries the run id for traceability.
+PROBE_INVOCATION = uuid4().hex
+PROBE_TOKEN = {"probe": "015-memory-baseline", "run_id": support.RUN_ID,
+               "invocation": PROBE_INVOCATION}
 
 
 def probe_arguments(*, scope_ref: str | None = None, scope_id: int | None = None, **overrides: Any) -> dict:
@@ -142,9 +152,9 @@ def probe_arguments(*, scope_ref: str | None = None, scope_id: int | None = None
 
 
 def _probe_predicate() -> str:
-    """SQL predicate: ``submission_meta.task_context.probe`` equals this run's token."""
+    """SQL predicate: this invocation's own probe rows (stable re-run denominator)."""
     return ("submission_meta -> 'task_context' ->> 'probe' = '015-memory-baseline' "
-            "and submission_meta -> 'task_context' ->> 'run_id' = :probe_run_id")
+            "and submission_meta -> 'task_context' ->> 'invocation' = :probe_run_id")
 
 
 def _inline_common(schema: dict, contracts: Path) -> dict:
@@ -385,11 +395,11 @@ async def measure_memory_provenance(session, scope_id: int) -> dict[str, Any]:
     hard_rows = (await session.execute(sa.text(
         f"select memory_id, evidence_refs, confidence, provenance_meta, inference_meta from memory_entries "
         f"where knowledge_scope_id=:s and provenance='hard' and {_probe_predicate()}"),
-        {"s": scope_id, "probe_run_id": support.RUN_ID})).mappings().all()
+        {"s": scope_id, "probe_run_id": PROBE_INVOCATION})).mappings().all()
     soft_rows = (await session.execute(sa.text(
         f"select memory_id, inference_meta from memory_entries "
         f"where knowledge_scope_id=:s and provenance in ('soft','distilled') and {_probe_predicate()}"),
-        {"s": scope_id, "probe_run_id": support.RUN_ID})).mappings().all()
+        {"s": scope_id, "probe_run_id": PROBE_INVOCATION})).mappings().all()
 
     hard_missing: list[dict[str, Any]] = []
     for row in hard_rows:
@@ -418,6 +428,41 @@ async def measure_memory_provenance(session, scope_id: int) -> dict[str, Any]:
         "scope_id": scope_id, "reason": reason,
         "caliber": "stored memory rows: hard anchor (evidence_refs + confidence is None) and "
                    "soft/distilled five inference metadata keys, kept as separate denominators",
+    }
+
+
+def _merge_provenance_calibers(soft_side: Mapping[str, Any], hard_side: Mapping[str, Any]) -> dict[str, Any]:
+    """T032: give the hard caliber a real denominator without merging the calibers.
+
+    The soft/distilled caliber is measured on this run's fresh probe scope. The hard
+    caliber can only be measured where published chunks live, because
+    ``MemoryProvenanceValidator`` refuses a cross-scope anchor with
+    ``MEMORY_EVIDENCE_SCOPE_MISMATCH``. Both denominators are carried through
+    separately (never collapsed into one), and a zero on either side is reported as a
+    zero denominator rather than as a pass.
+    """
+    hard_examined = int(hard_side.get("hard_items_examined") or 0)
+    soft_examined = int(soft_side.get("soft_distilled_items_examined") or 0)
+    hard_missing = list(hard_side.get("hard_missing") or [])
+    soft_missing = list(soft_side.get("soft_distilled_missing") or [])
+    reason = None
+    if not hard_examined:
+        reason = "the hard caliber has a zero denominator: no hard row was examined in the anchor scope"
+    elif not soft_examined:
+        reason = "the soft/distilled caliber has a zero denominator: no soft/distilled row was examined"
+    return {
+        "passed": (hard_examined - len(hard_missing)) + (soft_examined - len(soft_missing)),
+        "total": hard_examined + soft_examined,
+        "hard_items_examined": hard_examined,
+        "soft_distilled_items_examined": soft_examined,
+        "hard_missing": hard_missing,
+        "soft_distilled_missing": soft_missing,
+        "scope_id": soft_side.get("scope_id"),
+        "hard_scope_id": hard_side.get("scope_id"),
+        "reason": reason,
+        "caliber": "stored memory rows in two separate calibers and two separate scopes: hard anchor "
+                   "(evidence_refs present and confidence is None) on the anchor scope that owns published "
+                   "chunks, soft/distilled five inference metadata keys on this run's probe scope",
     }
 
 
@@ -485,9 +530,14 @@ async def measure_hard_anchoring(session, scope_id: int, server, *, has_lease: b
     anchored_row = None
     anchor_scope = int(anchors[0]["knowledge_scope_id"]) if anchors else None
     if has_lease and anchors:
+        # The content must be unique per invocation. Record is idempotent on
+        # (scope_id, sha256(content)) and raises MEMORY_CONTENT_CONFLICT when the same
+        # body is resubmitted with different metadata, so a constant probe body made
+        # every re-run's anchored write fail (found when the registry repair forced a
+        # re-measurement). The write is still a real anchored hard write over MCP.
         anchored = await _call(server, "record_memory", probe_arguments(
             scope_ref=str(anchor_scope),
-            content=f"015 baseline anchor probe ({support.RUN_ID}): the reranker latency benchmark "
+            content=f"015 baseline anchor probe ({support.RUN_ID}/{uuid4()}): the reranker latency benchmark "
                     f"is owned by Li and due 2026-09-08.",
             provenance="hard", evidence_refs=[str(anchors[0]["chunk_id"])], inference_meta=None),
             timings)
@@ -521,8 +571,8 @@ async def measure_hard_anchoring(session, scope_id: int, server, *, has_lease: b
                 "and knowledge_scope_id <> all(:forbidden) "
                 "order by memory_id desc limit 5"),
                 {"s": anchor_scope, "forbidden": list(FORBIDDEN_SCOPE_IDS)})).mappings().all()
-            sample_rule = ("the anchor scope's most recent hard rows (the writer lease was held elsewhere, "
-                           "so no anchored write could be attempted in this run)")
+            sample_rule = ("the anchor scope's most recent hard rows (no anchored write could be attempted in this "
+                           "run: the writer lease was not held or no same-scope published anchor was available)")
     missing: list[dict[str, Any]] = []
     verified: list[int] = []
     for row in sample:
@@ -963,6 +1013,14 @@ async def measure_live(*, args) -> dict[str, Any]:
         provenance = await measure_memory_provenance(session, hard_scope)
         anchoring = await measure_hard_anchoring(session, hard_scope, server,
                                                  has_lease=lease is not None, timings=timings)
+        # T032/T033: the hard caliber needs a real denominator. An anchored hard write
+        # can only live in a scope that owns published chunks, so the hard caliber is
+        # measured on that anchor scope and carried alongside the probe scope's
+        # soft/distilled caliber. The two denominators stay separate.
+        anchor_scope_id = anchoring.get("anchor_scope_id")
+        if anchor_scope_id is not None and int(anchor_scope_id) != int(hard_scope):
+            provenance = _merge_provenance_calibers(
+                provenance, await measure_memory_provenance(session, int(anchor_scope_id)))
         await session.commit()
     _progress(f"hard scope={hard_scope} provenance={provenance['passed']}/{provenance['total']} "
               f"anchoring={anchoring['passed']}/{anchoring['total']}")
@@ -1171,6 +1229,7 @@ def assemble_from_measurements(*, measurements: Mapping[str, Any], args, commit:
         environment_fingerprint_value=str(raw.get("environment_fingerprint")
                                           or support.environment_fingerprint()))
 
+    reproducibility_not_measured = reference_report is None
     if reference_report is not None:
         # Both comparison sites hand the same shape to the same caliber: the root
         # keys the two reports share. Absent-on-both keys are never a drift, and
@@ -1184,8 +1243,38 @@ def assemble_from_measurements(*, measurements: Mapping[str, Any], args, commit:
         reproducibility = {key: comparison[key] for key in
                            ("non_latency_reproducible", "tolerance", "checks")}
     else:
-        reproducibility = {"non_latency_reproducible": True, "tolerance": support.RATE_TOLERANCE,
+        # No reference report was supplied, so no two-run comparison was performed.
+        # This branch used to assert ``non_latency_reproducible: True`` with an empty
+        # ``checks`` array, i.e. it claimed a check that never ran - a real over-claim
+        # found during finalization. The contract forces a boolean, so the honest
+        # encoding is false and the missing comparison is named in ``not_measurable``
+        # and in the notes below.
+        reproducibility = {"non_latency_reproducible": False, "tolerance": support.RATE_TOLERANCE,
                            "checks": []}
+    if reproducibility_not_measured:
+        not_measurable = list(not_measurable) + [support.not_measurable(
+            "reproducibility.non_latency",
+            "no reference report was supplied (--compare), so the two-run non-latency comparison was not performed; "
+            "the contract requires a boolean and reporting true would assert a check that never ran")]
+
+    notes = [
+        "baseline anchor, not an improvement claim: the report records the current watermark of this "
+        "snapshot and no comparative gain is asserted (013's conclusion is preserved verbatim)",
+        "every hard metric names its caliber and the exact denominator it used; a zero denominator is "
+        "reported as not_measurable with a reason and is never recorded as 0 or as a pass",
+        "safety-class calibers keep zero tolerance; the 1 % non-latency tolerance applies only to the "
+        "re-run reproducibility check and never to a safety verdict",
+        "any model review is diagnostic only and does not gate this report",
+        "the itemised raw measurements of this run (per-tool validation errors, per-path denominators, "
+        "per-axis metadata and the whole six-axis sample) live in "
+        f"{str(measurements_file).replace(chr(92), '/')}",
+    ]
+    if reproducibility_not_measured:
+        notes.append(
+            "reproducibility was NOT measured in this run: no --compare reference report was supplied, so the two-run "
+            "non-latency comparison did not happen. non_latency_reproducible is recorded false and the missing "
+            "comparison is named in not_measurable; reporting true would have asserted a check that never ran."
+        )
 
     report = support.assemble_report(
         run_id=support.RUN_ID, generated_at=generated_at, commit=commit, status=status,
@@ -1194,18 +1283,7 @@ def assemble_from_measurements(*, measurements: Mapping[str, Any], args, commit:
         per_case=per_case, reproducibility=reproducibility,
         not_measurable_items=not_measurable, gates=gates, goal_ledger_entries=ledger,
         regression=regression, evidence=evidence, failed_paths=[],
-        notes=[
-            "baseline anchor, not an improvement claim: the report records the current watermark of this "
-            "snapshot and no comparative gain is asserted (013's conclusion is preserved verbatim)",
-            "every hard metric names its caliber and the exact denominator it used; a zero denominator is "
-            "reported as not_measurable with a reason and is never recorded as 0 or as a pass",
-            "safety-class calibers keep zero tolerance; the 1 % non-latency tolerance applies only to the "
-            "re-run reproducibility check and never to a safety verdict",
-            "any model review is diagnostic only and does not gate this report",
-            "the itemised raw measurements of this run (per-tool validation errors, per-path denominators, "
-            "per-axis metadata and the whole six-axis sample) live in "
-            f"{str(measurements_file).replace(chr(92), '/')}",
-        ])
+        notes=notes)
     support.assert_status_consistent(report)
     return report
 
