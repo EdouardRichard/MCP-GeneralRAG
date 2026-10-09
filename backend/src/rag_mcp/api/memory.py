@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, cast, func, select, true
+from sqlalchemy import BigInteger, Float, cast, func, select, true
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -275,15 +275,36 @@ async def list_memory_scopes(session: AsyncSession = Depends(get_session)):
 
 @router.get("")
 async def browse_memories(scope_ref: str = Query(min_length=1), limit: int = Query(default=50, ge=1, le=100),
-                          offset: int = Query(default=0, ge=0), session: AsyncSession = Depends(get_session)):
+                          offset: int = Query(default=0, ge=0),
+                          kind: str | None = Query(default=None, min_length=1),
+                          status: str | None = Query(default=None, min_length=1),
+                          provenance: str | None = Query(default=None, min_length=1),
+                          session_id: str | None = Query(default=None, min_length=1),
+                          min_salience: float | None = Query(default=None, ge=0, le=1),
+                          session: AsyncSession = Depends(get_session)):
     try:
         sid = await MemoryScopeResolver(session).resolve(scope_ref)
     except ValueError as exception:
         raise _http_error(exception) from None
     entries = func.jsonb_each(MemoryProjectionMeta.payload["state"]["entries"]).table_valued("key", "value").lateral()
     data = cast(entries.c.value, JSONB)
-    conditions = (MemoryProjectionMeta.knowledge_scope_id == sid, MemoryProjectionMeta.projection_type == "manifest",
-                  MemoryProjectionMeta.status == "complete", MemoryProjectionMeta.payload["verification_version"].as_integer() == 1)
+    conditions = [MemoryProjectionMeta.knowledge_scope_id == sid, MemoryProjectionMeta.projection_type == "manifest",
+                  MemoryProjectionMeta.status == "complete", MemoryProjectionMeta.payload["verification_version"].as_integer() == 1]
+    # FR-036 six-dimension filtering. Every filter is additive and narrows the SAME
+    # conditions list the count uses, so `total` is the filtered total and pagination
+    # stays correct. Omitting every filter leaves the previous behaviour byte-identical.
+    for field, value in (("kind", kind), ("status", status), ("provenance", provenance), ("session_id", session_id)):
+        if value is not None:
+            conditions.append(data[field].as_string() == value)
+    if min_salience is not None:
+        # salience is the sibling field projection, not a relation-entry field: read
+        # state.salience[<memory_id>].salience through the jsonb_each lateral key.
+        conditions.append(
+            cast(
+                func.jsonb_extract_path_text(MemoryProjectionMeta.payload["state"]["salience"], entries.c.key, "salience"),
+                Float,
+            ) >= min_salience
+        )
     rows = (await session.execute(select(data).select_from(MemoryProjectionMeta).join(entries, true()).where(*conditions)
         .order_by(data["observed_at"].as_string().desc(), cast(data["memory_id"].as_string(), BigInteger).desc())
         .offset(offset).limit(limit))).scalars().all()
