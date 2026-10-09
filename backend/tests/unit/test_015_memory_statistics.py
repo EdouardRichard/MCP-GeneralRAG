@@ -23,9 +23,10 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import BigInteger, cast, func, select, true
+from sqlalchemy import cast, func, select, true
 from sqlalchemy.dialects.postgresql import JSONB
 
+from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
 from rag_mcp.services.memory_statistics import (
     KINDS,
@@ -287,6 +288,12 @@ async def test_stats_total_matches_the_browse_caliber_for_the_same_domain(db_ses
         select(func.count()).select_from(MemoryProjectionMeta).join(entries, true())
         .where(MemoryProjectionMeta.knowledge_scope_id == sid, *conditions))
     assert result["total"] == browse_total == 1
+    # A second, independent caliber: the completed relation rows the manifest was
+    # materialized from (six-projection verification pins the two together).
+    relation_total = await db_session.scalar(
+        select(func.count()).select_from(MemoryEntry)
+        .where(MemoryEntry.knowledge_scope_id == sid, MemoryEntry.write_status == "complete"))
+    assert relation_total == result["total"]
     salience = result["salience_distribution"]
     assert sum(bucket["count"] for bucket in salience["buckets"]) == result["total"]
     assert salience["p50"] is not None and salience["p50"] == salience["p90"] == salience["p95"]
