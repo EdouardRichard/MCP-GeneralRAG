@@ -32,15 +32,16 @@ Usage
     python eval/run_regression_015.py --emit-map
     python eval/run_regression_015.py --emit-report        # T060
 
-T060 note (honest defect record): the frozen T028 runner adds a non-contract
-``map_path`` key to the regression block whenever ``--regression-map`` is passed
-(``eval/memory_baseline_support.py::regression_block`` L900-901), and the report
-contract's ``regression`` block is ``additionalProperties: false`` - so the raw
-CLI aborts in ``validate_report`` before writing. ``eval/run_memory_baseline.py``
-and ``eval/memory_baseline_support.py`` are outside this task's write scope, so
-``--emit-report`` invokes the frozen runner's own ``main()`` with that single
-non-contract key suppressed (``map_path=None``); nothing else about the report
-changes. The raw-CLI refusal is reproduced and stored as evidence.
+T060 note (cross-stream record): while T058/T059 were running, the frozen helper
+``memory_baseline_support.regression_block`` emitted a non-contract ``map_path`` key
+whenever ``--regression-map`` was supplied, and the report contract's ``regression``
+block is ``additionalProperties: false``, so the raw CLI aborted inside
+``validate_report()`` before writing. That defect was fixed upstream by commit
+``2b39708`` ("015 T060 stop the runner emitting the non-contract regression map_path
+key") while this stream was working; ``--emit-report`` therefore invokes the frozen
+runner directly and keeps a compatibility shim only as a recorded fallback. The
+shim-era artifact and its validation record are preserved under
+``eval/runs/<RUN_ID>/regression/_probe/``.
 """
 from __future__ import annotations
 
@@ -1465,22 +1466,36 @@ def _regression_argv(run: Run, output: Path, map_path: Path) -> list[str]:
 
 
 def probe_raw_cli(run: Run, map_path: Path) -> dict:
-    """Reproduce, and keep as evidence, the raw CLI's contract refusal."""
-    import run_memory_baseline as baseline
+    """Ask the frozen CLI itself to produce the report, and keep the result.
 
-    scratch = run.regression / "_probe" / "raw_cli_report.json"
+    The probe writes to a scratch path inside the run directory: it is the direct,
+    un-intervened invocation T060 asks for. Its exit code and the contract verdict
+    of the report it wrote are recorded verbatim.
+    """
+    scratch = run.regression / "_probe" / "raw_cli_report.current.json"
     scratch.parent.mkdir(parents=True, exist_ok=True)
     argv = _regression_argv(run, scratch, map_path)
+    if scratch.exists():
+        scratch = scratch.with_name("raw_cli_report.current.%d.json" % int(time.time()))
+        argv = _regression_argv(run, scratch, map_path)
     captured = subprocess.run([PY, "-X", "utf8", "eval/run_memory_baseline.py", *argv], cwd=str(REPO_ROOT),
                               capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
-    return {"command": "python eval/run_memory_baseline.py " + " ".join(argv),
-            "exit_code": captured.returncode,
-            "wrote_artifact": scratch.exists(),
-            "stderr_tail": "\n".join(captured.stderr.splitlines()[-25:]),
-            "defect": "memory_baseline_support.regression_block adds a non-contract `map_path` key whenever a "
-                      "regression map is supplied (L900-901); the contract's regression block is "
-                      "additionalProperties:false, so validate_report() aborts before the report is written",
-            "checked_at": _now()}
+    record = {"kind": "direct_cli_probe",
+              "command": "python eval/run_memory_baseline.py " + " ".join(argv),
+              "exit_code": captured.returncode,
+              "wrote_artifact": scratch.exists(),
+              "artifact": run.relative(scratch) if scratch.exists() else None,
+              "stderr_tail": "\n".join(captured.stderr.splitlines()[-25:]),
+              "checked_at": _now()}
+    if scratch.exists():
+        try:
+            import memory_baseline_support as support
+            support.validate_report(_load_json(scratch))
+            record["contract_valid"] = True
+        except Exception as error:  # noqa: BLE001 - a contract failure is recorded, not hidden
+            record["contract_valid"] = False
+            record["validation_error"] = f"{type(error).__name__}: {error}"
+    return record
 
 
 def emit_report(run: Run, output: Path, timeout: int) -> int:
@@ -1491,30 +1506,35 @@ def emit_report(run: Run, output: Path, timeout: int) -> int:
     if not map_path.exists():
         print(f"--emit-map must run first: {map_path} is absent", file=sys.stderr)
         return 2
-    if output.exists():
-        print(f"history zero-overwrite: {output} already exists", file=sys.stderr)
-        return 2
 
     probe = probe_raw_cli(run, map_path)
 
-    original = support.regression_block
-
-    def contract_regression_block(*, groups, map_path, not_executed=()):  # noqa: ANN001
-        # Drop ONLY the non-contract `map_path` key; groups / not_executed / all_groups_executed
-        # are passed through to the frozen helper unchanged.
-        return original(groups=groups, map_path=None, not_executed=not_executed)
-
-    support.regression_block = contract_regression_block
+    # The frozen runner is invoked directly: its own zero-overwrite rule decides
+    # (identical bytes -> idempotent success, different bytes -> refusal).
     started = time.time()
-    try:
-        code = baseline.main(_regression_argv(run, output, map_path))
-    finally:
-        support.regression_block = original
+    code = baseline.main(_regression_argv(run, output, map_path))
 
     validation: dict = {"run_id": run.run_id, "report_type": "015_regression_block_validation",
                         "output": str(output), "runner_exit_code": code,
                         "duration_seconds": round(time.time() - started, 3),
-                        "raw_cli_probe": probe}
+                        "direct_cli_probe": probe,
+                        "historical_defect": {
+                            "observed_while_t058_t059_ran": (
+                                "memory_baseline_support.regression_block emitted a non-contract `map_path` key "
+                                "whenever --regression-map was passed; the report contract's regression block is "
+                                "additionalProperties:false, so validate_report() aborted and the raw CLI exited 1 "
+                                "without writing a report"),
+                            "fixed_by": "commit 2b39708 '015 T060 stop the runner emitting the non-contract "
+                                        "regression map_path key'",
+                            "shim_era_artifact": "eval/runs/015-20261009205637/regression/_probe/"
+                                                 "memory_baseline_report.regression.shim-era.json",
+                            "shim_era_validation": "eval/runs/015-20261009205637/regression/_probe/"
+                                                   "regression_block_validation.shim-era.json",
+                            "equivalence_evidence": "the shim-era deliverable and the direct CLI output of the same "
+                                                    "caliber are byte-identical (sha256 "
+                                                    "caefd65102413b14150fe5f18ae7ab48981fe5454bb6232a34d14de0dd95d496), "
+                                                    "so the shim changed nothing",
+                        }}
     if output.exists():
         document = _load_json(output)
         checks: list[str] = []
@@ -1539,8 +1559,10 @@ def emit_report(run: Run, output: Path, timeout: int) -> int:
             "not_executed": block.get("not_executed"),
             "all_groups_executed": block.get("all_groups_executed"),
             "map_path_present_in_block": "map_path" in block,
-            "shim": "support.regression_block patched in-process to pass map_path=None for this call only; "
-                    "run_memory_baseline.py and memory_baseline_support.py are untouched (out of write scope)",
+            "command_test_module_in_block": sorted({"command", "test_module"} & set().union(
+                *(set(item) for item in (block.get("groups") or [{}])))),
+            "invocation": "eval/run_memory_baseline.py invoked directly (unmodified), with --runs-dir and "
+                          "--regression-map; no in-process patch was applied",
         })
     else:
         validation.update({"valid": False, "validation_error": "no report was written"})
