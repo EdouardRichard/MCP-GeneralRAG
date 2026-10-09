@@ -16,6 +16,30 @@ from rag_mcp.config import get_settings
 os.environ.setdefault("INGESTION_BACKGROUND", "false")
 
 
+def _sanitize_proxy_environment() -> None:
+    """Drop malformed bracketed IPv6 entries from NO_PROXY (environment defect).
+
+    This host exports ``NO_PROXY='localhost,127.0.0.1,::1,[::1]'``. The bracketed
+    entry makes httpx build an invalid URLPattern for EVERY client, so any test that
+    constructs one fails with ``httpx.InvalidURL: Invalid port: ':1]'`` before it
+    reaches the code under test (measured: ``http://[::1]:P``, ``http://127.0.0.1:P``
+    and ``http://localhost:P`` all fail as-is and all succeed once the bracketed entry
+    is removed). Only this process's environment is normalised; nothing global changes
+    and the services the tests talk to are real.
+    """
+    for name in ("NO_PROXY", "no_proxy"):
+        value = os.environ.get(name)
+        if not value:
+            continue
+        entries = [entry.strip() for entry in value.split(",") if entry.strip()]
+        cleaned = [entry for entry in entries if not (entry.startswith("[") and entry.endswith("]"))]
+        if cleaned != entries:
+            os.environ[name] = ",".join(cleaned)
+
+
+_sanitize_proxy_environment()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def consolidation_evidence_bundle(request):
     """T094: real 013 acceptance-evidence collection, gated on the environment.
