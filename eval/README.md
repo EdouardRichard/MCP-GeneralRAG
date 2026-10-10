@@ -361,36 +361,85 @@ recall per arm so the first timed query measures retrieval instead of a cold sta
 
 | 产物 | 路径 | 口径 |
 |---|---|---|
-| 投毒防护子集 | `eval/memory_poisoning_eval_dataset.json`（`dataset_version 015.eval.1`） | 11 例；10 例 `role=primary`（其中 1 例为检测器故障注入，语料库自身把它列入 `detector_unavailable_cases`，**分子分母均不计入**），2 例 `role=control`；硬水位 = 可判 primary 例全数被标记且隔离 |
-| AOEP 义务用例 | `eval/memory_aoep_obligation_dataset.json`（`015.eval.1`） | 13 例，五条不变量各 ≥2（`traceable_rollback`/`deletion_propagation`/`authority_monotonicity`/`provenance_preservation`/`scope_non_expansion`） |
+| 投毒防护子集 | `eval/memory_poisoning_eval_dataset.json`（`dataset_version 015.eval.1`） | **19 例**（11 例首次冻结 + convergence 追加 8 例，`amendment` 记录追加与既有用例逐字节不变）：16 例 `role=primary`（覆盖检测器全部 11 条规则面与 4 类变种 `015.variants.1`），3 例 `role=control`（含 `jailbreak_marker`）；硬水位 = 可判 primary 例全数被标记且隔离；`known_misses` 公开登记当前检测器确实漏检的真实同义改写（不进入冻结子集） |
+| AOEP 义务用例 | `eval/memory_aoep_obligation_dataset.json`（`015.eval.1`） | 13 例，五条不变量各 ≥2（`traceable_rollback`/`deletion_propagation`/`authority_monotonicity`/`provenance_preservation`/`scope_non_expansion`）；逐例证据携带 `role`/`criterion`/`expected`/`observed`/`scoring`/`sample_sizes`，反例显式 `negative_control` |
 | 连续性数据集 | `eval/memory_continuity_eval_dataset.json`（**014** 冻结集，`014.eval.1`） | 16 查询；水位沿 014 冻结判据（`completed_with_memory ≥ 12` 且四类各 ≥1） |
 | 受益数据集 | `eval/consolidation_eval_dataset.json`（**013**） | 记录口径；巩固默认关闭时基线不可比，相对收益记 `not_measurable` |
-| 逐例结果（本 Feature 实跑） | `eval/runs/015-20261009205637/evidence/poisoning-cases.json`、`.../aoep-cases.json` | 运行器只读这两个文件，不手抄任何计数 |
-| 基准报告（追踪路径） | `eval/memory_baseline_report.json` | **仅首次播种**；此后由运行器写 `eval/runs/<RUN_ID>/memory_baseline_report.json` |
-| 基准报告（运行路径） | `eval/runs/015-20261009205637/memory_baseline_report.json` | 契约 `specs/015-memory-evaluation-governance/contracts/memory-baseline-report.schema.json`（与共享 `$defs` 合并后校验） |
-| 原始实测载荷 | `eval/runs/015-20261009205637/hard-metrics-measurements.json` | 逐工具校验错误、四路径分母、五处隔离计数、六投影/六轴逐条样本、延迟样本 |
-| 重跑可复现证据 | `eval/runs/015-20261009205637/evidence/baseline_reproducibility.json` | 两次运行的逐指标 `relative_delta`（延迟除外） |
+| 逐例结果（本 Feature 实跑） | `eval/runs/015-20261010020241/evidence/poisoning-cases.json`（20 条，含检测器故障注入）、`.../aoep-cases.json`（13 条） | 运行器只读这两个文件，不手抄任何计数 |
+| 基准报告（追踪路径） | `eval/memory_baseline_report.json` | **仅首次播种**，为 015-20261009205637 的历史种子；此后由运行器写 `eval/runs/<RUN_ID>/memory_baseline_report*.json` |
+| 基准报告（**权威路径**，convergence） | `eval/runs/015-20261010020241/memory_baseline_report.r5.json` | `status = incomplete`；权威性以同目录 `memory_baseline_report.index.json` 为准（其中逐条列出被取代的报告与理由）。契约 `specs/015-memory-evaluation-governance/contracts/memory-baseline-report.schema.json`（与共享 `$defs` 合并后校验） |
+| 原始实测载荷 | `eval/runs/015-20261010020241/hard-metrics-measurements.r2.json` | 逐工具校验错误、**六条**跨域路径分母与可探测性控制、五处隔离计数、六投影/六轴逐条样本、延迟样本 |
+| 重跑可复现证据 | `eval/runs/015-20261009205637/evidence/baseline_reproducibility.json`、`eval/runs/015-20261010020241/evidence/reproducibility_convergence.json` | 两次**真实实测**的逐指标 `relative_delta`（延迟除外）：7 项超出 1% 容差；同载荷装配两次（182/182 一致）**不是**该口径 |
 
 **运行器用法与重跑口径**
 
 ```powershell
+$env:RUN_ID='015-<YYYYMMDDHHMMSS>'
 python eval/run_memory_baseline.py `
-    --output eval/runs/015-20261009205637/memory_baseline_report.json `
+    --output eval/runs/$env:RUN_ID/memory_baseline_report.json `
     --poisoning eval/memory_poisoning_eval_dataset.json `
     --aoep eval/memory_aoep_obligation_dataset.json `
-    --aoep-results D:\Project_new\docsToCode\eval\runs\015-20261009205637\evidence\aoep-cases.json `
-    --poisoning-results D:\Project_new\docsToCode\eval\runs\015-20261009205637\evidence\poisoning-cases.json `
-    --runs-dir eval/runs/015-20261009205637 `
+    --aoep-results D:\Project_new\docsToCode\eval\runs\$env:RUN_ID\evidence\aoep-cases.json `
+    --poisoning-results D:\Project_new\docsToCode\eval\runs\$env:RUN_ID\evidence\poisoning-cases.json `
+    --runs-dir eval/runs/$env:RUN_ID `
     --continuity-report eval/runs/015-20261009205637/continuity-replay/memory-replay.json `
-    --continuity-criterion-met --continuity-completed 16
+    --continuity-criterion-met --continuity-completed 16 `
+    --regression-map eval/runs/015-20261009205637/regression/regression_group_map.json `
+    --measurements eval/runs/$env:RUN_ID/hard-metrics-measurements.json
 ```
+
+- **不在同一台共享库上并发跑多个写评测**：多个套件同时争用全局 writer lease 会造成
+  `idle in transaction` 持锁 + `UPDATE writer_lease` 永久等待（本项目实测到 481 秒死锁），
+  必须串行执行；本轮 convergence 因此按 AOEP → 投毒 → 治理 → 全集回归 的顺序单进程运行。
+- **重新执行的 001–014 全集回归**：`eval/runs/015-20261010032500/regression/regression_group_map.json`
+  （31 组登记、**30 组实执行**、1 组未执行：`013_consolidation_comparison` 的 record 轮产出 0 条缓存清单，
+  replay 以 `cache evidence incomplete: matched=0/0` 拒绝）。该 map 另记录：host 的 `NO_PROXY` 括号 IPv6 条目
+  会让每个 caliber 在建 Qdrant 客户端时抛 `InvalidURL: Invalid port ':1]'`（首轮 31 组全部 exit 1、无产物），
+  编排器已对自身与全部子进程归一化该变量并记录 original → normalized；以及"多套件不得并发"的串行纪律。
+  每次执行按 `--timeout 1800` 一轮预算，超时记 not_executed、绝不记通过。
+- **回归编排的两处缺陷（重跑期间发现并修复）**：① `eval/run_regression_011.py` 的聚合把"本次实际选择"的 5 个确定性组
+  与模块级 6 组清单比较，使被 015 刻意收窄的调用**永远不可能通过**（现按 selected 集合判定，并在摘要中记录
+  `selected_groups`）；② 同一 runner 用 `create_subprocess_exec` 起子进程时未传 `env`，导致 Windows **机器级**的
+  畸形 `NO_PROXY` 穿透到孙进程（实测：父进程已归一化，子 `cmd /c set NO_PROXY` 仍显示畸形值），子进程全部在构造
+  Qdrant 客户端时崩溃（现改为传净化后的显式 env）。修复后 `011_regression_011` 的真实产物 `all_passed = true`
+  （5/5 子组），该组已由 failed 重分类为 passed；前一版产物与状态逐字保留在 `regression/011_regression.pre-fix/`
+  与状态文件的 `superseded_outcome` 中。
+- **Phase 11 收敛轮（关闭"全集回归无回归"）**：`eval/runs/015-20261010100500` —— 单一 run id 全量重跑
+  001–014，**31/31 组实执行、31/31 组 `outcome = passed`**，4 个 record+replay 组 replay 真实网络调用均为 0；
+  权威报告 `eval/runs/015-20261010100500/memory_baseline_report.json`（`status = passed`，四项硬门全真），
+  索引 `.../memory_baseline_report.index.json`，逐条修复与证据见 `evidence/convergence_closure.json`。本轮新增/修正：
+  - `--isolated-database` / `--isolated-template` / `--keep-isolated-database` 与逐组 `requires_isolated_database`：
+    写入 013 巩固状态的 caliber（`013_e2e`、`014_contract`）以"胶囊库原生模板副本"执行，运行前 drop+template-copy
+    刷新并落证 `evidence/isolated_database.json`；隔离口径实测 `013_e2e` 7 passed、`tests/contract` 601 passed 0 failed。
+  - `012_acceptance` 的命令补传 `--regression`（该 runner 的 `SC-012` 规则在无回归证据时记 `not_verified`，会使
+    验收报告恒为 `status=incomplete`）；现报告 `status=passed`、17/17 判据含 `SC-012` 全过。
+  - `eval/run_consolidation_comparison.py` 的冻结标识种子下界改为 `max(sha256 派生值, authority_cutoff + WINDOW_ID_STRIDE)`：
+    原实现可能给出**低于**被恢复权威 high-water 的封窗事件 id，被 0095 的
+    `guard_consolidation_window_event()` 正当地拒绝为 `invalid consolidation window prefix`（实测
+    `015REGRESSION013234bd726` → 273118229010885578 < cutoff 366085522273075200），导致两臂首条写入即失败、
+    strict cache manifest 为空、replay 拒绝启动；修复后两臂 6/6 查询无错、清单 2 条、replay 计数 0。
+  - 4 组超容差比较的既有漂移处置（`pre_existing_corpus_drift` / `inherited_between_historicals`）落为**逐指标机器
+    校验**的 `outcome_reason`（`DRIFT_DISPOSITIONS` + `_disposition_for`，1e-6 容差，且不得含未登记漂移）；
+    `regression_gate` 只在"无处置"时判不通过，并在 detail 中列出带处置的组。
+  - 013 对照的 replay 步骤声明 `allow_nonzero_exit`（其退出码承载 013 自身 `status=failed` 的已发布结论，而非执行
+    失败）与 `resume_existing_artifact`：仅当既有 replay 产物自身记录的 `replay_real_network_calls` **恰为 0** 时才
+    采纳为 pass basis，否则拒绝采纳并记未执行；`run-summary.json` 的失败态摘要改为 `superseded-N` 旁置后再写。
+- **每组 outcome 的判定口径**：JUnit 产物（failures/errors）→ 无 JUnit 时与各组声明的 `historical` 产物做
+  **结论比对**（`enters_default_path`/`three_gate_pass`/`all_passed`/`default_enable_eligible`/`status` 相同即
+  无回归；gate/constraint 与 metric 块按 1% 容差比对，**延迟项不参与**）→ 编排器 `_derive_outcome`。
+  非延迟比较超出 1% 容差且 map 未记处置的组一律判 `failed`（即使进程 exit 0）。
 
 - `--output` 必填且**唯一写入路径**；`--poisoning`/`--aoep`/`--aoep-results`/`--poisoning-results` 必填；
   `--runs-dir` 供装配 `regression` 块（读 T058 的 `regression_group_map.json`，映射缺失或未执行的组
   记入 `not_executed`，**绝不记为通过**）；`--continuity-report` + `--continuity-criterion-met` +
   `--continuity-completed` 提供连续性水位的真实来源（014 replay 报告）。
-- **运行标识规则**：`RUN_ID=015-<YYYYMMDDHHMMSS>`；本 Feature 冻结 `015-20261009205637`。运行器读取
-  `RUN_ID` 环境变量，默认即该冻结值，且所有 015 产物只写 `eval/runs/<RUN_ID>/`。
+- **运行标识规则**：`RUN_ID=015-<YYYYMMDDHHMMSS>`；015 首轮冻结 `015-20261009205637`，convergence
+  轮为 `015-20261010020241`（权威报告与索引在该目录）。运行器读取 `RUN_ID` 环境变量（未设置时默认
+  首轮值），且所有 015 产物只写 `eval/runs/<RUN_ID>/`。
+- **回归块的可判定性（convergence T078）**：`regression.groups[]` 每项必须带 `outcome`
+  （`passed|failed|not_measured`，由 `regression_group_map.json` 的 outcome、JUnit 产物或
+  非延迟比较结果派生），`regression_gate` 在任一已执行组 `outcome != passed` 或任一非延迟比较
+  超出 1% 容差且无处置时判**不通过**；未执行/未判定 MUST NOT 记为通过。
 - **零覆盖纪律**：目标路径已存在且字节不同 → 拒绝写入并 `exit 2`；字节相同 → 幂等成功（`exit 0`）。
   `eval/memory_baseline_report.json` 仅在不存在时播种（`--seed-tracked-report`）。运行器**不**复制
   `eval/hard_metrics_014.py:435` 的无条件重写行为，`hard_metrics_014` 的 `main()` 从不被调用；该模块
