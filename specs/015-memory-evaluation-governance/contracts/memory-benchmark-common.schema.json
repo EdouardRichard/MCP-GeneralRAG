@@ -76,7 +76,20 @@
         "leaks": { "type": "integer", "minimum": 0 },
         "value": { "type": ["number", "null"] },
         "state": { "enum": ["measured", "not_measurable"] },
-        "reason": { "type": "string", "minLength": 1 }
+        "reason": { "type": "string", "minLength": 1 },
+        "detectability": {
+          "type": "object",
+          "description": "可探测性控制（Phase 10 T076）。人为植入一条跨域行/向量点/文件后该路径 MUST 报 leaks>0；fired=false 的路径 MUST NOT 记为达标（FR-028/SC-013）。",
+          "properties": {
+            "control": { "type": "string", "minLength": 1 },
+            "fired": { "type": "boolean" },
+            "planted": { "type": "integer", "minimum": 0 },
+            "observed_leaks": { "type": "integer", "minimum": 0 },
+            "reason": { "type": "string", "minLength": 1 }
+          },
+          "required": ["control", "fired", "planted", "observed_leaks"],
+          "additionalProperties": false
+        }
       },
       "required": ["examined", "leaks", "value", "state"],
       "allOf": [
@@ -87,9 +100,34 @@
             "properties": { "value": { "type": "null" }, "state": { "const": "not_measurable" } },
             "required": ["value", "state", "reason"]
           }
+        },
+        {
+          "description": "可探测性控制未触发（detectability.fired=false）时该路径 MUST 记 not_measurable 并写明原因（FR-028/SC-013）。",
+          "if": {
+            "properties": { "detectability": { "properties": { "fired": { "const": false } }, "required": ["fired"] } },
+            "required": ["detectability"]
+          },
+          "then": {
+            "properties": { "value": { "type": "null" }, "state": { "const": "not_measurable" } },
+            "required": ["state", "reason"]
+          }
         }
       ],
       "additionalProperties": false
+    },
+    "leakPathPassing": {
+      "type": "object",
+      "description": "达标路径形态（Phase 10 T076）：状态为 measured、leaks=0 且可探测性控制已触发（fired=true）。",
+      "properties": {
+        "leaks": { "const": 0 },
+        "state": { "const": "measured" },
+        "detectability": {
+          "type": "object",
+          "properties": { "fired": { "const": true } },
+          "required": ["fired"]
+        }
+      },
+      "required": ["leaks", "state"]
     },
     "hardMetricsBlock": {
       "type": "object",
@@ -104,7 +142,9 @@
                 "event_log": { "$ref": "#/$defs/leakPath" },
                 "relation": { "$ref": "#/$defs/leakPath" },
                 "vector": { "$ref": "#/$defs/leakPath" },
-                "file": { "$ref": "#/$defs/leakPath" }
+                "file": { "$ref": "#/$defs/leakPath" },
+                "attachment": { "$ref": "#/$defs/leakPath" },
+                "working_set": { "$ref": "#/$defs/leakPath" }
               },
               "required": ["event_log", "relation", "vector", "file"],
               "additionalProperties": false
@@ -208,6 +248,8 @@
             "reason": { "type": "string", "minLength": 1 },
             "rejected_samples": { "type": "array", "items": { "type": "object" } },
             "error_code_distribution": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+            "prior_items_examined": { "type": "integer", "minimum": 0 },
+            "sample_rule": { "type": "string", "minLength": 1 },
             "caliber": { "type": "string", "minLength": 1 }
           },
           "required": ["passed", "total", "rate", "value", "rejected_samples", "error_code_distribution", "caliber"],
@@ -312,6 +354,29 @@
               "state_metadata_completeness": { "properties": { "all_passed": { "const": true } } }
             }
           }
+        },
+        {
+          "description": "all_passed 为真 ⇒ 六条路径（含消费面 related_memories/working_set）各自 measured、leaks=0 且 detectability.fired=true（Phase 10 T076/T077）；消费面任一不可测量或控制未触发即 MUST NOT 判达标（FR-018/FR-028/SC-008/SC-013）。",
+          "if": { "properties": { "all_passed": { "const": true } }, "required": ["all_passed"] },
+          "then": {
+            "properties": {
+              "cross_domain_leakage": {
+                "properties": {
+                  "paths": {
+                    "properties": {
+                      "event_log": { "$ref": "#/$defs/leakPathPassing" },
+                      "relation": { "$ref": "#/$defs/leakPathPassing" },
+                      "vector": { "$ref": "#/$defs/leakPathPassing" },
+                      "file": { "$ref": "#/$defs/leakPathPassing" },
+                      "attachment": { "$ref": "#/$defs/leakPathPassing" },
+                      "working_set": { "$ref": "#/$defs/leakPathPassing" }
+                    },
+                    "required": ["attachment", "working_set"]
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "additionalProperties": false
@@ -324,6 +389,10 @@
         "pattern": { "type": "string", "minLength": 1 },
         "risk_tier": { "enum": ["high", "low", "none"] },
         "variant_class": { "type": ["string", "null"] },
+        "variant_id": { "type": ["string", "null"] },
+        "detector_rule": { "type": ["string", "null"] },
+        "matched_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "criterion_expected": { "type": ["boolean", "null"] },
         "language": { "enum": ["zh", "en"] },
         "flag_observed": { "type": ["string", "null"] },
         "status_observed": { "type": ["string", "null"] },
@@ -375,6 +444,12 @@
       "properties": {
         "case_id": { "type": "string", "pattern": "^aoep_[a-z0-9_]+$" },
         "invariant": { "enum": ["traceable_rollback", "deletion_propagation", "authority_monotonicity", "provenance_preservation", "scope_non_expansion"] },
+        "role": { "enum": ["primary", "negative_control"] },
+        "criterion": { "type": "string", "minLength": 1 },
+        "expected": { "type": "object" },
+        "observed": { "type": "object" },
+        "scoring": { "type": "object" },
+        "sample_sizes": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
         "request_id": { "type": "string", "minLength": 1 },
         "status": { "enum": ["passed", "failed", "not_measurable"] },
         "target_kind": { "type": ["string", "null"] },

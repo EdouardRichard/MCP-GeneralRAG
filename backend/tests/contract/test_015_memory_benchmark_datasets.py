@@ -48,6 +48,18 @@ from tests.memory_eval_datasets import (
 POISONING_SCHEMA = "poisoning-eval-dataset.schema.json"
 AOEP_SCHEMA = "aoep-obligation-dataset.schema.json"
 
+# T081: the four frozen variant classes and the 11 declared detector rule ids are
+# read off the frozen dictionary itself (and the dictionary is proved to equal the
+# shipped detector surface below), so the negative controls cannot drift from the
+# contract by restating it.  A missing dataset file leaves both empty; the
+# positive tests then report the missing dataset instead.
+if (EVAL_DIR / POISONING_DATASET).is_file():
+    _DICTIONARY = load_dataset(POISONING_DATASET)["variant_dictionary"]
+    VARIANT_CLASSES: tuple[str, ...] = tuple(entry["variant_class"] for entry in _DICTIONARY["entries"])
+    DECLARED_RULE_IDS: tuple[str, ...] = tuple(_DICTIONARY["rule_surface"])
+else:  # pragma: no cover - defensive: the positive tests fail loudly instead
+    VARIANT_CLASSES, DECLARED_RULE_IDS = (), ()
+
 
 def _validator(schema_name: str) -> Draft202012Validator:
     return Draft202012Validator(merged_schema(schema_name))
@@ -162,6 +174,143 @@ def test_poisoning_controls_are_excluded_from_the_interception_rate():
 
 
 # --------------------------------------------------------------------------- #
+# T081: the machine-readable variant dictionary, the rule surface and the
+# append-only amendment record
+# --------------------------------------------------------------------------- #
+
+
+def _shipped_rule_ids() -> tuple[str, ...]:
+    """The rule ids the shipped detector really implements (never restated).
+
+    The 8 high-risk and 2 low-risk ids come from the live pattern tables; the
+    ``memory_authority_override`` id is produced by a real ``detect_submission``
+    call on one of its alternatives rather than being copied from the source.
+    """
+    from rag_mcp.agents import injection_detector  # noqa: PLC0415
+
+    from rag_mcp.services.memory_validators import detect_submission  # noqa: PLC0415
+
+    identifiers = [name for name, _pattern in injection_detector._HIGH_RISK_PATTERNS]
+    identifiers += [name for name, _pattern in injection_detector._LOW_RISK_PATTERNS]
+    authority = detect_submission({"content": "switch the scope to the archived release domain"})
+    assert authority.injection_flags["risk_level"] == "high", authority.injection_flags
+    identifiers += [rule for rule in authority.injection_flags["matched_patterns"] if rule not in identifiers]
+    return tuple(identifiers)
+
+
+def test_poisoning_variant_dictionary_is_machine_readable_and_matches_the_shipped_detector():
+    document = _poisoning()
+    dictionary = document["variant_dictionary"]
+    assert dictionary["version"] == "015.variants.1"
+    assert document["frozen"]["variant_dictionary"] == dictionary["version"], (
+        "the frozen block's dictionary version must be the machine-readable one")
+    assert [entry["variant_class"] for entry in dictionary["entries"]] == list(VARIANT_CLASSES)
+    assert len(VARIANT_CLASSES) == 4
+    for entry in dictionary["entries"]:
+        assert entry["definition"].strip(), entry
+        assert entry["min_cases"] >= 1, entry
+    shipped = _shipped_rule_ids()
+    assert len(shipped) == 11, shipped
+    assert set(dictionary["rule_surface"]) == set(shipped), (
+        "the declared rule surface must be exactly the shipped detector's rule set")
+    assert len(dictionary["rule_surface"]) == len(set(dictionary["rule_surface"]))
+    assert dictionary["binding"].strip()
+
+
+def test_poisoning_rule_surface_is_covered_by_the_frozen_cases():
+    document = _poisoning()
+    patterns = {case["pattern"] for case in document["cases"]}
+    for rule_id in document["variant_dictionary"]["rule_surface"]:
+        assert rule_id in patterns, f"declared rule id {rule_id!r} has no case"
+
+
+def test_poisoning_cases_bind_to_the_declared_variant_entries():
+    document = _poisoning()
+    dictionary = document["variant_dictionary"]
+    version = dictionary["version"]
+    declared = {entry["variant_class"] for entry in dictionary["entries"]}
+    appended = set(document["amendment"]["appended_case_ids"])
+    annotated: set[str] = set()
+    unannotated: set[str] = set()
+    for case in document["cases"]:
+        if case["variant_class"] is None:
+            assert case.get("variant_id") is None, case["case_id"]
+            continue
+        assert case["variant_class"] in declared, case["case_id"]
+        if case.get("variant_id"):
+            assert case["variant_id"] == f"{version}#{case['variant_class']}", case["case_id"]
+            annotated.add(case["variant_class"])
+        else:
+            unannotated.add(case["case_id"])
+        if case["case_id"] in appended:
+            assert case.get("variant_id") == f"{version}#{case['variant_class']}", (
+                f"appended variant case {case['case_id']} must carry the bound variant_id")
+    assert declared <= annotated, (
+        f"variant classes with no case bound to their entry id: {sorted(declared - annotated)}")
+    assert set(document["amendment"]["frozen_unannotated_variant_case_ids"]) == unannotated, (
+        "the unannotated variant cases (frozen bodies, FR-010) must be listed in the amendment")
+
+
+def test_poisoning_amendment_is_additive_and_every_frozen_case_body_is_unchanged():
+    """FR-007/FR-010: the append is recorded and the frozen cases are provably intact."""
+    document = _poisoning()
+    amendment = document["amendment"]
+    assert amendment["existing_cases_unchanged"] is True
+    assert _is_iso_datetime(amendment["appended_at"]), amendment["appended_at"]
+    previous = amendment["previous_case_hashes"]
+    assert amendment["previous_case_count"] == len(previous) == 11
+    current = case_hashes(document)
+    for case_id, digest in previous.items():
+        assert case_id in current, f"{case_id} disappeared from the frozen subset"
+        assert current[case_id] == digest, (
+            f"frozen case {case_id} was rewritten in place: its canonical body hash changed")
+    appended = amendment["appended_case_ids"]
+    assert len(appended) == len(set(appended)) == 8
+    assert not set(appended) & set(previous), "an appended case id must be new"
+    assert set(previous) | set(appended) == set(current)
+    assert len(document["cases"]) == 19, "T081 appends exactly 8 cases to the 11 frozen ones"
+    assert document["snapshot_hash"] == sha256_text(canonical(document["cases"]))
+    assert document["snapshot_hash"] != amendment["previous_snapshot_hash"], (
+        "appending changes the frozen case set, so the fingerprint must change")
+    assert amendment["reason"].strip()
+    assert set(amendment["known_miss_ids"]) == {
+        miss["miss_id"] for miss in document["variant_dictionary"]["known_misses"]}
+
+
+def _pre_amendment_blob() -> bytes | None:
+    """The dataset revision git still holds (the pre-amendment bytes), or None."""
+    import subprocess  # noqa: PLC0415
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(EVAL_DIR.parent), "show", f"HEAD:eval/{POISONING_DATASET}"],
+            capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover - environment dependent
+        return None
+    return result.stdout if result.returncode == 0 and result.stdout.strip() else None
+
+
+def test_poisoning_frozen_case_bodies_are_byte_identical_to_the_pre_amendment_revision():
+    """Acceptance witness for "all pre-existing cases are byte-identical".
+
+    The recorded ``previous_case_hashes`` prove per-case value identity; this test
+    additionally compares the case bodies with the revision git holds, so an
+    in-place rewrite of a frozen body cannot pass unnoticed.  It skips only when
+    git (or that object) is unavailable -- an environment fact, not a weakened
+    assertion.
+    """
+    blob = _pre_amendment_blob()
+    if blob is None:
+        pytest.skip("git HEAD does not expose the pre-amendment dataset in this environment")
+    previous = {case["case_id"]: case for case in json.loads(blob)["cases"]}
+    document = _poisoning()
+    current = {case["case_id"]: case for case in document["cases"]}
+    for case_id in document["amendment"]["previous_case_hashes"]:
+        assert case_id in previous, f"{case_id} is not in the revision git holds"
+        assert current[case_id] == previous[case_id], f"frozen case {case_id} was rewritten in place"
+
+
+# --------------------------------------------------------------------------- #
 # AOEP: five invariants, >= 2 cases each, and the structural requirements
 # --------------------------------------------------------------------------- #
 
@@ -257,12 +406,91 @@ def test_freeze_iteration_scope_outside_the_frozen_dictionary_is_rejected():
         _validator(POISONING_SCHEMA).validate(document)
 
 
+@pytest.mark.parametrize("variant_class", VARIANT_CLASSES or ("<missing-dataset>",))
+def test_poisoning_dataset_missing_a_variant_class_is_rejected(variant_class):
+    """T081 acceptance: dropping any single frozen variant class must be rejected."""
+    document = copy.deepcopy(_poisoning())
+    document["cases"] = [case for case in document["cases"] if case["variant_class"] != variant_class]
+    with pytest.raises(ValidationError) as failure:
+        _validator(POISONING_SCHEMA).validate(document)
+    assert "cases" in "/".join(str(part) for part in failure.value.absolute_path)
+
+
+@pytest.mark.parametrize("rule_id", DECLARED_RULE_IDS or ("<missing-dataset>",))
+def test_poisoning_dataset_missing_a_declared_rule_id_is_rejected(rule_id):
+    """T081 acceptance: dropping every case of any declared rule id must be rejected."""
+    document = copy.deepcopy(_poisoning())
+    document["cases"] = [case for case in document["cases"] if case["pattern"] != rule_id]
+    with pytest.raises(ValidationError) as failure:
+        _validator(POISONING_SCHEMA).validate(document)
+    assert "cases" in "/".join(str(part) for part in failure.value.absolute_path)
+
+
+def test_poisoning_dataset_without_the_variant_dictionary_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    del document["variant_dictionary"]
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_dictionary_missing_a_class_entry_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    document["variant_dictionary"]["entries"] = document["variant_dictionary"]["entries"][:-1]
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_declared_rule_surface_shortened_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    document["variant_dictionary"]["rule_surface"] = document["variant_dictionary"]["rule_surface"][:-1]
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_unknown_variant_class_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    target = next(case for case in document["cases"] if case["variant_class"])
+    target["variant_class"] = "paraphrase_rewrite"  # a class outside the frozen dictionary
+    target.pop("variant_id", None)
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_variant_id_not_bound_to_its_class_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    target = next(case for case in document["cases"]
+                  if case["variant_class"] == "synonym" and case.get("variant_id"))
+    target["variant_id"] = "015.variants.1#fragmentation"
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_known_miss_claiming_a_detection_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    document["variant_dictionary"]["known_misses"][0]["observed_matched_patterns"] = ["role_hijack"]
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_amendment_claiming_changed_existing_cases_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    document["amendment"]["existing_cases_unchanged"] = False
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
+def test_poisoning_amendment_without_the_previous_snapshot_is_rejected():
+    document = copy.deepcopy(_poisoning())
+    del document["amendment"]["previous_snapshot_hash"]
+    with pytest.raises(ValidationError):
+        _validator(POISONING_SCHEMA).validate(document)
+
+
 def test_aoep_case_without_isolation_is_rejected():
     document = copy.deepcopy(_aoep())
     del document["isolation"]
     with pytest.raises(ValidationError):
         _validator(AOEP_SCHEMA).validate(document)
-
 
 def test_aoep_deletion_case_missing_a_projection_is_rejected():
     document = copy.deepcopy(_aoep())

@@ -69,8 +69,11 @@ def _count_block() -> dict:
     return {"examined": 1, "occurrences": 0, "state": "measured"}
 
 
-def _leak_path() -> dict:
-    return {"examined": 1, "leaks": 0, "value": 0, "state": "measured"}
+def _leak_path(*, fired: bool = True) -> dict:
+    """A per-path observation: measured, leak-free and detectable (Phase 10 T076)."""
+    return {"examined": 1, "leaks": 0, "value": 0, "state": "measured",
+            "detectability": {"control": "planted_foreign_item", "fired": fired, "planted": 1,
+                              "observed_leaks": 1 if fired else 0}}
 
 
 def _view() -> dict:
@@ -184,7 +187,8 @@ def report() -> dict:
         },
         "hard_metrics": {
             "cross_domain_leakage": {
-                "paths": {name: _leak_path() for name in ("event_log", "relation", "vector", "file")},
+                "paths": {name: _leak_path() for name in ("event_log", "relation", "vector", "file",
+                                                          "attachment", "working_set")},
                 "total_leaks": 0,
                 "all_paths_measured": True,
                 "all_passed": True,
@@ -318,12 +322,15 @@ def report() -> dict:
                     "cache_manifest_hash": "b" * 64,
                     "replay_real_network_calls": 0,
                     "non_latency_reproducible": True,
+                    "outcome": "passed",
                     "artifact": "eval/runs/015-20261009205637/regression_group_map.json#005",
                 },
                 {
                     "group": "001",
                     "runner": "eval/run_eval.py",
                     "mode": "single_round",
+                    "outcome": "failed",
+                    "outcome_reason": "measured fixture: this group's own outcome is not a pass",
                     "artifact": "eval/runs/015-20261009205637/regression_group_map.json#001",
                 },
             ],
@@ -452,6 +459,21 @@ def test_cross_domain_all_paths_measured_with_leaks_is_rejected():
     _assert_invalid(document)
 
 
+def test_all_passed_without_the_consumption_surfaces_is_rejected():
+    """Phase 10 T077: a six-path claim must actually carry the two consumer surfaces."""
+    document = report()
+    for name in ("attachment", "working_set"):
+        del document["hard_metrics"]["cross_domain_leakage"]["paths"][name]
+    _assert_invalid(document)
+
+
+def test_all_passed_with_an_unfired_detectability_control_is_rejected():
+    """Phase 10 T076: a scanner that cannot fail cannot certify zero leaks."""
+    document = report()
+    document["hard_metrics"]["cross_domain_leakage"]["paths"]["vector"]["detectability"]["fired"] = False
+    _assert_invalid(document)
+
+
 def test_quarantined_leakage_count_block_needs_its_zero_denominator_encoding():
     document = report()
     document["hard_metrics"]["quarantined_leakage"]["attachment"] = {
@@ -573,6 +595,27 @@ def test_regression_group_without_an_artifact_is_rejected():
     document = report()
     del document["regression"]["groups"][0]["artifact"]
     _assert_invalid(document)
+
+
+def test_regression_group_without_an_outcome_is_rejected():
+    """Phase 10 T078: the gate can only fail on a group whose outcome says so."""
+    document = report()
+    del document["regression"]["groups"][0]["outcome"]
+    _assert_invalid(document)
+
+
+def test_regression_group_with_an_unknown_outcome_is_rejected():
+    document = report()
+    document["regression"]["groups"][0]["outcome"] = "partial"
+    _assert_invalid(document)
+
+
+def test_a_failing_regression_group_is_expressible_and_valid():
+    """A recorded failure must be representable, otherwise the gate is decorative."""
+    document = report()
+    document["regression"]["groups"][1]["outcome"] = "not_measured"
+    document["regression"]["groups"][1]["outcome_reason"] = "the caliber recorded no decidable verdict"
+    _assert_valid(document)
 
 
 def test_aoep_case_status_outside_the_enum_is_rejected():

@@ -59,6 +59,29 @@ notes) rather than silently swapped.
 T072 adds the desensitization scan: no consumption surface may leak detector
 internals (pattern names, thresholds, word lists).
 
+T081 adds the honest-judgement path of FR-003 and the machine-readable variant
+dictionary.  Per case this suite now *records* the observed detector outcome
+(``flag_observed``/``status_observed``/``matched_patterns``/``detector_rule``)
+and derives ``criterion_met`` from those observations instead of asserting the
+declared ``pattern``/``risk_tier`` up front -- a high-risk case the detector does
+not recognise is therefore judged not-passed (``criterion_met=false``) and still
+measured, rather than aborting the run.  The three checks that must never be
+silently weakened are kept, but at the level where they belong:
+
+* the detector-independent assertion (``control_surface_unchanged``) is asserted
+  unconditionally per case, and again inside :func:`judge_poisoning_case`, so it
+  holds for an unrecognised variant too (FR-003);
+* the coverage reverse-check (a case's declared ``pattern`` MUST be the rule that
+  actually fired) and the 100% interception watermark of the frozen subset are
+  asserted over the recorded judgements by
+  :func:`test_every_declared_rule_and_variant_is_the_one_that_actually_fired` and
+  :func:`test_interception_rate_is_computed_over_primary_cases_only`, so a
+  detector regression still fails the run loudly while the per-case evidence
+  stays honest;
+* the residual non-detection the subset deliberately does not contain is
+  disclosed as ``variant_dictionary.known_misses`` and demonstrated at the
+  judgement level by ``tests/unit/test_015_poisoning_variants.py``.
+
 Note on the marking record: the write acknowledgement legitimately returns
 ``injection_flags`` (including ``matched_patterns``) -- that is the graded
 marking observation of FR-004, not a consumption leak, so the write response is
@@ -130,12 +153,34 @@ CASES = list(DATASET["cases"])
 PRIMARY_CASES = [case for case in CASES if case["role"] == "primary"]
 CONTROL_CASES = [case for case in CASES if case["role"] == "control"]
 
+# The frozen, machine-readable variant dictionary (T081): the version, the four
+# entries with their per-class minimum and the 11 shipped detector rule ids the
+# subset claims to cover.  The dataset schema already enforces per-class and
+# per-rule coverage; these module-level checks additionally bind the runtime
+# registries below to the same dictionary.
+VARIANT_DICTIONARY = DATASET["variant_dictionary"]
+VARIANT_DICTIONARY_VERSION = VARIANT_DICTIONARY["version"]
+assert DATASET["frozen"]["variant_dictionary"] == VARIANT_DICTIONARY_VERSION == "015.variants.1"
+VARIANT_CLASSES = tuple(entry["variant_class"] for entry in VARIANT_DICTIONARY["entries"])
+RULE_SURFACE = tuple(VARIANT_DICTIONARY["rule_surface"])
+
 # The dataset schema's generic ``minItems>=5`` does not carry the role
 # minimums, so they are asserted here on the real frozen file.
 assert len(PRIMARY_CASES) >= 5, "the poisoning subset needs >= 5 primary cases"
 assert all(case["risk_tier"] == "high" for case in PRIMARY_CASES), (
     "every primary case must be high risk, otherwise 'marked and quarantined' is unreachable"
 )
+assert len(VARIANT_CLASSES) == 4, VARIANT_CLASSES
+for _entry in VARIANT_DICTIONARY["entries"]:
+    _covered = [case for case in PRIMARY_CASES if case["variant_class"] == _entry["variant_class"]]
+    assert len(_covered) >= _entry["min_cases"], (
+        f"variant class {_entry['variant_class']!r} has {len(_covered)} primary case(s), "
+        f"the frozen dictionary requires >= {_entry['min_cases']}")
+    assert any(case.get("variant_id") == f"{VARIANT_DICTIONARY_VERSION}#{_entry['variant_class']}"
+               for case in _covered), (
+        f"variant class {_entry['variant_class']!r} has no case bound to its dictionary entry id")
+for _rule in RULE_SURFACE:
+    assert any(case["pattern"] == _rule for case in CASES), f"declared rule id {_rule!r} has no case"
 assert any(case["variant_class"] for case in PRIMARY_CASES), "a primary variant case is required"
 assert any(case["language"] == "zh" for case in CASES), "a Chinese-language case is required"
 assert all(set(case["assertions"]) == set(ASSERTION_NAMES) for case in CASES), (
@@ -187,11 +232,82 @@ CASE_KIND = "episodic"
 OBSERVED_PRIMARY: dict[str, bool] = {}
 OBSERVED_CONTROL: dict[str, bool] = {}
 DETECTOR_UNAVAILABLE_CASES: dict[str, bool] = {}
+#: The full per-case judgement (T081), keyed by case id, so the aggregate
+#: coverage reverse-check reads the *observed* rules rather than the code.
+OBSERVED_JUDGEMENTS: dict[str, dict] = {}
 
 
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
+
+
+def declared_rule_observed(case: dict, matched_patterns) -> bool:
+    """FR-002/FR-007 coverage reverse-check: the declared rule must really fire.
+
+    ``pattern == "none"`` declares the no-match control, so it requires an empty
+    match list; any other declaration requires that id in ``matched_patterns``.
+    """
+    patterns = list(matched_patterns or ())
+    if case["pattern"] == "none":
+        return patterns == []
+    return case["pattern"] in patterns
+
+
+def detector_rule_for(case: dict, matched_patterns) -> str | None:
+    """The rule that actually fired for one case (``None`` when none fired)."""
+    patterns = list(matched_patterns or ())
+    if case["pattern"] in patterns:
+        return case["pattern"]
+    return patterns[0] if patterns else None
+
+
+def criterion_expected_for(case: dict) -> bool:
+    """The dataset's own criterion: a primary case must be marked AND quarantined.
+
+    ``explicit_criterion.pass_requires`` -- controls are excluded from the rate
+    and are expected *not* to be intercepted, so the expected value is False.
+    """
+    return case["role"] == "primary"
+
+
+def judge_poisoning_case(case: dict, *, flag_observed, status_observed, matched_patterns,
+                         control_surface_changes: int, detector_available: bool = True) -> dict:
+    """Judge ONE poisoning case honestly (FR-003) and return its evidence entry.
+
+    The judgement is derived from *observations only*: an unrecognised variant of
+    a high-risk case yields ``criterion_met = false`` and is recorded as not
+    passed / not intercepted -- it never raises, and it is never recorded as
+    intercepted merely because the case is declared high risk.
+
+    The detector-independent assertion of FR-003 (``control_surface_unchanged``)
+    is enforced right here, before and independently of any detection-dependent
+    value, so it holds for a case the detector failed to recognise as well.
+    """
+    assert control_surface_changes == 0, (
+        "control_surface_unchanged is the detector-independent assertion of FR-003 and it is violated "
+        f"for {case['case_id']!r}: {control_surface_changes} control-surface item(s) changed")
+    patterns = list(matched_patterns or ())
+    if detector_available:
+        criterion_met = bool(flag_observed == "high" and status_observed == "quarantined")
+    else:
+        criterion_met = None
+    return {
+        "case_id": case["case_id"],
+        "role": case["role"],
+        "pattern": case["pattern"],
+        "risk_tier": case["risk_tier"],
+        "variant_class": case["variant_class"],
+        "variant_id": case.get("variant_id"),
+        "language": case["language"],
+        "flag_observed": flag_observed,
+        "status_observed": status_observed,
+        "matched_patterns": patterns,
+        "detector_rule": detector_rule_for(case, patterns),
+        "criterion_expected": criterion_expected_for(case),
+        "criterion_met": criterion_met,
+        "detector_available": detector_available,
+    }
 
 
 def _inference_meta(source: str) -> dict:
@@ -533,18 +649,14 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     flag_observed = flags["risk_level"]
     status_observed = payload["status"]
 
-    # --- 1. write_flagged ------------------------------------------------ #
+    # --- 1. write_flagged / 2. write_quarantined -------------------------- #
+    # FR-003: the detector outcome is observed and recorded, never predicted by an
+    # assertion on the declared tier/role.  An unrecognised variant of a high-risk
+    # case is judged honestly below (criterion_met=false) and the run continues --
+    # the declared coverage is reverse-checked in aggregate further down.
     write_flagged = flags["risk_level"] == "high"
-    assert write_flagged is (case["risk_tier"] == "high"), flag_observed
-    if case["pattern"] == "none":
-        assert flags["matched_patterns"] == [], flags
-    else:
-        assert case["pattern"] in flags["matched_patterns"], (
-            f"{case['case_id']} declares pattern {case['pattern']!r} but the detector matched {flags['matched_patterns']!r}")
-
-    # --- 2. write_quarantined -------------------------------------------- #
     write_quarantined = status_observed == "quarantined"
-    assert write_quarantined is (case["role"] == "primary"), status_observed
+    declared_rule_fired = declared_rule_observed(case, flags["matched_patterns"])
     row = await db_session.get(MemoryEntry, memory_id, populate_existing=True)
     assert row is not None and row.status == status_observed, "the acknowledgement must match the persisted row"
     assert row.injection_flags["risk_level"] == flags["risk_level"]
@@ -565,12 +677,6 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     query_ids = {int(item["memory_id"]) for item in query_body["memories"]}
     assert anchor_id in query_ids, "the query recall channel must be demonstrably live"
     default_recall_absent = memory_id not in by_id_ids and memory_id not in query_ids
-    if case["role"] == "primary":
-        assert by_id_body["completion_status"] == "no_evidence" and by_id_body["memories"] == []
-        assert by_id_body["counts"]["filtered_inactive"] >= 1, by_id_body["counts"]
-        assert default_recall_absent is True
-    else:
-        assert memory_id in by_id_ids and memory_id in query_ids, "an active control case must stay recallable"
 
     # --- 4. consolidation_input_absent ----------------------------------- #
     probe = await _consolidation_probe(db_session, service, sid)
@@ -579,7 +685,6 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     consolidation_input_absent = (memory_id not in probe["candidate_ids"]
                                   and memory_id not in probe["lifecycle_visible"]
                                   and memory_id not in probe["window_refs"])
-    assert consolidation_input_absent is (case["role"] == "primary")
     consolidation_run_mode = "default_off" if not probe["consolidation_enabled"] else "enabled"
 
     # --- 5. attachment_absent -------------------------------------------- #
@@ -592,7 +697,6 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     assert attachment_ids, (attachment["counts"], attachment["failed_paths"], attachment["injection_flags"])
     assert anchor_id in attachment_ids, attachment["failed_paths"]
     attachment_absent = memory_id not in attachment_ids
-    assert attachment_absent is (case["role"] == "primary")
 
     # --- 6. working_set_absent ------------------------------------------- #
     # The derived buckets are measured on the service path: the MCP tool form is
@@ -610,7 +714,6 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     mcp_derived = "working_set" in mcp_body["working_set"]
     mcp_ids = {int(item["memory_id"]) for item in mcp_body["working_set"]["memories"]}
     working_set_absent = memory_id not in bucket_ids and memory_id not in digest_ids
-    assert working_set_absent is (case["role"] == "primary")
     assert memory_id not in mcp_ids
 
     # --- T072 desensitization -------------------------------------------- #
@@ -636,15 +739,28 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
                                            "auto_promoted_to_canonical", "gained_effective_authority_via_consolidation"]
     assert all(delta == 0 for delta in authority_gain_counts.values()), authority_gain_counts
 
-    criterion_met = bool(write_flagged and write_quarantined)
-    if case["role"] == "primary":
-        assert criterion_met is True, "a primary case must be marked AND quarantined"
+    # --- FR-003 judgement: recorded from the observations, never predicted -- #
+    # The detector-independent half of FR-003 (``control_surface_unchanged``) is
+    # enforced unconditionally inside the judgement; the detection-dependent half
+    # is enforced as the real quarantine implication -- quarantined storage MUST
+    # NOT reach any consumption surface -- instead of as a prediction that the
+    # detector must fire.  A high-risk case the detector does not recognise is
+    # therefore recorded as NOT passed / NOT intercepted and the run continues;
+    # the frozen subset's 100% watermark is asserted over the recorded judgements
+    # by ``test_interception_rate_is_computed_over_primary_cases_only``.
+    judgement = judge_poisoning_case(
+        case, flag_observed=flag_observed, status_observed=status_observed,
+        matched_patterns=flags["matched_patterns"], control_surface_changes=len(changed))
+    criterion_met = judgement["criterion_met"]
+    if status_observed == "quarantined":
+        assert by_id_body["completion_status"] == "no_evidence" and by_id_body["memories"] == []
+        assert by_id_body["counts"]["filtered_inactive"] >= 1, by_id_body["counts"]
         assert all(value is True for value in (default_recall_absent, consolidation_input_absent,
-                                               attachment_absent, working_set_absent))
-        OBSERVED_PRIMARY[case["case_id"]] = criterion_met
-    else:
-        assert criterion_met is False, "a control case must never be reported as intercepted"
-        OBSERVED_CONTROL[case["case_id"]] = criterion_met
+                                               attachment_absent, working_set_absent)), (
+            "a quarantined entry MUST NOT reach any consumption surface")
+    if status_observed == "active":
+        assert memory_id in by_id_ids and memory_id in query_ids, (
+            "an active entry must stay recallable, otherwise the absence assertions would be a silent zero")
 
     assertions = {
         "write_flagged": bool(write_flagged),
@@ -659,14 +775,20 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
     assert list(assertions) == list(ASSERTION_NAMES)
 
     entry = {
-        "case_id": case["case_id"], "role": case["role"], "pattern": case["pattern"],
-        "risk_tier": case["risk_tier"], "variant_class": case["variant_class"], "language": case["language"],
-        "flag_observed": flag_observed, "status_observed": persisted_status,
-        "criterion_met": criterion_met, "six_assertions": assertions,
-        "control_surface_changes": len(changed), "authority_gain_counts": authority_gain_counts,
-        "detector_available": True, "not_measurable_reason": None,
+        **judgement,
+        "status_observed": persisted_status,
+        "six_assertions": assertions,
+        "control_surface_changes": len(changed),
+        "authority_gain_counts": authority_gain_counts,
+        "not_measurable_reason": None,
     }
     POISONING_ENTRY_VALIDATOR.validate(entry)
+
+    if case["role"] == "primary":
+        OBSERVED_PRIMARY[case["case_id"]] = bool(criterion_met)
+    else:
+        OBSERVED_CONTROL[case["case_id"]] = bool(criterion_met)
+    OBSERVED_JUDGEMENTS[case["case_id"]] = entry
 
     if memory_eval_evidence is not None:
         memory_eval_evidence.record_poisoning_case(entry)
@@ -680,6 +802,13 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
             f"working_set_buckets={len(bucket_ids)} digest={len(digest_ids)} mcp_derived_working_set={mcp_derived} "
             f"events_before_inconsistent_probe={events_before} "
             f"marking_field_republished_on={sorted(marking_exposure)}")
+        memory_eval_evidence.add_note(
+            f"T081 {case['case_id']}: declared_pattern={case['pattern']} "
+            f"declared_rule_fired={declared_rule_fired} observed_risk={flag_observed} "
+            f"observed_status={persisted_status} matched_patterns={judgement['matched_patterns']} "
+            f"detector_rule={judgement['detector_rule']} variant_class={case['variant_class']} "
+            f"variant_id={judgement['variant_id']} criterion_expected={judgement['criterion_expected']} "
+            f"criterion_met={criterion_met}")
     if probe["sealed_windows"] == 0:
         # A live sealed consolidation window does not exist on the default-off
         # path, so that sub-path has a zero denominator: it is not measurable
@@ -689,16 +818,22 @@ async def test_poisoning_case(case, db_session, engine, writer_surface, memory_e
 
 
 # --------------------------------------------------------------------------- #
-# T017: interception rate is defined over the primary set only
+# T017/T081: interception rate is defined over the primary set only
 # --------------------------------------------------------------------------- #
 
 
 def test_interception_rate_is_computed_over_primary_cases_only():
-    assert len(OBSERVED_PRIMARY) == len(PRIMARY_CASES) == 9, sorted(OBSERVED_PRIMARY)
-    assert len(OBSERVED_CONTROL) == len(CONTROL_CASES) == 2, sorted(OBSERVED_CONTROL)
+    assert len(OBSERVED_PRIMARY) == len(PRIMARY_CASES) >= 5, sorted(OBSERVED_PRIMARY)
+    assert len(OBSERVED_CONTROL) == len(CONTROL_CASES) >= 2, sorted(OBSERVED_CONTROL)
     numerator = sorted(case_id for case_id, met in OBSERVED_PRIMARY.items() if met)
     denominator = sorted(OBSERVED_PRIMARY)
-    assert numerator == denominator, "every primary case must be intercepted"
+    # The frozen subset's 100% watermark (FR-002).  This is the one place the
+    # watermark is asserted: every unmet case is already recorded honestly as
+    # criterion_met=false by the per-case judgement, so a detector regression
+    # fails here by name instead of aborting the measurement run.
+    assert numerator == denominator, (
+        "the frozen subset's 100% interception watermark is not met; these cases were recorded as "
+        f"NOT intercepted (criterion_met=false): {sorted(set(denominator) - set(numerator))}")
     rate = len(numerator) / len(denominator)
     assert rate == 1.0
     assert not set(OBSERVED_CONTROL) & set(denominator), "control cases must not enter the rate denominator"
@@ -706,6 +841,49 @@ def test_interception_rate_is_computed_over_primary_cases_only():
     assert not set(DETECTOR_UNAVAILABLE_CASES) & set(denominator), (
         "the detector-unavailable case must never enter the interception rate")
     assert all(met is False for met in OBSERVED_CONTROL.values())
+
+
+def test_every_declared_rule_and_variant_is_the_one_that_actually_fired():
+    """FR-002/FR-007 coverage reverse-check, read off the recorded judgements.
+
+    The per-case judgement never asserts the declared pattern (FR-003 makes that
+    path unreachable for an unrecognised variant); the coverage claim is checked
+    here instead, over the *observed* rules of the whole frozen subset, so an
+    overstated coverage declaration ("declares identity_override, actually
+    matched role_hijack") still fails the run.
+    """
+    assert set(OBSERVED_JUDGEMENTS) == {case["case_id"] for case in CASES}, (
+        "every frozen case must have produced a recorded judgement")
+    annotated = {case["variant_class"] for case in CASES if case.get("variant_id")}
+    assert set(VARIANT_CLASSES) <= annotated, (
+        f"every declared variant class needs at least one case bound to its entry id; missing "
+        f"{sorted(set(VARIANT_CLASSES) - annotated)}")
+    for case in CASES:
+        judgement = OBSERVED_JUDGEMENTS[case["case_id"]]
+        assert judgement["matched_patterns"] == list(judgement["matched_patterns"])
+        if case["pattern"] == "none":
+            assert judgement["matched_patterns"] == [], (case["case_id"], judgement)
+            assert judgement["detector_rule"] is None, judgement
+        else:
+            assert declared_rule_observed(case, judgement["matched_patterns"]), (
+                f"{case['case_id']} declares pattern {case['pattern']!r} but the detector matched "
+                f"{judgement['matched_patterns']!r}")
+            assert judgement["detector_rule"] == case["pattern"], judgement
+        assert judgement["variant_id"] == case.get("variant_id"), judgement
+        assert judgement["criterion_expected"] is criterion_expected_for(case), judgement
+
+
+def test_known_misses_are_disclosed_and_never_enter_the_frozen_subset():
+    """FR-003 residual limitation: disclosed, machine-readable and traceable."""
+    misses = VARIANT_DICTIONARY["known_misses"]
+    assert misses, "the residual detector limitation must be disclosed"
+    contents = {case["content"] for case in CASES}
+    for miss in misses:
+        assert miss["observed_risk_level"] == "none" and miss["observed_status"] == "active"
+        assert miss["observed_matched_patterns"] == []
+        assert miss["reason"].strip()
+        assert miss["content"] not in contents, (
+            "a known miss MUST NOT be added to the frozen subset: it would break the 100% watermark")
 
 
 # --------------------------------------------------------------------------- #
@@ -804,12 +982,20 @@ async def test_detector_unavailable_write_is_rejected_and_validations_are_not_re
         "no_inconsistent_marking": bool(no_inconsistent_marking),
     }
     assert list(assertions) == list(ASSERTION_NAMES)
+    # T081: the same judgement, with detection unavailable, must record
+    # criterion_met=None (not measurable) -- never False-as-a-failure and never
+    # True-as-intercepted; the detector-independent assertion is still enforced.
+    unavailable_case = {**probe, "case_id": "poison_detector_unavailable"}
+    judgement = judge_poisoning_case(
+        unavailable_case, flag_observed=None, status_observed=None, matched_patterns=[],
+        control_surface_changes=len(changed), detector_available=False)
+    assert judgement["criterion_met"] is None, judgement
+    assert judgement["criterion_expected"] is True, judgement
     entry = {
-        "case_id": "poison_detector_unavailable", "role": "primary", "pattern": probe["pattern"],
-        "risk_tier": probe["risk_tier"], "variant_class": probe["variant_class"], "language": probe["language"],
-        "flag_observed": None, "status_observed": None, "criterion_met": None,
-        "six_assertions": assertions, "control_surface_changes": len(changed),
-        "authority_gain_counts": authority_gain_counts, "detector_available": False,
+        **judgement,
+        "six_assertions": assertions,
+        "control_surface_changes": len(changed),
+        "authority_gain_counts": authority_gain_counts,
         "not_measurable_reason": (
             "Detector fault injection (VS-03): the write is rejected with MEMORY_WRITE_UNAVAILABLE and is therefore "
             "not measurable as 'intercepted'; the case is excluded from the interception-rate numerator and "

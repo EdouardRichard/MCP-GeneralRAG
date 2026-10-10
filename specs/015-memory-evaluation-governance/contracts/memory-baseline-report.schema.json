@@ -101,9 +101,11 @@
               "cache_manifest_hash": { "type": ["string", "null"] },
               "replay_real_network_calls": { "type": ["integer", "null"], "minimum": 0 },
               "non_latency_reproducible": { "type": ["boolean", "null"] },
+              "outcome": { "enum": ["passed", "failed", "not_measured"] },
+              "outcome_reason": { "type": "string", "minLength": 1 },
               "artifact": { "type": "string", "minLength": 1 }
             },
-            "required": ["group", "runner", "mode", "artifact"],
+            "required": ["group", "runner", "mode", "artifact", "outcome"],
             "additionalProperties": false
           }
         }

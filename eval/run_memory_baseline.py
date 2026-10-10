@@ -33,6 +33,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from collections.abc import Mapping, Sequence
@@ -272,109 +273,395 @@ async def _published_scope(session) -> int | None:
         "order by count(*) desc limit 1"))
 
 
-async def _leak_paths(session, scope_ids: Sequence[int], qdrant_store, label: str) -> dict[str, Any]:
-    """Measure leaks for one request set: four paths, each with its own denominator."""
+async def _scope_owners(session, memory_ids: Sequence[int]) -> dict[int, int]:
+    """``memory_id -> owning knowledge_scope_id``, straight from the store (T077)."""
     import sqlalchemy as sa
 
-    from rag_mcp.models.knowledge_scope import KnowledgeScope
-    from rag_mcp.models.memory_projection import MemoryEntry
-    from rag_mcp.models.memory_event import MemoryEvent
+    wanted = sorted({int(identifier) for identifier in memory_ids if identifier is not None})
+    if not wanted:
+        return {}
+    rows = (await session.execute(sa.text(
+        "select memory_id, knowledge_scope_id from memory_entries where memory_id = any(:ids)"),
+        {"ids": wanted})).mappings().all()
+    return {int(row["memory_id"]): int(row["knowledge_scope_id"]) for row in rows}
+
+
+def _file_owner(path: Path) -> tuple[int | None, int | None]:
+    """Owner signal declared by a rendered projection file (T076).
+
+    The current writer emits ``# Memory <id>`` followed by the row's canonical JSON
+    (which carries both ``memory_id`` and ``knowledge_scope_id``); an older writer
+    emitted YAML frontmatter. Both shapes are read, because the owner signal must
+    come from the file itself and never from the directory it happens to sit in.
+    Returns ``(memory_id, declared_scope_id)``.
+    """
+    try:
+        head = path.read_text(encoding="utf-8", errors="ignore")[:8000]
+    except OSError:
+        return None, None
+    declared = None
+    match = re.search(r'"knowledge_scope_id":\s*(\d+)', head)
+    if match:
+        declared = int(match.group(1))
+    for pattern in (r"^memory_id:\s*(\d+)\s*$", r"^#\s*Memory\s+(\d+)\s*$",
+                    r'"memory_id":\s*(\d+)'):
+        match = re.search(pattern, head, re.MULTILINE)
+        if match:
+            return int(match.group(1)), declared
+    return None, declared
+
+
+async def _scan_paths(session, qdrant_store, *, requested: Sequence[int], scan_scopes: Sequence[int],
+                      reachable_ids: Sequence[int], label: str, attach_ids: Sequence[int] = (),
+                      working_ids: Sequence[int] = (),
+                      control: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    """Scan the six leak paths *without* pre-filtering the population to ``requested``.
+
+    Phase 10 T076/T077 repair. The earlier scanner filtered every population to the
+    requested scopes and then tested membership in it, so ``leaks`` could never be
+    non-zero. Here:
+
+    * ``reachable_ids`` are the memory ids the request actually consumed; their rows
+      and events are looked up **regardless of scope**, so a foreign-scope row the
+      request pulled in is observable;
+    * ``scan_scopes`` is the set of stores/files scanned (the request's own scopes in
+      production, plus one deliberately planted foreign scope in the control);
+    * the two consumer surfaces (``attachment`` / ``working_set``) are resolved from
+      the real memory ids those surfaces returned.
+    """
+    import sqlalchemy as sa
+
     from rag_mcp.services.memory_projection_store import MemoryProjectionStore
 
-    wanted = [int(scope_id) for scope_id in scope_ids]
+    wanted = {int(scope_id) for scope_id in requested}
+    scanned = sorted({int(scope_id) for scope_id in scan_scopes})
+    reachable = sorted({int(identifier) for identifier in reachable_ids})
 
-    events = (await session.execute(sa.select(MemoryEvent).where(
-        MemoryEvent.knowledge_scope_id.in_(wanted)))).scalars().all()
-    event_leaks = [row.event_id for row in events if int(row.knowledge_scope_id) not in wanted]
+    # --- event_log / relation: by consumed id (any scope) or by scanned scope ---
+    clauses: list[str] = []
+    parameters: dict[str, Any] = {}
+    if scanned:
+        clauses.append("knowledge_scope_id = any(:scanned)")
+        parameters["scanned"] = scanned
+    if reachable:
+        clauses.append("aggregate_id = any(:reachable)")
+        parameters["reachable"] = reachable
+    event_clause = " or ".join(clauses) or "false"
+    events = (await session.execute(sa.text(
+        f"select event_id, knowledge_scope_id from memory_events where {event_clause}"),
+        parameters)).mappings().all()
+    event_leaks = [row["event_id"] for row in events if int(row["knowledge_scope_id"]) not in wanted]
 
-    rows = (await session.execute(sa.select(MemoryEntry).where(
-        MemoryEntry.knowledge_scope_id.in_(wanted)))).scalars().all()
-    relation_leaks = [row.memory_id for row in rows if int(row.knowledge_scope_id) not in wanted]
+    row_parameters = dict(parameters)
+    row_clauses: list[str] = []
+    if scanned:
+        row_clauses.append("knowledge_scope_id = any(:scanned)")
+    if reachable:
+        row_clauses.append("memory_id = any(:reachable_ids)")
+        row_parameters["reachable_ids"] = reachable
+    relation_clause = " or ".join(row_clauses) or "false"
+    rows = (await session.execute(sa.text(
+        f"select memory_id, knowledge_scope_id from memory_entries where {relation_clause}"),
+        row_parameters)).mappings().all()
+    relation_leaks = [row["memory_id"] for row in rows if int(row["knowledge_scope_id"]) not in wanted]
 
-    vector: dict[str, Any] = {"examined": 0, "leaks": 0,
-                              "reason": "no projection collection covers the requested scopes"}
+    # --- vector: the production per-scope revision filter, then membership -----
+    # The dense collection is shared by every scope, so the honest denominator is
+    # the point population the production filter returns for the scanned scopes
+    # (a foreign point returned by that filter is a real leak). Scrolling the whole
+    # global collection and calling every other scope's point a leak would be a
+    # false positive; pre-filtering the result to `wanted` would be a tautology.
+    from rag_mcp.indexing.memory_vectors import revision_filter
+
     projections = MemoryProjectionStore(session, qdrant_store=qdrant_store)
-    for scope_id in wanted:
+    vector = {"examined": 0, "leaks": 0,
+              "reason": "no projection collection covers the scanned scopes"}
+    seen_revisions: set[tuple[str, str]] = set()
+    for scope_id in scanned:
         current = await projections.current(scope_id)
         if current is None:
             continue
+        collection = str(current.payload.get("collection"))
+        revision = str(current.payload.get("dense_revision"))
+        if (collection, revision) in seen_revisions:
+            continue
+        seen_revisions.add((collection, revision))
         points, _ = await asyncio.to_thread(
-            qdrant_store._client.scroll, collection_name=current.payload["collection"],
+            qdrant_store._client.scroll, collection_name=collection,
+            scroll_filter=revision_filter(scope_id, current.payload.get("dense_revision")),
             limit=10000, with_payload=True)
-        selected = [point for point in points
-                    if int((point.payload or {}).get("knowledge_scope_id") or 0) in wanted]
-        vector["examined"] += len(selected)
-        vector["leaks"] += sum(1 for point in selected
+        vector["examined"] += len(points)
+        vector["leaks"] += sum(1 for point in points
                                if int((point.payload or {}).get("knowledge_scope_id") or 0) not in wanted)
         vector["reason"] = None
     if vector["examined"] == 0:
-        vector["reason"] = "no live Qdrant point carried one of the requested scopes"
+        vector["reason"] = "no live Qdrant point carried one of the scanned scopes"
 
+    # --- file: resolve each rendered file's own frontmatter owner ---------------
     files_examined = 0
     files_leaks = 0
-    file_reason = "no materialised file root was recorded for the requested scopes"
-    for scope_id in wanted:
+    unresolvable = 0
+    file_reason = "no materialised file root was recorded for the scanned scopes"
+    seen_roots: set[str] = set()
+    for scope_id in scanned:
         current = await projections.current(scope_id)
         if current is None:
             continue
         root = Path(str(current.payload.get("root"))) / str(scope_id) / str(current.source_event_id)
-        if not root.is_dir():
+        if str(root) in seen_roots or not root.is_dir():
             continue
+        seen_roots.add(str(root))
         file_reason = None
-        for path in sorted(root.rglob("*")):
+        for path in sorted(root.rglob("*.md")):
             files_examined += 1
-            if scope_id not in [int(part) for part in path.parts if str(part).isdigit()]:
+            owner_id, declared_scope = _file_owner(path)
+            if declared_scope is not None:
+                owner = declared_scope
+            elif owner_id is not None:
+                owner = int((await _scope_owners(session, [owner_id])).get(owner_id, scope_id))
+            else:
+                # No owner signal at all (INDEX.md / DIGEST.md / an unreadable body):
+                # the manifest directory is the only signal, and it is the scanned
+                # scope, so it cannot leak. Counted, never silently dropped.
+                unresolvable += 1
+                continue
+            if int(owner) not in wanted:
                 files_leaks += 1
-    if files_examined and files_leaks == 0:
-        # A missing scope directory is a real zero denominator, not a pass.
-        pass
 
-    return {
-        "request": label,
-        "requested_scope_ids": wanted,
-        "paths": {
-            "event_log": {"examined": len(events), "leaks": len(event_leaks),
-                          "reason": "no authority event exists for the requested scopes" if not events else None},
-            "relation": {"examined": len(rows), "leaks": len(relation_leaks),
-                         "reason": "no relation projection row exists for the requested scopes" if not rows else None},
-            "vector": {"examined": vector["examined"], "leaks": vector["leaks"], "reason": vector["reason"]},
-            "file": {"examined": files_examined, "leaks": files_leaks, "reason": file_reason},
-        },
+    # --- consumer surfaces: the real returned ids, resolved to their owners -----
+    attach_owners = await _scope_owners(session, attach_ids)
+    attach_leaks = [identifier for identifier, owner in attach_owners.items() if owner not in wanted]
+    working_owners = await _scope_owners(session, working_ids)
+    working_leaks = [identifier for identifier, owner in working_owners.items() if owner not in wanted]
+
+    control = control or {}
+    paths: dict[str, Any] = {
+        "event_log": {"examined": len(events), "leaks": len(event_leaks),
+                      "reason": "no authority event was reachable for this request" if not events else None},
+        "relation": {"examined": len(rows), "leaks": len(relation_leaks),
+                     "reason": "no relation row was reachable for this request" if not rows else None},
+        "vector": {"examined": vector["examined"], "leaks": vector["leaks"], "reason": vector["reason"]},
+        "file": {"examined": files_examined, "leaks": files_leaks, "reason": file_reason,
+                 "unresolvable_frontmatter": unresolvable},
+        "attachment": {"examined": len(attach_owners), "leaks": len(attach_leaks),
+                       "reason": "the attachment surface returned no memory row" if not attach_owners else None},
+        "working_set": {"examined": len(working_owners), "leaks": len(working_leaks),
+                        "reason": "the working set exposed no memory row" if not working_owners else None},
     }
+    for name, block in paths.items():
+        if control.get(name) is not None:
+            block["detectability"] = control[name]
+    return {"request": label, "requested_scope_ids": sorted(wanted), "scanned_scope_ids": scanned,
+            "reachable_memory_ids": reachable, "paths": paths}
 
 
-async def measure_cross_domain(session, second_scope: int, qdrant_store) -> dict[str, Any]:
-    """FR-028/SC-008: >= 2 real domains plus one explicit multi-domain request."""
-    import uuid
+async def _detectability_control(session, qdrant_store, provider) -> dict[str, Any]:
+    """Prove every scanner can see a deliberately planted foreign item (T076).
 
-    import sqlalchemy as sa
-
+    Two dedicated throwaway scopes are created for this run: ``own`` is treated as
+    the requested scope and ``foreign`` holds the planted item. The same scanners
+    are then run with ``requested=[own]`` and ``scan_scopes=[own, foreign]``, so
+    each path MUST report at least one leak — otherwise its "0 leaks" is not a
+    measurement. Nothing is written into an existing real domain or a frozen scope.
+    """
     from rag_mcp.services.memory_service import MemoryService
 
-    single = await _leak_paths(session, [second_scope], qdrant_store,
-                               f"single-domain request scope={second_scope}")
-    # The explicit multi-domain request: two real domains resolved in one recall.
-    from rag_mcp.services.memory_reader import MemoryReader
+    service = MemoryService(session, embedding_provider=provider, qdrant_store=qdrant_store)
+    own = await _new_scope(session, f"c015-leak-control-own-{support.RUN_ID}")
+    foreign = await _new_scope(session, f"c015-leak-control-foreign-{support.RUN_ID}")
+    planted: dict[int, int] = {}
+    for scope_id in (own, foreign):
+        recorded = await service.record(probe_arguments(
+            scope_id=scope_id,
+            content=f"015 leak detectability control, scope {scope_id}: the release checklist owner is Li."))
+        planted[scope_id] = int(recorded["memory_id"])
+    await session.commit()
+    identifiers = sorted(planted.values())
+    scan = await _scan_paths(session, qdrant_store, requested=[own], scan_scopes=[own, foreign],
+                             reachable_ids=identifiers, label="detectability control",
+                             attach_ids=identifiers, working_ids=identifiers)
+    control: dict[str, Any] = {}
+    for name, block in scan["paths"].items():
+        observed = int(block["leaks"])
+        entry = {"control": f"planted_foreign_{name}_item_in_scope_{foreign}",
+                 "fired": observed > 0, "planted": 1, "observed_leaks": observed}
+        if observed == 0:
+            entry["reason"] = (f"the {name} scanner did not see a deliberately planted cross-scope item, "
+                               f"so a zero leak count on this path is not a measurement")
+        control[name] = entry
+    return {"own_scope_id": own, "foreign_scope_id": foreign, "planted_memory_ids": planted,
+            "control": control, "scan": scan}
 
-    multi_scope = [int(second_scope)]
-    first = await session.scalar(sa.text(
-        "select knowledge_scope_id from memory_entries where status='active' and write_status='complete' "
-        "and knowledge_scope_id <> :s group by knowledge_scope_id order by count(*) desc limit 1"),
-        {"s": second_scope})
-    if first is not None and int(first) != int(second_scope):
-        multi_scope = [int(first), int(second_scope)]
+
+async def _seeded_probe_scope(session, provider, qdrant_store, *, label: str,
+                              contents: Sequence[str]) -> tuple[int, list[int]]:
+    """Create one real scope and write live memories into it (T077).
+
+    The consumer surfaces (attachment / working set) only expose *recall-visible*
+    memories, and the pre-existing evaluation scopes hold rows that recall filters
+    out as inactive, so a measurement built only on them would have a zero
+    attachment/working-set denominator. This scope is an ordinary real scope with
+    live rows; it is created for this run and never touches a frozen corpus.
+    """
+    from rag_mcp.services.memory_service import MemoryService
+
+    service = MemoryService(session, embedding_provider=provider, qdrant_store=qdrant_store)
+    scope_id = await _new_scope(session, f"c015-baseline-{label}-{support.RUN_ID}")
+    identifiers: list[int] = []
+    for content in contents:
+        recorded = await service.record(probe_arguments(scope_id=scope_id, kind="episodic", content=content))
+        identifiers.append(int(recorded["memory_id"]))
+    await session.commit()
+    return scope_id, identifiers
+
+
+async def _consumer_call(factory, provider, qdrant_store, call):
+    """Run one consumer-surface call in its own session; never poison the next one.
+
+    ``attach`` cancels a query when it hits its frozen budget, and a cancelled
+    statement leaves its SQLAlchemy session unusable (measured: the following
+    ``start_work`` raised ``PendingRollbackError``). Each consumer call therefore
+    gets a fresh session, and a failure is returned as a recorded error instead of
+    crashing the whole measurement.
+    """
+    from rag_mcp.services.memory_service import MemoryService
+
+    async with factory() as session:
+        service = MemoryService(session, embedding_provider=provider, qdrant_store=qdrant_store)
+        try:
+            result = await call(service)
+        except Exception as error:  # noqa: BLE001 - a consumer failure is data, not a crash
+            return {"_error": f"{type(error).__name__}: {str(error)[:200]}"}
+        return result if isinstance(result, Mapping) else {"_error": "no structured result"}
+
+
+async def measure_cross_domain(factory, second_scope: int, qdrant_store, provider) -> dict[str, Any]:
+    """FR-028/SC-008 + T077: >= 2 real domains plus one explicit multi-domain request.
+
+    The per-path numbers reported for the constitutional four paths come from the
+    **explicit multi-domain request's own scan** (the earlier revision passed the
+    single-domain denominators while claiming they were the multi-domain ones). The
+    two consumer surfaces are scanned too, and a detectability control proves each
+    scanner is able to fail.
+    """
+    import uuid
+
+    session_id = str(uuid.uuid4())
+    async with factory() as setup:
+        fresh_scope, fresh_ids = await _seeded_probe_scope(
+            setup, provider, qdrant_store, label="cross-domain",
+            contents=("015 cross-domain probe one: the release train moved to Thursday.",
+                      "015 cross-domain probe two: the reranker latency benchmark owner is Li."))
+    multi_scope = sorted({int(second_scope), int(fresh_scope)})
+    refs = [str(scope_id) for scope_id in multi_scope]
+    consumer_errors: dict[str, str] = {}
+    recall: dict[str, Any] = {}
+    single_recall: dict[str, Any] = {}
+
+    # Warm the dense path first so the attachment's frozen budget is not consumed by
+    # the first-use vector-store build (the quarantine measurement does the same).
+    warm = await _consumer_call(factory, provider, qdrant_store,
+                                lambda service: service.recall(scope_ref=refs, query="015 cross-domain probe",
+                                                               limit=5, session_id=session_id))
+    if "_error" in warm:
+        consumer_errors["warm_recall"] = str(warm["_error"])
+    single = await _consumer_call(factory, provider, qdrant_store,
+                                  lambda service: service.recall(scope_ref=[str(second_scope)], limit=5,
+                                                                 session_id=session_id))
+    if "_error" in single:
+        consumer_errors["single_recall"] = str(single["_error"])
+    else:
+        single_recall = single
+
     started = time.perf_counter()
-    recall = await MemoryService(session, qdrant_store=qdrant_store).recall(
-        scope_ref=[str(scope_id) for scope_id in multi_scope], limit=5, session_id=str(uuid.uuid4()))
+    recall = await _consumer_call(factory, provider, qdrant_store,
+                                  lambda service: service.recall(scope_ref=refs, limit=5,
+                                                                 session_id=session_id))
     elapsed = (time.perf_counter() - started) * 1000
-    multi = await _leak_paths(session, multi_scope, qdrant_store,
-                              f"explicit multi-domain request scope_ref={multi_scope}")
+    if "_error" in recall:
+        consumer_errors["recall"] = str(recall["_error"])
+        recall = {}
+
+    attach: dict[str, Any] = {}
+    attach_attempts = 0
+    for attempt in range(1, 3):
+        attach_attempts = attempt
+        attach = await _consumer_call(factory, provider, qdrant_store,
+                                      lambda service: service.attach(scope_ref=refs,
+                                                                     memory_context="015 multi-domain leak probe"))
+        if "_error" in attach:
+            consumer_errors[f"attach_attempt_{attempt}"] = str(attach["_error"])
+            attach = {}
+            continue
+        if "attachment_timeout" not in (attach.get("failed_paths") or []):
+            break
+    if attach.get("failed_paths"):
+        consumer_errors["attach_failed_paths"] = ", ".join(str(path) for path in attach["failed_paths"])
+
+    working_ids: list[int] = []
+    for scope_id in multi_scope:
+        package = await _consumer_call(factory, provider, qdrant_store,
+                                       lambda service, sid=scope_id: service.start_work(
+                                           scope_ref=str(sid), include_working_set=True))
+        if "_error" in package:
+            consumer_errors[f"start_work_{scope_id}"] = str(package["_error"])
+            continue
+        # The service-level package carries the working set under ``working_set.memories``
+        # and the digest under ``digest.memories``; the MCP tool surface additionally
+        # buckets them as open_items/recent_activity/procedural. Read both shapes.
+        working = package.get("working_set") or {}
+        digest = package.get("digest") or {}
+        rows = list(working.get("memories") or []) + list(digest.get("memories") or [])
+        for bucket in ("open_items", "recent_activity", "procedural"):
+            rows.extend(working.get(bucket) or [])
+        working_ids.extend(int(item["memory_id"]) for item in rows
+                           if item.get("memory_id") is not None)
+
     returned = [int(item["knowledge_scope_id"]) for item in recall.get("memories") or []]
+    recalled_ids = [int(item["memory_id"]) for item in recall.get("memories") or []]
+    attach_ids = [int(item["memory_id"]) for item in attach.get("items") or []
+                  if item.get("memory_id") is not None]
+    observed_scopes = sorted({int(item["knowledge_scope_id"]) for item in recall.get("memories") or []}
+                             | {int(item["knowledge_scope_id"]) for item in attach.get("items") or []
+                                if item.get("knowledge_scope_id") is not None})
+    reachable = sorted(set(recalled_ids) | set(attach_ids) | set(working_ids))
+    single_observed = sorted({int(item["knowledge_scope_id"]) for item in single_recall.get("memories") or []
+                              if item.get("knowledge_scope_id") is not None})
+
+    async with factory() as session:
+        single = await _scan_paths(session, qdrant_store, requested=[int(second_scope)],
+                                   scan_scopes=sorted({int(second_scope)} | set(single_observed)),
+                                   reachable_ids=[int(item["memory_id"])
+                                                  for item in single_recall.get("memories") or []],
+                                   label=f"single-domain request scope={second_scope}")
+        control = await _detectability_control(session, qdrant_store, provider)
+        # The scan universe is the requested scopes *plus every scope the request's own
+        # resolution actually produced*: a resolver that pulled a foreign scope in makes
+        # that scope's rows/points/files observable here and countable as leaks.
+        scan_universe = sorted(set(multi_scope) | set(observed_scopes))
+        multi = await _scan_paths(session, qdrant_store, requested=multi_scope, scan_scopes=scan_universe,
+                                  reachable_ids=reachable,
+                                  label=f"explicit multi-domain request scope_ref={multi_scope}",
+                                  attach_ids=attach_ids, working_ids=working_ids,
+                                  control=control["control"])
+        multi["recall_returned_foreign_memory_ids"] = sorted(
+            identifier for identifier, owner in (await _scope_owners(session, recalled_ids)).items()
+            if owner not in set(multi_scope))
     multi["recall_returned_scope_ids"] = returned
+    multi["recall_returned_memory_ids"] = recalled_ids
     multi["recall_returned_foreign_scope_ids"] = sorted(set(returned) - set(multi_scope))
+    multi["attachment_item_ids"] = attach_ids
+    multi["working_set_item_ids"] = working_ids
+    multi["observed_scope_ids"] = observed_scopes
+    multi["observed_foreign_scope_ids"] = sorted(set(observed_scopes) - set(multi_scope))
     multi["latency_ms"] = elapsed
+    single["detectability_control"] = control
     return {"single_domain": single, "multi_domain": multi,
-            "domains_covered": sorted(set(multi_scope))}
+            "detectability_control": control, "domains_covered": sorted(set(multi_scope)),
+            "seeded_scope": fresh_scope, "seeded_memory_ids": fresh_ids,
+            "attach_attempts": attach_attempts, "consumer_errors": consumer_errors,
+            "attach_failed_paths": list(attach.get("failed_paths") or []),
+            "attach_candidates": (attach.get("counts") or {}).get("candidates")}
 
 
 # --------------------------------------------------------------------------- #
@@ -382,23 +669,27 @@ async def measure_cross_domain(session, second_scope: int, qdrant_store) -> dict
 # --------------------------------------------------------------------------- #
 
 
-async def measure_memory_provenance(session, scope_id: int) -> dict[str, Any]:
+async def measure_memory_provenance(session, scope_id: int, *, probe_only: bool = True) -> dict[str, Any]:
     """Hard anchoring, soft/distilled metadata, and unanchored hard writes.
 
     The denominator is the real row population of the measured scope, split by
     provenance and never merged: ``hard`` rows are checked for a live anchor,
-    ``soft``/``distilled`` rows for the five inference metadata keys.
+    ``soft``/``distilled`` rows for the five inference metadata keys. With
+    ``probe_only=False`` the whole hard population of the scope is measured (used
+    for the anchor scope, whose hard rows are pre-existing real rows rather than
+    this run's probe rows).
     """
     import sqlalchemy as sa
 
     critical = ("source", "confidence", "model_version", "time", "supporting_evidence")
+    probe = f" and {_probe_predicate()}" if probe_only else ""
     hard_rows = (await session.execute(sa.text(
         f"select memory_id, evidence_refs, confidence, provenance_meta, inference_meta from memory_entries "
-        f"where knowledge_scope_id=:s and provenance='hard' and {_probe_predicate()}"),
+        f"where knowledge_scope_id=:s and provenance='hard'{probe}"),
         {"s": scope_id, "probe_run_id": PROBE_INVOCATION})).mappings().all()
     soft_rows = (await session.execute(sa.text(
         f"select memory_id, inference_meta from memory_entries "
-        f"where knowledge_scope_id=:s and provenance in ('soft','distilled') and {_probe_predicate()}"),
+        f"where knowledge_scope_id=:s and provenance in ('soft','distilled'){probe}"),
         {"s": scope_id, "probe_run_id": PROBE_INVOCATION})).mappings().all()
 
     hard_missing: list[dict[str, Any]] = []
@@ -579,6 +870,21 @@ async def measure_hard_anchoring(session, scope_id: int, server, *, has_lease: b
                 {"s": anchor_scope, "forbidden": list(FORBIDDEN_SCOPE_IDS)})).mappings().all()
             sample_rule = ("the anchor scope's most recent hard rows (no anchored write could be attempted in this "
                            "run: the writer lease was not held or no same-scope published anchor was available)")
+        elif True:  # noqa: SIM108 - keep the three branches explicit for readability
+            # A 100 % goal is not evidenced by the measuring run's own output alone:
+            # extend the sample with the anchor scope's pre-existing hard rows so the
+            # caliber rests on real rows this run did not write, and record how many.
+            existing = (await session.execute(sa.text(
+                "select memory_id, evidence_refs, confidence from memory_entries "
+                "where knowledge_scope_id=:s and provenance='hard' and write_status='complete' "
+                "and knowledge_scope_id <> all(:forbidden) and memory_id <> all(:written) "
+                "order by memory_id desc limit 5"),
+                {"s": anchor_scope, "forbidden": list(FORBIDDEN_SCOPE_IDS),
+                 "written": [int(identifier) for identifier in anchored_rows]})).mappings().all()
+            if existing:
+                sample = list(sample) + list(existing)
+                sample_rule += (f" plus {len(existing)} pre-existing hard row(s) of the anchor scope that this "
+                                f"run did not write")
     missing: list[dict[str, Any]] = []
     verified: list[int] = []
     for row in sample:
@@ -617,6 +923,8 @@ async def measure_hard_anchoring(session, scope_id: int, server, *, has_lease: b
 
     examined = len(sample)
     passed = len(verified)
+    prior_items = [int(row["memory_id"]) for row in sample
+                   if int(row["memory_id"]) not in {int(identifier) for identifier in anchored_rows}]
     reason = None
     if examined == 0:
         reason = ("no hard memory sample was measured in the anchor scope, so the anchoring rate is not "
@@ -628,6 +936,7 @@ async def measure_hard_anchoring(session, scope_id: int, server, *, has_lease: b
         "rejected_samples": rejected, "error_code_distribution": distribution,
         "attempts": attempts, "landed_anchored": verified, "landed_unanchored": [item["memory_id"] for item in missing],
         "anchor_scope_id": anchor_scope, "anchor_rows": list(verified), "sample_rule": sample_rule,
+        "prior_items_examined": len(prior_items), "prior_items": prior_items,
         "reason": reason,
         "caliber": "real hard writes at the MCP boundary (refused unanchored, accepted anchored) plus a live "
                    "row-by-row re-verification of the attribution anchor against the published corpus",
@@ -1026,7 +1335,7 @@ async def measure_live(*, args) -> dict[str, Any]:
         anchor_scope_id = anchoring.get("anchor_scope_id")
         if anchor_scope_id is not None and int(anchor_scope_id) != int(hard_scope):
             provenance = _merge_provenance_calibers(
-                provenance, await measure_memory_provenance(session, int(anchor_scope_id)))
+                provenance, await measure_memory_provenance(session, int(anchor_scope_id), probe_only=False))
         await session.commit()
     _progress(f"hard scope={hard_scope} provenance={provenance['passed']}/{provenance['total']} "
               f"anchoring={anchoring['passed']}/{anchoring['total']}")
@@ -1036,8 +1345,8 @@ async def measure_live(*, args) -> dict[str, Any]:
         second = await session.scalar(sa.text(
             "select knowledge_scope_id from memory_entries where status='active' and write_status='complete' "
             "group by knowledge_scope_id having count(*) >= 2 order by count(*) desc limit 1"))
-        _progress(f"cross-domain measurement over scope {second}")
-        cross_domain = await measure_cross_domain(session, int(second), qdrant)
+    _progress(f"cross-domain measurement over scope {second} plus one seeded live scope")
+    cross_domain = await measure_cross_domain(factory, int(second), qdrant, provider)
     _progress("cross-domain measured")
 
     # --- T034: quarantined leakage ----------------------------------------- #
@@ -1154,9 +1463,16 @@ def assemble_from_measurements(*, measurements: Mapping[str, Any], args, commit:
 
     raw = measurements
     cross_domain_measurement = raw.get("cross_domain") or {}
+    # T076: the constitutional four-path numbers MUST come from the explicit
+    # multi-domain request's own scan. The single-domain scan is registered beside
+    # it and is never used as the multi-domain evidence.
+    multi_paths = (cross_domain_measurement.get("multi_domain") or {}).get("paths") or {}
     cross_domain = support.cross_domain_block(
-        (cross_domain_measurement.get("single_domain") or {}).get("paths") or {},
-        evidence=support.multi_domain_evidence(cross_domain_measurement))
+        multi_paths,
+        evidence=support.multi_domain_evidence(cross_domain_measurement),
+        request=f"explicit multi-domain request {cross_domain_measurement.get('multi_domain', {}).get('requested_scope_ids')} "
+                f"with per-path detectability controls; single-domain scan registered separately under "
+                f"eval/runs/{support.RUN_ID}/hard-metrics-measurements.json")
     tool_schema = support.tool_schema_block(raw.get("tool_checks") or [], raw.get("negative_controls") or [],
                                             writer_refusal=(raw.get("writer_lease") or {}).get("reason"),
                                             violations=raw.get("contract_violations") or [])

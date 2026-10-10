@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import xml.etree.ElementTree as ElementTree
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,8 +249,12 @@ TOOLS_CHECKED = (
     "record_memory",
 )
 
-#: The four cross-domain paths (Constitution hard constraint 1 / FR-028).
-LEAK_PATHS = ("event_log", "relation", "vector", "file")
+#: The cross-domain leak paths: the four constitutional paths (FR-028) plus the
+#: two consumer surfaces 014 introduced (T077).  A path only counts as measured
+#: when its own denominator is non-zero AND its detectability control fired.
+LEAK_PATHS = ("event_log", "relation", "vector", "file", "attachment", "working_set")
+#: The four paths the constitutional hard constraint names (FR-028); always required.
+LEAK_PATHS_REQUIRED = ("event_log", "relation", "vector", "file")
 #: FR-057 projections: the five consumable views plus the field projection.
 PROJECTION_VIEWS = ("relation", "dense", "links", "summary", "file", "salience")
 #: FR-058 governance axes, in the reducer's own order.
@@ -605,14 +610,23 @@ def truncate(value: str, limit: int = 220) -> str:
 
 
 def cross_domain_block(paths: Mapping[str, Mapping[str, Any]],
-                       evidence: str | None = None) -> dict[str, Any]:
-    """``cross_domain_leakage``: four independently denominated paths.
+                       evidence: str | None = None,
+                       *, request: str | None = None) -> dict[str, Any]:
+    """``cross_domain_leakage``: six independently denominated, detectable paths.
 
-    The 014 defect this repairs is ``value = null`` with no denominators: every
-    path now carries its own ``examined`` and ``leaks``, and ``all_passed``
-    requires all four paths measured with zero leaks. ``leakPath`` is
-    ``additionalProperties: false``, so the multi-domain request evidence rides in
-    the path ``reason`` (or in ``evidence`` only when a leak needs one).
+    Phase 10 T076/T077 repair. The 014 defect was ``value = null`` with no
+    denominators; the first 015 repair gave four paths denominators, but every one
+    of them filtered the population to the requested scopes *before* testing
+    membership, so ``leaks`` was structurally 0 and the block could not fail. Here:
+
+    * a path is ``measured`` only when ``examined > 0`` **and** its own
+      detectability control fired (a deliberately planted foreign row/point/file
+      was seen by the same scanner);
+    * the two consumer surfaces (``attachment`` / ``working_set``) are reported
+      alongside the four constitutional paths, so a foreign scope carried into
+      ``search_knowledge.related_memories`` or ``start_work`` is visible;
+    * ``all_passed`` requires every registered path to be measured, leak-free and
+      detectable. An unmeasurable or undetectable path is *not* a pass.
     """
     blocks: dict[str, Any] = {}
     for name in LEAK_PATHS:
@@ -620,33 +634,72 @@ def cross_domain_block(paths: Mapping[str, Mapping[str, Any]],
         if raw is None:
             blocks[name] = leak_path(0, 0, f"the {name} path was not measured in this run")
             continue
-        extra = {key: value for key, value in raw.items()
-                 if key in {"value", "state", "reason"} and key != "reason"}
+        extra: dict[str, Any] = {}
+        detectability = raw.get("detectability")
+        if isinstance(detectability, Mapping):
+            extra["detectability"] = {
+                "control": str(detectability.get("control") or "unspecified"),
+                "fired": bool(detectability.get("fired")),
+                "planted": int(detectability.get("planted") or 0),
+                "observed_leaks": int(detectability.get("observed_leaks") or 0),
+            }
+            if not detectability.get("fired") and detectability.get("reason"):
+                extra["detectability"]["reason"] = truncate(str(detectability["reason"]))
         reason = raw.get("reason")
-        if reason:
-            extra["reason"] = truncate(str(reason))
-        blocks[name] = leak_path(int(raw.get("examined") or 0), int(raw.get("leaks") or 0),
-                                 extra.pop("reason", None), **extra)
+        examined = int(raw.get("examined") or 0)
+        leaks = int(raw.get("leaks") or 0)
+        if examined > 0 and isinstance(detectability, Mapping) and not detectability.get("fired"):
+            # A scanner that cannot see a planted foreign row cannot certify zero leaks.
+            # ``leak_path`` only writes ``reason`` for a zero denominator, so the
+            # undetectable case sets it explicitly (the contract requires it).
+            blocks[name] = leak_path(examined, leaks, None, **extra)
+            blocks[name]["state"] = "not_measurable"
+            blocks[name]["value"] = None
+            blocks[name]["reason"] = truncate(str(
+                (detectability or {}).get("reason")
+                or f"the {name} detectability control did not fire, so its zero leak count is not a measurement"))
+        else:
+            blocks[name] = leak_path(examined, leaks, truncate(str(reason)) if reason else None, **extra)
     total_leaks = sum(block["leaks"] for block in blocks.values())
-    all_measured = all(block["examined"] > 0 for block in blocks.values())
+    measured = [name for name, block in blocks.items()
+                if block["state"] == "measured" and int(block["examined"]) > 0]
+    undetectable = [name for name, block in blocks.items()
+                    if block["state"] == "measured" and not (block.get("detectability") or {}).get("fired")]
+    all_measured = len(measured) == len(LEAK_PATHS)
     block: dict[str, Any] = {"paths": blocks, "total_leaks": total_leaks,
                              "all_paths_measured": all_measured,
                              "all_passed": bool(all_measured and total_leaks == 0)}
-    if evidence:
-        # Only the multi-domain request provenance, never a fabricated metric.
-        block["paths"]["event_log"]["reason"] = truncate(evidence)
+    if undetectable:
+        block["all_passed"] = False
+    if request:
+        for name in LEAK_PATHS_REQUIRED:
+            existing = blocks[name].get("reason")
+            blocks[name]["reason"] = truncate(
+                f"{existing}; {request}" if existing else request, 600)
     return block
 
 
 def multi_domain_evidence(measurement: Mapping[str, Any]) -> str:
-    """Compact, real provenance of the explicit multi-domain request (FR-028)."""
+    """Compact, real provenance of the explicit multi-domain request (FR-028).
+
+    Phase 10 T076: this text is the request *provenance only*. The per-path numbers
+    in the block come from the same multi-domain request's own scan
+    (``multi_domain.paths``), never from the single-domain request — the earlier
+    revision passed the single-domain denominators while this string claimed they
+    were the multi-domain ones.
+    """
     multi = (measurement or {}).get("multi_domain") or {}
     requested = multi.get("requested_scope_ids") or []
     returned = multi.get("recall_returned_scope_ids") or []
     foreign = multi.get("recall_returned_foreign_scope_ids") or []
-    return (f"explicit multi-domain recall over scope_ref={requested} returned scope ids {returned} "
-            f"(foreign scope ids {foreign}); each of the four paths was measured for that exact request; "
-            f"domains covered: {(measurement or {}).get('domains_covered')}")
+    observed = multi.get("observed_scope_ids") or []
+    single = (measurement or {}).get("single_domain") or {}
+    return (f"explicit multi-domain request scope_ref={requested}: recall returned memory scope ids {returned} "
+            f"(foreign {foreign}); consumer-surface observed scope ids {observed}; the per-path denominators "
+            f"below are this request's own scan. Single-domain request "
+            f"{single.get('requested_scope_ids')} was scanned separately and is not used for the "
+            f"constitutional four-path numbers.")
+
 
 
 def tool_schema_block(checks: Sequence[Mapping[str, Any]],
@@ -712,6 +765,8 @@ def provenance_blocks(evidence: Mapping[str, Any], memory: Mapping[str, Any],
                          anchoring.get("reason") or "no hard memory sample was examined"),
             "rejected_samples": list(anchoring.get("rejected_samples") or []),
             "error_code_distribution": dict(anchoring.get("error_code_distribution") or {}),
+            "prior_items_examined": int(anchoring.get("prior_items_examined") or 0),
+            "sample_rule": str(anchoring.get("sample_rule") or "unspecified"),
             "caliber": anchoring.get("caliber") or "hard writes only: an unanchored hard write is always rejected",
         },
     }
@@ -846,7 +901,8 @@ def safety_gate(*, cross_domain: Mapping[str, Any], quarantined: Mapping[str, An
     reasons: list[str] = []
     leakage = cross_domain or {}
     if leakage.get("all_paths_measured") is not True:
-        reasons.append("cross-domain leakage: not all four paths were measured")
+        reasons.append("cross-domain leakage: not every registered path (four constitutional paths plus the two "
+                       "consumer surfaces) was measured with a fired detectability control")
     elif int(leakage.get("total_leaks") or 0) != 0:
         reasons.append(f"cross-domain leakage: {leakage.get('total_leaks')} leaks observed")
     for name in QUARANTINE_SURFACES:
@@ -910,11 +966,182 @@ def regression_block(*, groups: Sequence[Mapping[str, Any]], map_path: Path | No
     return block
 
 
+def _junit_outcome(artifact: Path) -> tuple[str, str] | None:
+    """Derive a group outcome from its own JUnit artifact (T078)."""
+    if artifact.suffix.lower() != ".xml" or not artifact.exists():
+        return None
+    try:
+        root = ElementTree.parse(artifact).getroot()
+    except ElementTree.ParseError as error:
+        return "not_measured", f"the JUnit artifact could not be parsed: {type(error).__name__}"
+    suites = [root] if root.tag == "testsuite" else list(root)
+    tests = failures = errors = 0
+    for suite in suites:
+        if suite.tag != "testsuite":
+            continue
+        tests += int(suite.get("tests") or 0)
+        failures += int(suite.get("failures") or 0)
+        errors += int(suite.get("errors") or 0)
+    if tests == 0:
+        return "not_measured", "the JUnit artifact recorded no test at all"
+    if failures or errors:
+        return "failed", f"junit tests={tests} failures={failures} errors={errors}"
+    return "passed", f"junit tests={tests} failures=0 errors=0"
+
+
+#: Explicit published conclusions a caliber's artifact may carry. A group's
+#: conclusion must be *unchanged* for "no regression" — a historically negative
+#: conclusion that stays negative is not a regression.
+VERDICT_KEYS = ("enters_default_path", "three_gate_pass", "all_passed", "default_enable_eligible")
+METRIC_BLOCKS = ("metrics", "dense_metrics", "hybrid_metrics", "baseline_metrics", "graph_metrics",
+                 "instance_forms", "scenarios")
+RATE_TOLERANCE = 0.01
+
+
+def _resolve(path: str | Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else REPO_ROOT / candidate
+
+
+def _collect_key(value: Any, key: str) -> list[Any]:
+    found: list[Any] = []
+    if isinstance(value, Mapping):
+        for name, item in value.items():
+            if name == key:
+                found.append(item)
+            found.extend(_collect_key(item, key))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(_collect_key(item, key))
+    return found
+
+
+def _numeric_leaf_map(value: Any, prefix: str = "") -> dict[str, float]:
+    leaves: dict[str, float] = {}
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            leaves.update(_numeric_leaf_map(item, f"{prefix}/{key}"))
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        leaves[prefix] = float(value)
+    return leaves
+
+
+#: Latency is environment-sensitive and MUST NOT participate in the non-latency
+#: tolerance caliber (FR-055/SC-023): it is recorded, never compared.
+LATENCY_MARKERS = ("latency", "duration", "elapsed", "wall_clock", "p50", "p95", "p99")
+
+
+def _is_latency_leaf(name: str) -> bool:
+    lowered = name.lower()
+    return any(marker in lowered for marker in LATENCY_MARKERS)
+
+
+def artifact_outcome(artifact: str | Path | None,
+                     historical: str | Path | None) -> tuple[str, str] | None:
+    """The "no regression" caliber: the group's own conclusion versus its history.
+
+    Phase 10 T078/T078-follow-up. A group with no JUnit artifact and no comparison
+    was previously `not_measured`, which made the gate unable to decide seven
+    groups. Their artifacts do carry a published conclusion (``enters_default_path``,
+    ``three_gate_pass``, ``all_passed``, ``default_enable_eligible``, ``status``) or
+    a metric block, so the honest comparison is: same conclusion ⇒ passed, changed
+    conclusion or metric beyond the 1 % tolerance ⇒ failed, nothing comparable ⇒
+    ``not_measured`` (never a pass).
+    """
+    if artifact is None:
+        return None
+    current_path = _resolve(artifact)
+    if not current_path.exists():
+        return None
+    if current_path.suffix.lower() == ".xml":
+        return _junit_outcome(current_path)
+    try:
+        current = json.loads(current_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        return "not_measured", f"the artifact could not be read: {type(error).__name__}"
+    if not isinstance(current, Mapping):
+        return None
+    historical_path = _resolve(historical) if historical is not None else None
+    if historical_path is not None and historical_path.exists():
+        try:
+            previous = json.loads(historical_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            return "not_measured", f"the historical artifact could not be read: {type(error).__name__}"
+        if isinstance(previous, Mapping):
+            # 1) An explicit published conclusion outranks every derived signal.
+            for key in VERDICT_KEYS:
+                if key in current and key in previous:
+                    if current[key] == previous[key]:
+                        return "passed", f"the group's published conclusion {key}={current[key]!r} is unchanged"
+                    return "failed", (f"the group's published conclusion changed: {key} {previous[key]!r} -> "
+                                      f"{current[key]!r}")
+            if "status" in current and "status" in previous:
+                if current["status"] == previous["status"]:
+                    return "passed", f"the group's status {current['status']!r} is unchanged"
+                return "failed", (f"the group's status changed: {previous['status']!r} -> {current['status']!r}")
+            # 2) Gate/constraint blocks, latency excluded.
+            for key in ("hard_constraints", "gates", "criteria"):
+                left, right = current.get(key), previous.get(key)
+                if isinstance(left, Mapping) and isinstance(right, Mapping) and left and right:
+                    left_leaves, right_leaves = _numeric_leaf_map(left), _numeric_leaf_map(right)
+                    shared = {name for name in set(left_leaves) & set(right_leaves)
+                              if not _is_latency_leaf(name)}
+                    if shared:
+                        drifted = [name for name in sorted(shared)
+                                   if abs(left_leaves[name] - right_leaves[name]) > RATE_TOLERANCE * max(
+                                       1.0, abs(right_leaves[name]))]
+                        if drifted:
+                            return "failed", (f"{key} changed: {len(drifted)} of {len(shared)} shared signal(s) "
+                                              f"drifted beyond {RATE_TOLERANCE}: {drifted[:6]}")
+                        return "passed", f"every shared {key} signal is unchanged within {RATE_TOLERANCE}"
+            # 3) Metric blocks, latency excluded.
+            for block in METRIC_BLOCKS:
+                left, right = current.get(block), previous.get(block)
+                if not isinstance(left, Mapping) or not isinstance(right, Mapping):
+                    continue
+                left_leaves, right_leaves = _numeric_leaf_map(left), _numeric_leaf_map(right)
+                shared = {name for name in set(left_leaves) & set(right_leaves) if not _is_latency_leaf(name)}
+                if not shared:
+                    continue
+                drifted = [name for name in sorted(shared)
+                           if abs(left_leaves[name] - right_leaves[name]) > RATE_TOLERANCE * max(
+                               1.0, abs(right_leaves[name]))]
+                if drifted:
+                    return "failed", (f"{len(drifted)} of {len(shared)} shared {block} metric(s) drifted beyond "
+                                      f"{RATE_TOLERANCE}: {drifted[:6]} (latency excluded)")
+                return "passed", (f"all {len(shared)} shared {block} metrics are within {RATE_TOLERANCE} "
+                                  f"(latency excluded)")
+    # 4) No comparable historical document: the artifact's own recorded signals.
+    # The caliber's own recorded exit code: an ingest/outcome caliber publishes no
+    # conclusion beyond "it completed", so its exit code is the honest signal.
+    if "exit_code" in current:
+        code = current["exit_code"]
+        if code == 0:
+            return "passed", "the group's own outcome record reports exit_code 0"
+        return "failed", f"the group's own outcome record reports exit_code {code!r}"
+    # Nested ``no_regression`` verdicts (the 006 instance-form smoke publishes one per
+    # metric per instance form): all true ⇒ no regression, any false ⇒ regression.
+    flags = [flag for flag in _collect_key(current, "no_regression") if isinstance(flag, bool)]
+    if flags:
+        if all(flags):
+            return "passed", f"all {len(flags)} reported no_regression flag(s) are true"
+        return "failed", f"{sum(1 for flag in flags if not flag)} of {len(flags)} no_regression flag(s) are false"
+    if historical is None:
+        return "not_measured", ("no historical artifact is declared for this group and its own artifact carries "
+                                "no conclusion")
+    return "not_measured", f"the declared historical artifact {historical} does not exist"
+
+
 def regression_groups_from_map(map_path: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Read T058's ``regression_group_map.json`` without inventing an execution.
 
     Only entries the map itself marks as executed become report groups; a group
     the map merely declares is named in ``not_executed``.
+
+    Phase 10 T078: every executed group also carries an ``outcome`` derived from
+    its own artifact (the map's ``outcome`` field when present, otherwise the Junit
+    artifact's failures/errors, otherwise the non-latency comparison result). A
+    group whose outcome cannot be established is ``not_measured`` — never a pass.
     """
     document = json.loads(Path(map_path).read_text(encoding="utf-8"))
     entries = document.get("groups") if isinstance(document, Mapping) else None
@@ -928,8 +1155,36 @@ def regression_groups_from_map(map_path: Path) -> tuple[list[dict[str, Any]], li
         if not entry.get("executed") or not artifact:
             pending.append(name)
             continue
+        recorded = entry.get("outcome")
+        if recorded in {"passed", "failed"}:
+            outcome, reason = recorded, None
+        else:
+            derived = _junit_outcome(Path(str(artifact)))
+            if derived is None:
+                derived = artifact_outcome(artifact, entry.get("historical"))
+            if derived is not None:
+                outcome, reason = derived
+            elif entry.get("non_latency_reproducible") is True:
+                outcome, reason = "passed", "derived from the within-tolerance non-latency comparison"
+            elif entry.get("non_latency_reproducible") is False:
+                outcome, reason = "failed", ("derived: the non-latency comparison drifted beyond the 1 % "
+                                            "tolerance and the map records no disposition")
+            else:
+                outcome, reason = "not_measured", ("the regression map records no outcome and the artifact "
+                                                   "carries no derivable verdict")
+        # FR-054/SC-020: a non-latency comparison beyond the 1 % tolerance is a
+        # regression unless a disposition is recorded, even when the caliber's own
+        # exit code was 0 (the caliber ran; its numbers moved).
+        if (outcome == "passed" and entry.get("non_latency_reproducible") is False
+                and not entry.get("outcome_reason")):
+            outcome = "failed"
+            reason = ("the non-latency comparison drifted beyond the 1 % tolerance and the regression map records "
+                      "no disposition")
         group = {"group": name, "runner": str(entry.get("runner")), "mode": str(entry.get("mode")),
-                 "artifact": str(artifact)}
+                 "artifact": str(artifact), "outcome": outcome}
+        explicit_reason = entry.get("outcome_reason") or reason
+        if explicit_reason:
+            group["outcome_reason"] = str(explicit_reason)
         if entry.get("cache_manifest_hash") is not None:
             group["cache_manifest_hash"] = entry["cache_manifest_hash"]
         if entry.get("replay_real_network_calls") is not None:
@@ -941,16 +1196,46 @@ def regression_groups_from_map(map_path: Path) -> tuple[list[dict[str, Any]], li
 
 
 def regression_gate(block: Mapping[str, Any]) -> dict[str, Any]:
+    """The regression gate must be able to FAIL (Phase 10 T078).
+
+    The earlier version only checked ``all_groups_executed`` and the replay network
+    call count, so five groups recorded ``outcome=failed`` in the regression map
+    while this gate still reported a pass. The honest predicate is FR-054/SC-020:
+    every registered group executed, every executed group's own outcome is a real
+    pass, and no non-latency comparison drifted beyond the 1 % tolerance without a
+    recorded disposition.
+    """
     if block.get("all_groups_executed") is not True:
         pending = ", ".join(block.get("not_executed") or []) or "no group was executed"
         return gate_block(False, f"regression gate NOT met: the full-suite groups have not been executed "
                                  f"in this run ({pending}); T058-T060 own the real regression block")
-    unmeasured = [group.get("group") for group in block.get("groups") or []
+    groups = list(block.get("groups") or [])
+    unmeasured = [group.get("group") for group in groups
                   if group.get("mode") == "record_then_replay" and group.get("replay_real_network_calls") != 0]
     if unmeasured:
         return gate_block(False, f"regression gate NOT met: replay performed real network calls for {unmeasured}")
-    return gate_block(True, "regression gate met: every group executed and every record_then_replay group "
-                            "replayed with zero real network calls")
+    failing = [f"{group.get('group')} ({group.get('outcome')}: {str(group.get('outcome_reason'))[:120]})"
+               for group in groups if group.get("outcome") != "passed"]
+    # A beyond-tolerance comparison with a recorded disposition is auditable and does
+    # not fail the gate by itself; an undispositioned drift does.
+    drifted = [str(group.get("group")) for group in groups
+               if group.get("non_latency_reproducible") is False and not group.get("outcome_reason")]
+    dispositioned = [str(group.get("group")) for group in groups
+                     if group.get("non_latency_reproducible") is False and group.get("outcome_reason")]
+    reasons: list[str] = []
+    if failing:
+        reasons.append("executed groups did not pass: " + "; ".join(failing))
+    if drifted:
+        reasons.append("non-latency comparisons drifted beyond the 1 % tolerance with no recorded disposition: "
+                       + ", ".join(drifted))
+    if reasons:
+        return gate_block(False, "regression gate NOT met: " + "; ".join(reasons))
+    detail = ("regression gate met: every group executed, every executed group passed its own caliber, and every "
+              "record_then_replay group replayed with zero real network calls")
+    if dispositioned:
+        detail += ("; beyond-tolerance comparisons with a documented disposition (recorded in "
+                   "regression.groups[].outcome_reason): " + ", ".join(dispositioned))
+    return gate_block(True, detail)
 
 
 # --------------------------------------------------------------------------- #
@@ -1007,7 +1292,10 @@ def aoep_case_entries(cases: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
                  ("case_id", "invariant", "request_id", "status", "target_kind",
                   "before_fingerprints", "after_fingerprints", "watermark_before", "watermark_after",
                   "impact", "event_chain_closed", "re_rollback_consistent", "reproducible",
-                  "projection_denominators", "isolated_scope_id")
+                  "projection_denominators", "isolated_scope_id",
+                  # T082: criterion-specific evidence must reach per_case.aoep[] too,
+                  # otherwise the report's own per-case block is not machine-decidable.
+                  "role", "criterion", "expected", "observed", "scoring", "sample_sizes")
                  if key in case}
         entry["not_measurable_reason"] = case.get("not_measurable_reason")
         entries.append(entry)
@@ -1261,16 +1549,12 @@ ACCEPTANCE_SC012_VERIFIED = False
 #: lease is judged on its own evidence. The earlier hard-coded ``False`` reflected
 #: the pre-repair runs, where a concurrent stream held the lease.
 
-#: T062: the real executed regression outcomes of this run, taken verbatim from
-#: the artifacts the orchestrator wrote under ``eval/runs/<RUN_ID>/regression/``
-#: (see ``evidence/regression_orchestration_notes.json`` and the per-group
-#: status files). They are recorded here because the report's ``regression``
-#: block is contractually limited to ``{group, runner, mode, ...}`` and carries
-#: no outcome field; the pointers in ``GOAL_EVIDENCE[7]`` name the artifacts.
+#: T078/T080: the executed regression outcomes are now carried by the report's own
+#: ``regression.groups[].outcome`` field (contract addition), so the ledger derives
+#: them from the block instead of restating them. This tuple is kept only as a
+#: human-readable fallback for a hand-built block with no outcomes.
 EXECUTED_REGRESSION_FAILURES: tuple[str, ...] = (
-    "012_acceptance: outcome=failed, report=incomplete, SC-012 not_verified",
-    "013_e2e: 5 failed / 2 passed",
-    "014_contract: 4 failed / 564 passed",
+    "recorded per group in regression.groups[].outcome / outcome_reason",
 )
 
 
@@ -1303,8 +1587,11 @@ def goal_ledger(*, hard_metrics: Mapping[str, Any], continuity: Mapping[str, Any
     three are unbroken): the target-host evaluation (SC-012) is a separate item
     that T073 registers as out of scope for this feature, so it is stated as a
     limit rather than folded into this goal's verdict. Goal 2 requires both
-    calibers to have non-zero denominators and the anchoring sample to be at
-    least two rows; goal 7 requires every registered group to have been executed.
+    calibers to have non-zero denominators, at least two measured rows and at least
+    one row this run did not write itself; goal 3 requires every registered leak
+    path (the four constitutional paths plus the two consumer surfaces) to be
+    measured with a fired detectability control; goal 7 requires the honest
+    regression gate to pass (every executed group's own outcome is a pass).
     """
     leakage = cross_domain or {}
     leakage_ok = leakage.get("all_paths_measured") is True and int(leakage.get("total_leaks") or 0) == 0
@@ -1316,44 +1603,50 @@ def goal_ledger(*, hard_metrics: Mapping[str, Any], continuity: Mapping[str, Any
     hard_provenance_items = int(provenance.get("hard_items_examined") or 0)
     soft_provenance_items = int(provenance.get("soft_distilled_items_examined") or 0)
     anchoring_samples = int(anchoring.get("total") or 0)
+    prior_anchoring_items = int(anchoring.get("prior_items_examined") or 0)
     continuity_ok = (continuity.get("watermark") or {}).get("met") is True
     poisoning_ok = (poisoning.get("watermark") or {}).get("met") is True
     aoep_ok = aoep.get("all_passed") is True
     regression = regression or {}
-    regression_ok = regression.get("all_groups_executed") is True
+    # T080: goal 7 is "no regression", so it may only be achieved when the honest
+    # regression gate passes (every executed group passed its own caliber) — not
+    # merely when every group was executed.
+    regression_ok = regression_gate(regression).get("passed") is True
     not_executed = [str(name) for name in (regression.get("not_executed") or [])]
 
+    # T080: a 100 % anchoring/provenance goal needs at least one measured hard row
+    # that this measuring run did NOT write itself; otherwise the sample is the
+    # run's own output and the verdict is at most partial.
     goal2_met = (anchoring_ok and provenance_ok and hard_provenance_items >= 1
-                 and soft_provenance_items >= 1 and anchoring_samples >= 2 and writer_lease_acquired)
+                 and soft_provenance_items >= 1 and anchoring_samples >= 2 and writer_lease_acquired
+                 and prior_anchoring_items >= 1)
     goal2_disposition = (
-        "not fully measured, so never recorded achieved: "
+        "at most partial, never recorded achieved: "
         f"hard_items_examined = {hard_provenance_items}, soft_distilled_items_examined = {soft_provenance_items}, "
-        f"hard-anchoring sample total = {anchoring_samples}, writer lease acquired = {writer_lease_acquired}. "
-        "Both calibers need a non-zero denominator and the anchoring sample needs at least two independently "
-        "attributed rows; a zero denominator is not a measured zero and is never generalised to 100 %."
+        f"hard-anchoring sample total = {anchoring_samples} (of which pre-existing rows not written by this run = "
+        f"{prior_anchoring_items}), writer lease acquired = {writer_lease_acquired}. A 100 % goal is not evidenced "
+        "by a sample this run wrote itself: re-measure on a scope that already holds hard rows (or accumulate "
+        "a non-self-written sample) and keep the denominators stated, never generalised."
     )
+    groups = list(regression.get("groups") or [])
+    failing_groups = [f"{group.get('group')}={group.get('outcome')}" for group in groups
+                      if group.get("outcome") != "passed"]
+    drifted_groups = [f"{group.get('group')}=non_latency_reproducible:{group.get('non_latency_reproducible')}"
+                      for group in groups if group.get("non_latency_reproducible") is False]
     goal7_disposition = (
-        "not a regression-free verdict and never recorded achieved: "
-        f"{len(not_executed)} of {len(not_executed) + len(regression.get('groups') or [])} registered groups "
-        f"were NOT executed ({', '.join(not_executed) or 'none named'}) — an unexecuted group is never counted as "
-        "passed — and the executed groups carry real outcomes that are not hidden: "
-        f"{'; '.join(EXECUTED_REGRESSION_FAILURES)}. The 54 non-latency comparisons include 8 beyond the 1 % "
-        "tolerance, all dispositioned (6 pre-existing 011 corpus drift measured 2026-09-07, 2 inherited between "
-        "the 004/010 historicals), so the executed portion shows no new 015-attributable drift but the full-suite "
-        "goal is at most partially evidenced.")
-    # Even when the gate is met, the executed portion carries real non-passing
-    # outcomes and environment-gated tests; they are stated with the achieved verdict
-    # instead of being dropped.
+        "not achieved and never recorded achieved: the full-suite regression goal is \"no regression\", and this "
+        f"run's own regression map records {len(failing_groups)} group(s) whose executed outcome is not a pass "
+        f"({', '.join(failing_groups) or 'none'}) and {len(drifted_groups)} group(s) whose non-latency comparison "
+        f"drifted beyond the 1 % tolerance ({', '.join(drifted_groups) or 'none'}). "
+        f"{len(not_executed)} registered group(s) were not executed at all "
+        f"({', '.join(not_executed) or 'none named'}); an unexecuted or failing group is never a pass. Remaining "
+        "work: close or explicitly disposition each failing group and each drift, then re-run the group per its own "
+        "caliber. Until then the finished 3.0 goal 7 verdict is not_achieved."
+    )
     goal7_limits = (
-        "achieved on the gate's own criterion (every registered group executed and every record_then_replay group "
-        "replayed with zero real provider calls), with the executed portion's real outcomes stated: "
-        f"{'; '.join(EXECUTED_REGRESSION_FAILURES)}. Nine of those failures are one environment guard — "
-        "013's own consolidation fixtures refuse to run unless CONSOLIDATION_ISOLATED_DATABASE is configured "
-        "(AssertionError: 013 writes require the explicitly isolated database), raised at fixture setup before any "
-        "caliber code runs — so they are harness-gated rather than measured regressions. The 54 non-latency "
-        "comparisons include 8 beyond the 1 % tolerance, all dispositioned (6 pre-existing 011 corpus drift "
-        "measured 2026-09-07, 2 inherited between the 004/010 historicals), and 2 not_measurable (011 domain "
-        "baselines), leaving 0 undisposed."
+        "achieved only when the honest regression gate passes: every registered group executed, every executed "
+        "group's own recorded outcome is a pass, and every record_then_replay group replayed with zero real "
+        "provider calls."
     )
     goal1_limits = (
         "achieved on this goal's own statement: all six tool contracts are legal in the live protocol responses "
@@ -1406,7 +1699,7 @@ def goal_ledger(*, hard_metrics: Mapping[str, Any], continuity: Mapping[str, Any
         entry(6, "achieved" if (poisoning_ok and aoep_ok) else "partial",
               None if (poisoning_ok and aoep_ok)
               else "poisoning interception and/or the AOEP five invariants were not fully measured"),
-        entry(7, "achieved" if regression_ok else "partial",
+        entry(7, "achieved" if regression_ok else "not_achieved",
               goal7_limits if regression_ok else goal7_disposition),
     ]
     return ledger
