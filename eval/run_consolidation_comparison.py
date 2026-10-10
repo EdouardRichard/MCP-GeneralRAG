@@ -714,8 +714,21 @@ class ComparisonEngine:
         # A deterministic identifier seed: the frozen clock pins the payload, and
         # a run-scoped base keeps the two independent restorations' generated
         # control identifiers inside this run's own range.
-        self.frozen_seed = int(hashlib.sha256(
-            f'013-comparison:{self.run.run_id}'.encode()).hexdigest()[:15], 16)
+        #
+        # The base MUST sit ABOVE the restored authority's high-water mark. The
+        # product's own append-only guard (0095 ``guard_consolidation_window_event``)
+        # rejects a window whose seal event id is not strictly greater than the
+        # window's ``high_water_mark`` ('invalid consolidation window prefix'). A
+        # raw sha256-derived base can fall below the frozen authority's cutoff
+        # (measured 2026-10-10: run 015REGRESSION013234bd726 produced base
+        # 273118229010885578 < cutoff 366085522273075200, so every consolidated arm
+        # failed at its first seal while the baseline arm was unaffected), which made
+        # the strict cache manifest empty and the replay round refuse to start.
+        cutoff = int(self.dataset.get('authority_cutoff') or 0)
+        self.frozen_seed = max(int(hashlib.sha256(
+            f'013-comparison:{self.run.run_id}'.encode()).hexdigest()[:15], 16),
+            cutoff + WINDOW_ID_STRIDE)
+        self.frozen_seed_floor = cutoff + WINDOW_ID_STRIDE
 
     # -- provider plumbing -------------------------------------------------
     @property
@@ -1612,7 +1625,23 @@ async def execute(args: argparse.Namespace) -> int:  # pragma: no cover - orches
     notes['verdict'] = verdict
     notes['frozen_binding'] = dict(engine.frozen_binding) if engine.frozen_binding else None
     _write_json(args.output, report)
-    _write_json(evidence_dir / 'run-summary.json',
+    # The evidence summary of an earlier attempt is preserved, never overwritten: a
+    # previous summary whose own status is not ``passed`` is an incomplete/failed
+    # attempt (measured 2026-10-10: a port-conflict refusal left
+    # ``status: incomplete``), so it is renamed aside as a superseded record before
+    # this attempt writes its own. A previous *passing* summary is still protected.
+    summary_path = Path(evidence_dir) / 'run-summary.json'
+    if summary_path.exists():
+        try:
+            previous = json.loads(summary_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            previous = {}
+        if previous.get('status') != 'passed':
+            number = 1
+            while (summary_path.parent / f'run-summary.superseded-{number}.json').exists():
+                number += 1
+            summary_path.rename(summary_path.parent / f'run-summary.superseded-{number}.json')
+    _write_json(summary_path,
                 {'run': run_bundle['identities'],
                  'arms': [record.as_record() for record in engine.arms.values()],
                  'manifest': str(manifest_path), 'report': str(args.output),

@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,20 @@ _BACKEND_SRC = _REPO_ROOT / "backend" / "src"
 for p in (_BACKEND_SRC, str(_REPO_ROOT / "eval"), str(_REPO_ROOT / "backend")):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
+
+# Host environment defect (measured 2026-10-10): this host exports
+# ``NO_PROXY='localhost,127.0.0.1,::1,[::1]'``. The bracketed entry makes httpx build
+# an invalid URLPattern (``httpx.InvalidURL: Invalid port: ':1]'``) for every client,
+# so ``qdrant_client`` cannot be constructed and every group exits without an
+# artifact. The 015 runners sanitize this for their own process; this legacy 011
+# runner must do the same before any client is constructed.
+for _name in ("NO_PROXY", "no_proxy"):
+    _value = os.environ.get(_name)
+    if _value:
+        _entries = [entry.strip() for entry in _value.split(",") if entry.strip()]
+        _cleaned = [entry for entry in _entries if not (entry.startswith("[") and entry.endswith("]"))]
+        if _cleaned != _entries:
+            os.environ[_name] = ",".join(_cleaned)
 
 logger = logging.getLogger(__name__)
 
@@ -230,11 +245,33 @@ async def run_smoke_group(output_path: str) -> int:
     return 0
 
 
+def _sanitized_environment() -> dict[str, str]:
+    """An explicit child environment with the malformed NO_PROXY entry removed.
+
+    On this host ``NO_PROXY`` also exists at machine level with a bracketed IPv6
+    entry, and a process-level assignment alone does not reach a grandchild (measured
+    2026-10-10): ``cmd /c set NO_PROXY`` run from a python process that had set the
+    normalized value still reported the machine value. Passing an explicit ``env``
+    block — as 015's orchestrator does — makes the child see the normalized value, so
+    the legacy eval runners can construct their Qdrant clients.
+    """
+    environment = dict(os.environ)
+    for name in ("NO_PROXY", "no_proxy"):
+        value = environment.get(name)
+        if not value:
+            continue
+        entries = [entry.strip() for entry in value.split(",") if entry.strip()]
+        cleaned = [entry for entry in entries if not (entry.startswith("[") and entry.endswith("]"))]
+        environment[name] = ",".join(cleaned)
+    return environment
+
+
 async def _run_subprocess(cmd: list[str], log_path: Path) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w", encoding="utf-8") as log:
         proc = await asyncio.create_subprocess_exec(
             *cmd, cwd=str(_REPO_ROOT), stdout=log, stderr=asyncio.subprocess.STDOUT,
+            env=_sanitized_environment(),
         )
         return await proc.wait()
 
@@ -320,7 +357,14 @@ async def run_regression(group_ids: list[str] | None = None, output_dir: Path | 
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "tolerance": _TOLERANCE,
         "groups": results,
-        "all_passed": all(r.get("all_passed") for r in results) and len(results) == len(GROUPS),
+        # The aggregate must be judged over the groups this invocation actually
+        # selected. 015's orchestrator deliberately narrows the 011 group set to the
+        # five deterministic groups (the model-dependent 005 agentic caliber is
+        # judged by its own record+replay group, per T059), so comparing against the
+        # module-level six-group list made every narrowed run report all_passed=false
+        # even when all five selected groups passed (measured 2026-10-10).
+        "selected_groups": [g["id"] for g in selected],
+        "all_passed": all(r.get("all_passed") for r in results) and len(results) == len(selected),
     }
     out = output_dir / "012_regression_summary.json" if output_dir else _EVAL / "011_regression_summary.json"
     with open(out, "w", encoding="utf-8") as f:
