@@ -411,8 +411,16 @@ class MemoryGovernance:
 
 
 def _promotion_result(pointer, *, reused):
+    # T083: the authority event carrying this request is the promotion_requested
+    # grant; its id is the stable task id, so the audit pointer is exposed next to
+    # request_id instead of surviving only as `task_id` (additive key: every 013
+    # client keeps every existing key). `request_event_id` is the stored pointer
+    # field for exactly that identity -- validate_promotion_pointer enforces
+    # task_id == str(request_event_id) -- so the fallback cannot disagree with it.
+    event_id = int(pointer.get("request_event_id") or pointer["task_id"])
     return {"schema_version": 1, "scope_id": pointer["scope_id"], "memory_id": pointer["memory_id"],
             "candidate_version": pointer["candidate_version"], "task_id": pointer["task_id"],
+            "event_id": event_id,
             "source_id": pointer["source_id"], "initial_processing_run_id": pointer["initial_processing_run_id"],
             "status": pointer["status"], "version_id": pointer["published_version_id"],
             "request_id": pointer["request_id"], "reused": reused}

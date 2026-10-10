@@ -58,6 +58,7 @@ function row(memory_id: string, status: string, superseded_by: string | null, ex
 const CONSOLIDATION_RUN = {
   schema_version: 1,
   run_id: 'run-015',
+  request_id: 'req-run-015',
   trigger: 'manual',
   execution_context: 'management',
   status: 'failed',
@@ -72,6 +73,15 @@ const CONSOLIDATION_RUN = {
   counts: { input_events: 3, proposals: 1, adjudications: 1, outputs: 0 },
   created_at: '2026-10-02T00:00:00Z',
   ttl_expires_at: '2026-11-02T00:00:00Z',
+};
+
+/** T083: the stored authority event each management pointer resolves to. */
+const AUTHORITY_EVENTS: Record<string, { event_id: string; event_type: string }> = {
+  'req-retire-1': { event_id: '9001', event_type: 'retract' },
+  'req-purge-1': { event_id: '9002', event_type: 'retract' },
+  'req-rollback-1': { event_id: '9003', event_type: 'rollback' },
+  'req-promote-1': { event_id: '4242', event_type: 'grant' },
+  'req-policy-1': { event_id: '9101', event_type: 'grant' },
 };
 
 async function stub(page: Page): Promise<Harness> {
@@ -101,6 +111,18 @@ async function stub(page: Page): Promise<Harness> {
       salience_distribution: { p50: 0.5, p90: 0.9, p95: 0.95,
         buckets: [{ lower: 0, upper: 0.5, count: 1 }, { lower: 0.5, upper: null, count: 1 }] },
       consolidation_run_count: 1, rollback_count: 0 });
+  });
+  await page.route('**/api/memories/audit**', route => {
+    // T083: the management audit read path dereferences a pointer into the
+    // append-only authority log; the UI never invents the resolved event.
+    count('audit');
+    const requestId = new URL(route.request().url()).searchParams.get('request_id') ?? '';
+    const event = AUTHORITY_EVENTS[requestId];
+    if (!event) return json(route, { detail: { code: 'MEMORY_AUDIT_NOT_FOUND' } }, 404);
+    return json(route, { schema_version: 1, request_id: requestId, event_id: event.event_id,
+      event_type: event.event_type, knowledge_scope_id: SID, aggregate_id: MID, actor: 'management',
+      authority: 'management', actionability: 'audit', occurred_at: '2026-10-10T00:00:00+00:00',
+      payload_summary: { reason: 'governance verification' } });
   });
   await page.route('**/api/memories/promotion-candidates**', route => {
     count('promotionCandidates');
@@ -137,15 +159,19 @@ async function stub(page: Page): Promise<Harness> {
       content_mismatch_paths: [], reason_code: null, repaired: false } });
   });
   await page.route('**/api/memories/policy**', route => {
-    if (route.request().method() === 'POST') { post('policy'); return json(route, { ok: true }); }
+    if (route.request().method() === 'POST') {
+      post('policy');
+      return json(route, { scope_id: Number(SID), event_id: 9101, request_id: 'req-policy-1',
+        impact: { memory_ids: [MID], scope_ids: [SID] }, before_fingerprint: 'b', after_fingerprint: 'a' });
+    }
     count('policy');
     return json(route, { scope_id: SID, domain_key: 'generic', policy: { decay_rate: 0.01, consolidation: { enabled: false } } });
   });
   await page.route('**/api/memories/promote', route => {
     post('promote');
     return json(route, { schema_version: 1, scope_id: SID, memory_id: MID, candidate_version: CANDIDATE_VERSION,
-      task_id: 4242, source_id: 'src-1', initial_processing_run_id: 'run-1', status: 'uploaded', version_id: null,
-      request_id: 'req-promote-1', reused: false });
+      task_id: 4242, event_id: 4242, source_id: 'src-1', initial_processing_run_id: 'run-1', status: 'uploaded',
+      version_id: null, request_id: 'req-promote-1', reused: false });
   });
   await page.route('**/api/memories/retire', route => {
     post('retire');
@@ -170,7 +196,7 @@ async function stub(page: Page): Promise<Harness> {
 }
 
 const TABS = ['Browse', 'Governance', 'Rollback', 'Projection rebuild', 'Promotion', 'Consolidation report', 'Statistics'];
-const BODY_ENDPOINTS = ['browse', 'stats', 'promotionCandidates', 'consolidationRuns', 'rebuildAudit', 'policy', 'usage'];
+const BODY_ENDPOINTS = ['browse', 'stats', 'promotionCandidates', 'consolidationRuns', 'rebuildAudit', 'audit', 'policy', 'usage'];
 
 const pane = (page: Page): Locator => page.locator('.ant-tabs-tabpane-active');
 const dialog = (page: Page): Locator => page.getByRole('dialog');
@@ -326,6 +352,11 @@ test('purge is the only deletion path and needs the same strong confirmation', a
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect.poll(() => harness.posts.purge || 0).toBe(1);
+  // A purge leaves a traceable pointer too: the PostgreSQL counter is not the
+  // whole assertion any more (T083).
+  await expect(dialog(page).getByText('Audit pointer')).toBeVisible();
+  await expect(dialog(page).getByText('req-purge-1')).toBeVisible();
+  await expect(dialog(page).getByText('9002')).toBeVisible();
 });
 
 test('rollback is management-surface only and needs the strong confirmation value', async ({ page }) => {
@@ -349,6 +380,10 @@ test('rollback is management-surface only and needs the strong confirmation valu
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect.poll(() => harness.posts.rollback || 0).toBe(1);
+  // The rollback pointer is asserted, not only the POST counter (T083).
+  await expect(dialog(page).getByText('Audit pointer')).toBeVisible();
+  await expect(dialog(page).getByText('req-rollback-1')).toBeVisible();
+  await expect(dialog(page).getByText('9003')).toBeVisible();
 });
 
 test('a rebuild failure is presented explicitly and the audit read path stays reachable', async ({ page }) => {
@@ -391,6 +426,14 @@ test('promotion is an explicit manual action with no automatic entry', async ({ 
   await pane(page).getByRole('button', { name: 'Promote manually' }).click();
   await expect.poll(() => harness.posts.promote || 0).toBe(1);
   await expect(pane(page).getByText('req-promote-1')).toBeVisible();
+  // T083: the promotion pointer is the authority event id (not only request_id),
+  // and it is dereferenced through the management audit read path.
+  const pointer = pane(page).getByTestId('memory-promotion-audit');
+  await expect(pointer).toContainText('Audit pointer');
+  await expect(pointer).toContainText('4242');
+  await expect(pointer).toContainText('req-promote-1');
+  await expect.poll(() => harness.counts.audit || 0).toBeGreaterThanOrEqual(1);
+  await expect(pointer).toContainText('grant');
 });
 
 test('the consolidation report shows failure and rejection reasons and the policy editor fails closed', async ({ page }) => {
@@ -416,6 +459,15 @@ test('the consolidation report shows failure and rejection reasons and the polic
   await pane(page).getByRole('textbox', { name: 'Reason' }).fill('policy verification');
   await pane(page).getByRole('button', { name: 'Save policy' }).click();
   await expect.poll(() => harness.posts.policy || 0).toBe(1);
+  // T083: the run's admission request id is surfaced, and a successful policy
+  // edit shows the authority pointer it returned and dereferences it.
+  await expect(pane(page).getByText('req-run-015')).toBeVisible();
+  const pointer = pane(page).getByTestId('memory-consolidation-policy-pointer');
+  await expect(pointer).toContainText('Audit pointer');
+  await expect(pointer).toContainText('9101');
+  await expect(pointer).toContainText('req-policy-1');
+  await expect.poll(() => harness.counts.audit || 0).toBeGreaterThanOrEqual(1);
+  await expect(pointer).toContainText('grant');
 });
 
 test('the statistics panel renders counts and distributions and no body text', async ({ page }) => {

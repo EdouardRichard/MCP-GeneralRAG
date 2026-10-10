@@ -1,16 +1,20 @@
 /**
  * 015 T048 (US6/FR-042; research R10) — consolidation report and domain policy.
  *
- * The run list and run detail carry run id / domain / window / input size /
- * proposals and adjudication / output / status / retention / **failure and
- * rejection reasons**.  The `memory_policy` editor fails closed: an illegal
- * value never reaches the API, and a failed save reports the error explicitly.
+ * The run list and run detail carry run id / admission request id / domain /
+ * window / input size / proposals and adjudication / output / status / retention
+ * / **failure and rejection reasons**.  The `memory_policy` editor fails closed:
+ * an illegal value never reaches the API, and a failed save reports the error
+ * explicitly.  T083: a successful policy edit shows the authority pointer it
+ * returned (`event_id` + `request_id`) and dereferences it through the
+ * management audit read path.
  */
 import { Alert, Button, Descriptions, Empty, Input, List, Space, Spin, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchConsolidationRun, fetchConsolidationRuns, fetchMemoryPolicy, updateMemoryPolicy, type ConsolidationRun } from '../../api/memories';
+import { fetchConsolidationRun, fetchConsolidationRuns, fetchMemoryAudit, fetchMemoryPolicy, updateMemoryPolicy, type ConsolidationRun, type MemoryAuditRecord, type MemoryGovernancePointer } from '../../api/memories';
 import { useLocale } from '../../i18n';
 import { wireNumericId } from './ConfirmActionModal';
+import { auditResolution } from './MemoryPromotionView';
 
 interface Props { scope?: string; refreshToken: number }
 
@@ -51,6 +55,9 @@ export default function MemoryConsolidationView({ scope, refreshToken }: Props) 
   const [policyError, setPolicyError] = useState<string>();
   const [policyMessage, setPolicyMessage] = useState<string>();
   const [policySaving, setPolicySaving] = useState(false);
+  const [policyPointer, setPolicyPointer] = useState<MemoryGovernancePointer | null>(null);
+  const [policyAudit, setPolicyAudit] = useState<MemoryAuditRecord | null>(null);
+  const [policyAuditError, setPolicyAuditError] = useState<string>();
   const generation = useRef(0);
 
   const loadRuns = useCallback(async () => {
@@ -114,12 +121,24 @@ export default function MemoryConsolidationView({ scope, refreshToken }: Props) 
     }
     setPolicySaving(true);
     try {
-      await updateMemoryPolicy({
+      const pointer = await updateMemoryPolicy({
         scope_id: wireNumericId(scope),
         reason: reason.trim() === '' ? 'management policy update' : reason.trim(),
         policy: parsed,
       });
+      setPolicyPointer(pointer);
+      setPolicyAudit(null);
+      setPolicyAuditError(undefined);
       setPolicyMessage(t('memories.consolidation.policySaved'));
+      if (pointer?.request_id) {
+        // T083: the pointer is dereferenced through the audit read path, so the
+        // shown event is the stored authority row.
+        try {
+          setPolicyAudit(await fetchMemoryAudit(String(pointer.request_id), wireNumericId(scope)));
+        } catch (cause: unknown) {
+          setPolicyAuditError(`${t('memories.audit.unavailable')}${cause instanceof Error ? cause.message : String(cause)}`);
+        }
+      }
       await loadPolicy();
     } catch (cause: unknown) {
       setPolicyError(`${t('memories.consolidation.policySaveFailed')}${cause instanceof Error ? cause.message : String(cause)}`);
@@ -143,6 +162,7 @@ export default function MemoryConsolidationView({ scope, refreshToken }: Props) 
           </Space>
           <Descriptions size="small" column={{ xs: 1, sm: 2 }} styles={{ content: { overflowWrap: 'anywhere', minWidth: 0 } }} items={[
             { key: 'window', label: t('memories.consolidation.window'), children: run.window ? JSON.stringify(run.window) : '-' },
+            { key: 'request', label: t('memories.consolidation.requestId'), children: run.request_id ?? '-' },
             { key: 'input', label: t('memories.consolidation.inputSize'), children: String(run.counts?.input_events ?? run.input_event_ids?.length ?? 0) },
             { key: 'proposals', label: t('memories.consolidation.proposals'), children: String(run.counts?.proposals ?? run.proposals?.length ?? 0) },
             { key: 'adjudications', label: t('memories.consolidation.adjudications'), children: String(run.counts?.adjudications ?? run.adjudications?.length ?? 0) },
@@ -189,6 +209,15 @@ export default function MemoryConsolidationView({ scope, refreshToken }: Props) 
       </Space>
       {policyError && <Alert style={{ marginTop: 8, overflowWrap: 'anywhere' }} type="error" showIcon message={policyError} />}
       {policyMessage && <Alert style={{ marginTop: 8, overflowWrap: 'anywhere' }} type="success" showIcon message={policyMessage} />}
+      {policyPointer && <section data-testid="memory-consolidation-policy-pointer" style={{ marginTop: 8, minWidth: 0 }}>
+        <Typography.Text strong>{t('memories.audit.pointer')}</Typography.Text>
+        <Descriptions size="small" column={1} styles={{ content: { overflowWrap: 'anywhere' } }} items={[
+          { key: 'event', label: t('memories.confirm.eventId'), children: String(policyPointer.event_id ?? '-') },
+          { key: 'request', label: t('memories.confirm.requestId'), children: String(policyPointer.request_id ?? '-') },
+          { key: 'resolved', label: t('memories.audit.resolved'), children: policyAudit ? auditResolution(policyAudit) : '-' },
+        ]} />
+        {policyAuditError && <Alert type="warning" showIcon message={policyAuditError} style={{ overflowWrap: 'anywhere' }} />}
+      </section>}
     </section>
   </section>;
 }

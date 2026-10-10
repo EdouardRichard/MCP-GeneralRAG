@@ -15,6 +15,7 @@ from rag_mcp.models.knowledge_scope import KnowledgeScope
 from rag_mcp.models.domain_profile import DomainProfile
 from rag_mcp.models.memory_projection import MemoryEntry
 from rag_mcp.models.memory_projection_meta import MemoryProjectionMeta
+from rag_mcp.models.memory_event import MemoryEvent
 from rag_mcp.models.memory_management_audit import MemoryManagementAudit
 from rag_mcp.models.runtime import WriterLease
 from rag_mcp.models.scope_binding import ScopeBinding
@@ -147,6 +148,7 @@ async def promote_candidate(data: PromoteCommand, response: Response,
         _schedule_promotion_ingestion(int(result["source_id"]), int(result["initial_processing_run_id"]))
     return {"schema_version": 1, "scope_id": str(result["scope_id"]), "memory_id": str(result["memory_id"]),
             "candidate_version": result["candidate_version"], "task_id": result["task_id"],
+            "event_id": str(result["event_id"]),
             "source_id": str(result["source_id"]),
             "initial_processing_run_id": str(result["initial_processing_run_id"]),
             "status": result["status"], "version_id": None, "request_id": result["request_id"],
@@ -406,6 +408,54 @@ async def rebuild_audit(request_id: str = Query(min_length=1, max_length=128),
             "scope_id": audit.knowledge_scope_id, "reason": audit.reason,
             "source_event_id": audit.source_event_id, "since_event_id": audit.since_event_id,
             "result": audit.result, "created_at": audit.created_at.isoformat()}
+
+
+#: Governance payload fields a management audit reader may see. The stored payload
+#: is summarised, never echoed: memory body text has no path here, and the nested
+#: promotion `pointer` snapshot stays behind `GET /promotions/{task_id}`.
+_AUDIT_PAYLOAD_KEYS = (
+    "reason", "payload_version", "grant_type", "purge", "event_point", "retention_stage",
+    "domain_key", "binding_id", "binding_kind", "priority", "status", "memory_id",
+    "candidate_version", "request_id", "source_id", "impact", "before_fingerprint",
+    "after_fingerprint", "policy_before", "policy_after",
+)
+
+
+def audit_payload_summary(payload):
+    if not isinstance(payload, dict):
+        return {}
+    return {key: payload[key] for key in _AUDIT_PAYLOAD_KEYS if key in payload}
+
+
+@router.get("/audit", dependencies=[Depends(require_writer)])
+async def memory_audit(request_id: str = Query(min_length=1, max_length=128),
+                       scope_id: int | None = Query(default=None, gt=0),
+                       session: AsyncSession = Depends(get_session)):  # noqa: B008
+    """T083 (FR-037/FR-039/FR-041): dereference a management pointer into the log.
+
+    Every governance command (retire, purge, rollback, policy, binding and an
+    explicit promotion) appends exactly one authority ``MemoryEvent`` carrying its
+    own ``request_id``; this is the management-plane read path that turns the
+    pointer those commands return into the stored authority row.  A promotion
+    reuses its request id for later ``promotion_observed`` grants, so the earliest
+    matching event is the authority event for the request itself.  ``GET
+    /rebuild/audit`` above keeps its different, keyed-by-request_id contract
+    byte-compatible, and this route is deliberately not part of the MCP tool
+    surface (``rag_mcp.mcp.memory_tools.tool_names``).
+    """
+    statement = select(MemoryEvent).where(MemoryEvent.request_id == request_id)
+    if scope_id is not None:
+        statement = statement.where(MemoryEvent.knowledge_scope_id == scope_id)
+    event = (await session.execute(
+        statement.order_by(MemoryEvent.event_id).limit(1))).scalars().first()
+    if event is None:
+        raise HTTPException(404, detail={"code": "MEMORY_AUDIT_NOT_FOUND"})
+    return {"schema_version": 1, "request_id": event.request_id, "event_id": str(event.event_id),
+            "event_type": event.event_type, "knowledge_scope_id": str(event.knowledge_scope_id),
+            "aggregate_id": str(event.aggregate_id), "actor": event.actor,
+            "authority": (event.authority or {}).get("source"),
+            "actionability": event.actionability, "occurred_at": event.occurred_at.isoformat(),
+            "payload_summary": audit_payload_summary(event.payload)}
 
 
 @router.get("/stats", dependencies=[Depends(require_writer)])

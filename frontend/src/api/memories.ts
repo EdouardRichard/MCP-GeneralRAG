@@ -164,6 +164,37 @@ export function fetchRebuildAudit(requestId: string, scopeId?: number): Promise<
   return get(`/api/memories/rebuild/audit?${params.toString()}`);
 }
 
+// --- management audit pointer (FR-037/FR-039/FR-041, 015 T083) --------------
+
+/**
+ * The stored authority event a management pointer resolves to.
+ *
+ * `GET /api/memories/audit` is the management-plane dereference for every
+ * governance pointer: retire/purge/rollback/policy return `event_id` and
+ * `request_id`, a promotion returns both too, and a command that can report only
+ * `request_id` is resolved through this read path. The payload is summarised
+ * server-side, so no memory body text is part of this record.
+ */
+export interface MemoryAuditRecord {
+  schema_version: number;
+  request_id: string;
+  event_id: string;
+  event_type: string;
+  knowledge_scope_id: string;
+  aggregate_id: string;
+  actor: string;
+  authority: string | null;
+  actionability: string | null;
+  occurred_at: string;
+  payload_summary: Record<string, unknown>;
+}
+
+export function fetchMemoryAudit(requestId: string, scopeId?: number): Promise<MemoryAuditRecord> {
+  const params = new URLSearchParams({ request_id: requestId });
+  if (scopeId !== undefined) params.set('scope_id', String(scopeId));
+  return get(`/api/memories/audit?${params.toString()}`);
+}
+
 // --- promotion (FR-041) ----------------------------------------------------
 
 export interface PromotionCandidate {
@@ -204,6 +235,8 @@ export interface PromotionTask {
   memory_id: string;
   candidate_version: string;
   task_id: string | number;
+  /** The authority event id of the promotion request (T083: no longer task_id-only). */
+  event_id: string | number;
   source_id: string;
   initial_processing_run_id: string;
   status: string;
@@ -247,6 +280,8 @@ export interface ConsolidationRunCounts {
 export interface ConsolidationRun {
   schema_version: number;
   run_id?: string;
+  /** The admission request id of the run, as persisted by the writer (T083). */
+  request_id?: string;
   trigger: string;
   execution_context: string;
   status: string;
@@ -306,6 +341,22 @@ export function fetchMemoryPolicy(scope: string): Promise<{ scope_id: string; do
 
 export interface PolicyCommand { scope_id: number; reason: string; policy: unknown }
 
-export function updateMemoryPolicy(command: PolicyCommand): Promise<unknown> {
+/**
+ * The audit pointer every management command returns (015 T083).
+ *
+ * Retire, purge, rollback and policy return `event_id` + `request_id`; the
+ * pointer is dereferenced through `fetchMemoryAudit`.
+ */
+export interface MemoryGovernancePointer {
+  scope_id?: number | string;
+  event_id?: number | string;
+  request_id?: string;
+  impact?: { memory_ids?: Array<string | number>; scope_ids?: Array<string | number> };
+  before_fingerprint?: string;
+  after_fingerprint?: string;
+  [key: string]: unknown;
+}
+
+export function updateMemoryPolicy(command: PolicyCommand): Promise<MemoryGovernancePointer> {
   return post('/api/memories/policy', command);
 }
